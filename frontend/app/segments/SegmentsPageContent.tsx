@@ -5,8 +5,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
-import { PlusIcon, ListIcon, EditIcon, EyeOffIcon, Loader2Icon } from "lucide-react";
+import { PlusIcon, ListIcon, EditIcon, EyeOffIcon, Loader2Icon, Search } from "lucide-react";
 import SegmentModal from "../segments/SegmentModal";
+import FlightSearch from "../segments/FlightSearch";
+import AccomodationSearch from "../segments/AccomodationSearch";
 import { formatDateWithUserOffset, formatWeekday } from "../utils/dateformatters";
 import { OptionBadge } from "../components/OptionBadge";
 import { cn } from "../lib/utils";
@@ -18,7 +20,16 @@ import { useCurrencies } from "../hooks/useCurrencies";
 import { useCurrencyConversions } from "../hooks/useCurrencyConversions";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 
-import type { Segment, SegmentType, OptionRef, SegmentSave, Currency, CurrencyConversion } from "../types/models";
+import type {
+  Segment,
+  SegmentType,
+  OptionRef,
+  SegmentSave,
+  Currency,
+  CurrencyConversion,
+  OptionFilterPreset,
+  SimpleOptionSortValue,
+} from "../types/models";
 import { formatCurrencyAmount, convertWithFallback } from "../utils/currency";
 import { segmentsApi, tripsApi } from "../utils/apiClient";
 
@@ -197,6 +208,8 @@ export default function SegmentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isFlightSearchOpen, setIsFlightSearchOpen] = useState(false);
+  const [isAccommodationOpen, setIsAccommodationOpen] = useState(false);
   const [editingSegment, setEditingSegment] = useState<Segment | null | undefined>(null);
   const [tripName, setTripName] = useState<string>("");
   const [tripCurrencyId, setTripCurrencyId] = useState<number | null>(null);
@@ -387,79 +400,6 @@ export default function SegmentsPage() {
     }
   }, [segments])
 
-  const filteredSegments = useMemo(() => {
-    const startDate = filterState.dateRange.start ? new Date(filterState.dateRange.start) : null
-    if (startDate) startDate.setHours(0, 0, 0, 0)
-    const endDate = filterState.dateRange.end ? new Date(filterState.dateRange.end) : null
-    if (endDate) endDate.setHours(23, 59, 59, 999)
-
-    return segments.filter((segment) => {
-      if (!filterState.showHidden && segment.isUiVisible === false) return false
-
-      const startLoc = (segment as any).startLocation ?? null
-      const endLoc = (segment as any).endLocation ?? null
-      const startLabel = getLocationLabel(startLoc)
-      const endLabel = getLocationLabel(endLoc)
-
-      if (filterState.locations.length > 0 && !filterState.locations.some((loc) => loc === startLabel || loc === endLabel)) {
-        return false
-      }
-
-      if (filterState.types.length > 0 && !filterState.types.includes(segment.segmentTypeId.toString())) {
-        return false
-      }
-
-      if (startDate || endDate) {
-        const segmentStart = new Date(segment.startDateTimeUtc)
-        const segmentEnd = new Date(segment.endDateTimeUtc)
-        if (startDate && segmentStart < startDate && segmentEnd < startDate) return false
-        if (endDate && segmentStart > endDate && segmentEnd > endDate) return false
-      }
-
-      return true
-    })
-  }, [segments, filterState])
-
-  const sortedSegments = useMemo(() => {
-    const typeNameMap = new Map(segmentTypes.map((t) => [t.id, t.name ?? ""]))
-    const list = [...filteredSegments]
-    const compare = (a: Segment, b: Segment) => {
-      if (!sortState) {
-        const diff = new Date(a.startDateTimeUtc).getTime() - new Date(b.startDateTimeUtc).getTime()
-        if (diff !== 0) return diff
-        return a.name.localeCompare(b.name)
-      }
-
-      const dir = sortState.direction === "asc" ? 1 : -1
-
-      switch (sortState.field) {
-        case "startDate":
-          return dir * (new Date(a.startDateTimeUtc).getTime() - new Date(b.startDateTimeUtc).getTime())
-        case "endDate":
-          return dir * (new Date(a.endDateTimeUtc).getTime() - new Date(b.endDateTimeUtc).getTime())
-        case "segmentType": {
-          const nameA = typeNameMap.get(a.segmentTypeId) ?? ""
-          const nameB = typeNameMap.get(b.segmentTypeId) ?? ""
-          return dir * nameA.localeCompare(nameB)
-        }
-        case "startLocation": {
-          const nameA = getLocationLabel((a as any).startLocation ?? (a as any).startLocation ?? null)
-          const nameB = getLocationLabel((b as any).startLocation ?? (b as any).startLocation ?? null)
-          return dir * nameA.localeCompare(nameB)
-        }
-        case "endLocation": {
-          const nameA = getLocationLabel((a as any).endLocation ?? (a as any).endLocation ?? null)
-          const nameB = getLocationLabel((b as any).endLocation ?? (b as any).endLocation ?? null)
-          return dir * nameA.localeCompare(nameB)
-        }
-        default:
-          return 0
-      }
-    }
-
-    return list.sort(compare)
-  }, [filteredSegments, sortState, segmentTypes])
-
   const effectiveDisplayCurrencyId = displayCurrencyId ?? tripCurrencyId ?? userPreferredCurrencyId ?? null
   const selectedCurrencyMeta = useMemo(
     () => currencies.find((c) => c.id === effectiveDisplayCurrencyId) ?? null,
@@ -469,6 +409,44 @@ export default function SegmentsPage() {
     () => currencies.find((c) => c.id === (tripCurrencyId ?? undefined)) ?? null,
     [currencies, tripCurrencyId],
   )
+
+  const filteredSegments = useMemo(() => {
+    return applySegmentFilters(segments, filterState, sortState, segmentTypes, {
+      targetCurrencyId: effectiveDisplayCurrencyId,
+      fallbackCurrencyId: tripCurrencyId ?? userPreferredCurrencyId ?? null,
+      currencies,
+      conversions,
+    })
+  }, [
+    segments,
+    filterState,
+    sortState,
+    segmentTypes,
+    effectiveDisplayCurrencyId,
+    tripCurrencyId,
+    userPreferredCurrencyId,
+    currencies,
+    conversions,
+  ])
+
+  const sortedSegments = filteredSegments
+
+  const optionModalFilters = useMemo<OptionFilterPreset>(
+    () => ({
+      locations: [...filterState.locations],
+      dateRange: { ...filterState.dateRange },
+      showHidden: filterState.showHidden,
+    }),
+    [filterState],
+  )
+
+  const optionModalSort = useMemo<SimpleOptionSortValue | null>(() => {
+    if (!sortState) return null
+    if (sortState.field === "startDate" || sortState.field === "endDate") {
+      return { field: sortState.field, direction: sortState.direction }
+    }
+    return null
+  }, [sortState])
 
   if (!tripId) {
     return <div>No trip ID provided</div>;
@@ -481,14 +459,26 @@ export default function SegmentsPage() {
           <CardTitle>Segments</CardTitle>
           <CardDescription>{tripName ? tripName : `Trip ID: ${tripId}`}</CardDescription>
         </div>
-        <div className="flex space-x-2">
-          <Button variant="outline" onClick={() => router.push(`/options?tripId=${tripId}`)}>
-            <ListIcon className="mr-2 h-4 w-4" />
-            View Options
-          </Button>
-          <Button onClick={handleCreateSegment}>
-            <PlusIcon className="h-4 w-4" />
-          </Button>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex space-x-2">
+            <Button variant="outline" onClick={() => router.push(`/options?tripId=${tripId}`)}>
+              <ListIcon className="mr-2 h-4 w-4" />
+              View Options
+            </Button>
+            <Button onClick={handleCreateSegment}>
+              <PlusIcon className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex space-x-2">
+            <Button variant="outline" className="text-muted-foreground" onClick={() => setIsFlightSearchOpen(true)}>
+              <Search className="mr-2 h-4 w-4" />
+              Search flights
+            </Button>
+            <Button variant="outline" className="text-muted-foreground" onClick={() => setIsAccommodationOpen(true)}>
+              <Search className="mr-2 h-4 w-4" />
+              Search stays
+            </Button>
+          </div>
         </div>
       </CardHeader>
 
@@ -509,8 +499,8 @@ export default function SegmentsPage() {
               currencies={currencies}
               placeholder={isLoadingCurrencies ? "Loading currencies..." : "Display currency"}
               disabled={isLoadingCurrencies}
-              className="w-full sm:w-[180px]"
-              triggerClassName="w-full"
+              className="w-full sm:w-[150px] text-sm"
+              triggerClassName="w-full h-9 text-sm px-3"
             />
           }
         />
@@ -558,6 +548,25 @@ export default function SegmentsPage() {
         segmentTypes={segmentTypes}
         tripCurrencyId={tripCurrencyId}
         displayCurrencyId={effectiveDisplayCurrencyId}
+        initialOptionFilters={optionModalFilters}
+        initialOptionSort={optionModalSort}
+      />
+      <FlightSearch
+        isOpen={isFlightSearchOpen}
+        onClose={() => setIsFlightSearchOpen(false)}
+        tripId={Number(tripId)}
+        tripCurrencyId={tripCurrencyId}
+        onSegmentCreated={fetchSegments}
+        segments={segments}
+        onViewSegment={handleEditSegment}
+        planeIconSvg={segmentTypes.find((type) => type.id === 1)?.iconSvg ?? null}
+      />
+      <AccomodationSearch
+        isOpen={isAccommodationOpen}
+        onClose={() => setIsAccommodationOpen(false)}
+        tripId={Number(tripId)}
+        tripCurrencyId={tripCurrencyId}
+        onSegmentCreated={fetchSegments}
       />
     </Card>
   );

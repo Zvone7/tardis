@@ -86,4 +86,18 @@ public class SegmentController : ControllerBase
     {
         return await _segmentService_.GetAllSegmentTypesAsync(cancellationToken);
     }
+
+    [HttpGet("ParseBookingLink")]
+    public async Task<ActionResult<SegmentSuggestionDto>> ParseBookingLink([FromQuery] string url, CancellationToken cancellationToken)
+    {
+        var result = await _segmentService_.ParseBookingLinkAsync(url, cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpGet("ParseFlightsLink")]
+    public async Task<ActionResult<SegmentSuggestionDto>> ParseFlightsLink([FromQuery] string url, CancellationToken cancellationToken)
+    {
+        var result = await _segmentService_.ParseFlightsLinkAsync(url, cancellationToken);
+        return Ok(result);
+    }
 }

@@ -1,6 +1,7 @@
-import type { SegmentApi, SegmentType, OptionApi } from "../types/models"
+import type { SegmentApi, SegmentType, OptionApi, CurrencyConversion } from "../types/models"
 import { formatWeekdayDayMonth } from "./dateformatters"
 import { getStartLocation, getEndLocation } from "./segmentLocations"
+import { convertWithFallback } from "./currency"
 
 export interface TitleToken {
   key: string
@@ -139,7 +140,16 @@ export const buildOptionTitleTokens = (config: OptionTitleConfig): TitleToken[] 
 
 export const tokensToLabel = (tokens: TitleToken[]) => tokens.map((token) => token.text).filter(Boolean).join(", ")
 
-export const summarizeSegmentsForOption = (segments: SegmentApi[]) => {
+interface SegmentSummaryCurrencyConfig {
+  targetCurrencyId?: number | null
+  fallbackCurrencyId?: number | null
+  conversions?: CurrencyConversion[]
+}
+
+export const summarizeSegmentsForOption = (
+  segments: SegmentApi[],
+  currencyConfig?: SegmentSummaryCurrencyConfig,
+) => {
   if (!segments.length) return {}
 
   const sortedByStart = [...segments].sort(
@@ -154,7 +164,19 @@ export const summarizeSegmentsForOption = (segments: SegmentApi[]) => {
 
   const startLabel = getStartLocation(earliest as any)?.name ?? ""
   const endLabel = getEndLocation(latest as any)?.name ?? ""
-  const totalCost = segments.reduce((sum, seg) => sum + (Number(seg.cost) || 0), 0)
+  const totalCost = segments.reduce((sum, seg) => {
+    const base = Number(seg.cost) || 0
+    if (!currencyConfig?.conversions) {
+      return sum + base
+    }
+    const converted = convertWithFallback({
+      amount: base,
+      fromCurrencyId: seg.currencyId ?? null,
+      toCurrencyId: currencyConfig.targetCurrencyId ?? currencyConfig.fallbackCurrencyId ?? null,
+      conversions: currencyConfig.conversions ?? [],
+    })
+    return sum + converted.amount
+  }, 0)
 
   return {
     segmentCount: segments.length,

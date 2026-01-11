@@ -10,6 +10,7 @@ import { PlusIcon, LayoutIcon, EditIcon, EyeOffIcon } from "lucide-react";
 import OptionModal from "./OptionModal";
 import { formatDateStr, formatWeekday } from "../utils/dateformatters";
 import { OptionFilterPanel, type OptionFilterValue } from "../components/filters/OptionFilterPanel";
+import type { SegmentFilterValue } from "../components/filters/SegmentFilterPanel";
 import type { OptionSortValue } from "../components/sorting/optionSortTypes";
 import { applyOptionFilters, buildOptionMetadata } from "../services/optionFiltering";
 import { cn } from "../lib/utils";
@@ -25,8 +26,12 @@ import type { OptionApi, OptionSave, SegmentApi, SegmentType, Currency, Currency
 
 const formatOptionDateWithWeekday = (iso: string | null) => {
   if (!iso) return "N/A";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "N/A";
   const weekday = formatWeekday(iso);
-  return `${weekday}, ${formatDateStr(iso)}`;
+  const dayMonth = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const timeLabel = date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return `${weekday}, ${dayMonth} · ${timeLabel}`;
 };
 
 const formatLocationLabel = (loc: any | null) => {
@@ -529,6 +534,29 @@ export default function OptionsPageContent() {
     [options, filterState, sortState, connectedSegments],
   )
 
+  const initialModalFilters = useMemo<SegmentFilterValue>(
+    () => ({
+      locations: [...filterState.locations],
+      types: [],
+      dateRange: { ...filterState.dateRange },
+      showHidden: filterState.showHidden,
+    }),
+    [filterState],
+  )
+
+  type ModalSegmentSort = { field: "startDate" | "endDate"; direction: "asc" | "desc" }
+  const initialModalSort = useMemo<ModalSegmentSort | null>(() => {
+    if (!sortState) return null
+    switch (sortState.field) {
+      case "startDate":
+        return { field: "startDate", direction: sortState.direction }
+      case "endDate":
+        return { field: "endDate", direction: sortState.direction }
+      default:
+        return null
+    }
+  }, [sortState])
+
   const effectiveDisplayCurrencyId = displayCurrencyId ?? tripCurrencyId ?? userPreferredCurrencyId ?? null
   const selectedCurrencyMeta = useMemo(
     () => currencies.find((c) => c.id === effectiveDisplayCurrencyId) ?? null,
@@ -578,8 +606,8 @@ export default function OptionsPageContent() {
               currencies={currencies}
               placeholder={isLoadingCurrencies ? "Loading currencies..." : "Display currency"}
               disabled={isLoadingCurrencies}
-              className="w-full sm:w-[180px]"
-              triggerClassName="w-full"
+              className="w-full sm:w-[150px] text-sm"
+              triggerClassName="w-full h-9 text-sm px-3"
             />
           }
         />
@@ -621,6 +649,8 @@ export default function OptionsPageContent() {
         displayCurrencyId={effectiveDisplayCurrencyId}
         currencies={currencies}
         conversions={conversions}
+        initialSegmentFilters={initialModalFilters}
+        initialSegmentSort={initialModalSort}
       />
     </Card>
   );

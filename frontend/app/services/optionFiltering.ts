@@ -47,7 +47,9 @@ export const filterOptions = (
   if (endDate) endDate.setHours(23, 59, 59, 999)
 
   return options.filter((option) => {
-    if (!filters.showHidden && option.isUiVisible === false) return false
+    if (option.isUiVisible === false) {
+      return filters.showHidden
+    }
 
     const connected = connectedSegments[option.id]
     const connectedList = connected ?? []

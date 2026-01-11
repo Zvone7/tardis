@@ -120,6 +120,10 @@ public class Program
         builder.Services.AddScoped<CurrencyService>();
         builder.Services.AddScoped<TripAccessFilterAttribute>();
         builder.Services.AddScoped<ILocationIqClient, LocationIqClient>();
+        builder.Services.AddScoped<IAmadeusScrapingService, AmadeusScrapingService>();
+        builder.Services.AddSingleton<IAirportCatalog, AirportCatalog>();
+        builder.Services.AddScoped<IBookingLinkParser, BookingLinkParser>();
+        builder.Services.AddScoped<IGoogleFlightsLinkParser, GoogleFlightsLinkParser>();
         builder.Services.AddHttpClient();
     }
 

@@ -1,6 +1,7 @@
-import type { Segment, SegmentType } from "../types/models"
+import type { Segment, SegmentType, Currency, CurrencyConversion } from "../types/models"
 import type { SegmentFilterValue } from "../components/filters/SegmentFilterPanel"
 import type { SegmentSortValue } from "../components/sorting/segmentSortTypes"
+import { convertWithFallback } from "../utils/currency"
 
 const getLocationLabel = (loc: any | null) => {
   if (!loc) return ""
@@ -72,10 +73,30 @@ export const filterSegments = (segments: Segment[], filters: SegmentFilterValue)
   })
 }
 
+interface SegmentCurrencySortArgs {
+  targetCurrencyId?: number | null
+  fallbackCurrencyId?: number | null
+  currencies?: Currency[]
+  conversions?: CurrencyConversion[]
+}
+
+const resolveSegmentCost = (segment: Segment, currencyArgs?: SegmentCurrencySortArgs) => {
+  const base = Number(segment.cost) || 0
+  if (!currencyArgs?.currencies || !currencyArgs.conversions) return base
+  const converted = convertWithFallback({
+    amount: base,
+    fromCurrencyId: segment.currencyId ?? null,
+    toCurrencyId: currencyArgs.targetCurrencyId ?? currencyArgs.fallbackCurrencyId ?? null,
+    conversions: currencyArgs.conversions ?? [],
+  })
+  return converted.amount
+}
+
 export const sortSegments = (
   filtered: Segment[],
   sort: SegmentSortValue | null,
   segmentTypes: SegmentType[],
+  currencyArgs?: SegmentCurrencySortArgs,
 ): Segment[] => {
   const list = [...filtered]
   const typeNameMap = new Map(segmentTypes.map((t) => [t.id, t.name ?? ""]))
@@ -104,6 +125,8 @@ export const sortSegments = (
         return dir * getLocationLabel((a as any).endLocation ?? (a as any).EndLocation ?? null).localeCompare(
           getLocationLabel((b as any).endLocation ?? (b as any).EndLocation ?? null),
         )
+      case "cost":
+        return dir * (resolveSegmentCost(a, currencyArgs) - resolveSegmentCost(b, currencyArgs))
       default:
         return 0
     }
@@ -115,7 +138,8 @@ export const applySegmentFilters = (
   filters: SegmentFilterValue,
   sort: SegmentSortValue | null,
   segmentTypes: SegmentType[],
+  currencyArgs?: SegmentCurrencySortArgs,
 ) => {
   const filtered = filterSegments(segments, filters)
-  return sortSegments(filtered, sort, segmentTypes)
+  return sortSegments(filtered, sort, segmentTypes, currencyArgs)
 }

@@ -31,7 +31,9 @@ export const formatDateStr = (dateString: string | null) => {
 const WEEKDAY_FORMATTER = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" })
 
 const applyOffset = (dateString: string, userPreferredOffset: number) => {
-  const base = new Date(dateString)
+  const normalized =
+    dateString && !/[zZ]|[+-]\d{2}:\d{2}$/.test(dateString) ? `${dateString}Z` : dateString
+  const base = new Date(normalized)
   return new Date(base.getTime() + userPreferredOffset * 60 * 60 * 1000)
 }
 

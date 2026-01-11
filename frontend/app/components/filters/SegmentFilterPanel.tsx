@@ -57,18 +57,19 @@ export function SegmentFilterPanel({
   return (
     <div className={cn("space-y-3", className)}>
       <div className="flex flex-wrap items-center justify-end gap-3 sm:flex-nowrap">
-        {toolbarAddon ? <div className="min-w-[160px] sm:min-w-[180px]">{toolbarAddon}</div> : null}
+        {toolbarAddon ? <div className="min-w-[140px] sm:min-w-[160px]">{toolbarAddon}</div> : null}
         <Button
           type="button"
           variant="outline"
           size="icon"
           aria-label="Toggle filters"
           onClick={() => setOpen((prev) => !prev)}
-          className={cn("shrink-0", toolbarAddon ? "" : "ml-auto")}
+          className={cn("shrink-0 h-9 w-9 border-muted-foreground/50 text-muted-foreground relative", toolbarAddon ? "" : "ml-auto")}
         >
           <SlidersHorizontal
             className={cn("h-5 w-5 transition-transform", open ? "text-primary rotate-90" : "text-muted-foreground")}
           />
+          {hasFilters ? <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-primary" /> : null}
         </Button>
       </div>
 
