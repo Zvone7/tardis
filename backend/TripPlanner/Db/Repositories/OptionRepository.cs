@@ -29,21 +29,32 @@ public class OptionRepository
     public async Task CreateAsync(TripOptionDbm option, CancellationToken cancellationToken)
     {
         using IDbConnection db = new SqlConnection(_connectionString_);
-        var sqlQuery = "INSERT INTO TripOption (trip_id, name, start_datetime_utc, end_datetime_utc, total_cost) VALUES (@trip_id, @name, @start_datetime_utc, @end_datetime_utc, @total_cost)";
+        var sqlQuery = "INSERT INTO TripOption (trip_id, name, start_datetime_utc, end_datetime_utc, total_cost, is_ui_visible) " +
+                       "VALUES " +
+                       "(@trip_id, @name, @start_datetime_utc, @end_datetime_utc, @total_cost, 1)";
         await db.ExecuteAsync(sqlQuery, option);
     }
 
     public async Task UpdateLightAsync(TripOptionDbm option, CancellationToken cancellationToken)
     {
         using IDbConnection db = new SqlConnection(_connectionString_);
-        var sqlQuery = "UPDATE TripOption SET name = @name WHERE id = @id";
+        var sqlQuery = "UPDATE TripOption SET " +
+                       "name = @name, " +
+                       "is_ui_visible=@is_ui_visible " +
+                       "WHERE id = @id";
         await db.ExecuteAsync(sqlQuery, option);
     }
     
     public async Task UpdateAsync(TripOptionDbm option, CancellationToken cancellationToken)
     {
         using IDbConnection db = new SqlConnection(_connectionString_);
-        var sqlQuery = "UPDATE TripOption SET name = @name, start_datetime_utc = @start_datetime_utc, end_datetime_utc = @end_datetime_utc, total_cost = @total_cost WHERE id = @id";
+        var sqlQuery = "UPDATE TripOption " +
+                       "SET name = @name, " +
+                       "start_datetime_utc = @start_datetime_utc, " +
+                       "end_datetime_utc = @end_datetime_utc, " +
+                       "total_cost = @total_cost, " +
+                       "is_ui_visible = @is_ui_visible " +
+                       "WHERE id = @id";
         await db.ExecuteAsync(sqlQuery, option);
     }
 

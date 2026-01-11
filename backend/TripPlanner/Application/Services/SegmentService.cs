@@ -1,7 +1,10 @@
 using Domain.ActionModels;
 using Domain.DbModels;
 using Domain.Dtos;
+using Domain.Models;
+using Domain.Services;
 using Microsoft.Extensions.Logging;
+using System.Linq;
 
 namespace Application.Services;
 
@@ -11,6 +14,8 @@ public class SegmentService
     private readonly OptionRepository _optionRepository_;
     private readonly LocationRepository _locationRepository;
     private readonly OptionService _optionService_;
+    private readonly IBookingLinkParser _bookingLinkParser;
+    private readonly IGoogleFlightsLinkParser _googleFlightsLinkParser;
     private readonly ILogger<SegmentService> _logger;
 
     public SegmentService(
@@ -18,12 +23,16 @@ public class SegmentService
         OptionRepository optionRepository,
         LocationRepository locationRepository,
         OptionService optionService,
+        IBookingLinkParser bookingLinkParser,
+        IGoogleFlightsLinkParser googleFlightsLinkParser,
         ILogger<SegmentService> logger)
     {
         _segmentRepository_ = segmentRepository;
         _optionRepository_ = optionRepository;
         _locationRepository = locationRepository;
         _optionService_ = optionService;
+        _bookingLinkParser = bookingLinkParser;
+        _googleFlightsLinkParser = googleFlightsLinkParser;
         _logger = logger;
     }
 
@@ -44,6 +53,8 @@ public class SegmentService
             Comment = s.comment,
             StartLocationId = s.start_location_id,
             EndLocationId = s.end_location_id,
+            IsUiVisible = s.is_ui_visible,
+            CurrencyId = s.currency_id,
         }).ToList();
         await RetrieveLocationsForSegmentsAsync(result, cancellationToken);
         return result;
@@ -66,6 +77,8 @@ public class SegmentService
                 Comment = s.comment,
                 StartLocationId = s.start_location_id,
                 EndLocationId = s.end_location_id,
+                IsUiVisible = s.is_ui_visible,
+                CurrencyId = s.currency_id,
             })
             .OrderBy(s => s.StartDateTimeUtc)
             .ToList();
@@ -92,7 +105,9 @@ public class SegmentService
                 StartDateTimeUtcOffset = segment.start_datetime_utc_offset,
                 TripId = segment.trip_id,
                 SegmentTypeId = segment.segment_type_id,
-                Comment = segment.comment
+                Comment = segment.comment,
+                IsUiVisible = segment.is_ui_visible,
+                CurrencyId = segment.currency_id,
             };
         if (result != null)
             await RetrieveLocationsForSegmentAsync(result, cancellationToken);
@@ -145,7 +160,9 @@ public class SegmentService
             segment_type_id = segment.SegmentTypeId,
             comment = segment.Comment,
             start_location_id = startLocation?.id,
-            end_location_id = endLocation?.id
+            end_location_id = endLocation?.id,
+            is_ui_visible = segment.IsUiVisible,
+            currency_id = segment.CurrencyId == 0 ? 1 : segment.CurrencyId,
         }, cancellationToken);
     }
 
@@ -153,6 +170,7 @@ public class SegmentService
     {
         try
         {
+            var persistedSegment = await _segmentRepository_.GetAsync(segment.Id, cancellationToken);
             var utcStart = ConvertWithOffset(segment.StartDateTimeUtc, segment.StartDateTimeUtcOffset);
             var utcEnd = ConvertWithOffset(segment.EndDateTimeUtc, segment.EndDateTimeUtcOffset);
             if (segment.StartLocation != null)
@@ -219,6 +237,10 @@ public class SegmentService
                 }
             }
 
+            var currencyId = segment.CurrencyId == 0
+                ? persistedSegment?.currency_id ?? 1
+                : segment.CurrencyId;
+
             await _segmentRepository_.UpdateAsync(new SegmentDbm
             {
                 id = segment.Id,
@@ -233,6 +255,8 @@ public class SegmentService
                 comment = segment.Comment,
                 start_location_id = segment.StartLocation?.Id,
                 end_location_id = segment.EndLocation?.Id,
+                is_ui_visible = segment.IsUiVisible,
+                currency_id = currencyId,
             }, cancellationToken);
 
             await UpdateOptionsRelatedBySegmentIdAsync(segment.Id, cancellationToken);
@@ -278,6 +302,7 @@ public class SegmentService
             {
                 Id = o.id,
                 Name = o.name,
+                IsUiVisible = o.is_ui_visible,
                 TripId = o.trip_id
             }).ToList();
             return result;
@@ -353,5 +378,15 @@ public class SegmentService
         }
     }
 
-    #endregion
+    public Task<SegmentSuggestionDto> ParseBookingLinkAsync(string url, CancellationToken cancellationToken)
+    {
+        return _bookingLinkParser.ParseBookingLinkAsync(url, cancellationToken);
+    }
+
+    public Task<SegmentSuggestionDto> ParseFlightsLinkAsync(string url, CancellationToken cancellationToken)
+    {
+        return _googleFlightsLinkParser.ParseFlightsLinkAsync(url, cancellationToken);
+    }
+
+#endregion
 }

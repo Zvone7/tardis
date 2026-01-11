@@ -8,4 +8,5 @@ public class TripOptionDbm
     public DateTime? start_datetime_utc { get; set; }
     public DateTime? end_datetime_utc { get; set; }
     public decimal total_cost { get; set; }
+    public bool is_ui_visible { get; set; }
 }

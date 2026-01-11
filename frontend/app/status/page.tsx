@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { TestApiButton } from "../components/TestApiButton";
 import { getServerStartTime } from "../lib/serverTime";
 import Link from "next/link";
+import { userApi } from "../utils/apiClient";
 
 export default function Authenticated() {
   const router = useRouter();
@@ -16,21 +17,8 @@ export default function Authenticated() {
   const envCode= process.env.NEXT_PUBLIC_ENV_CODE || "unknown";
   const buildNumber= process.env.NEXT_PUBLIC_BUILD_NUMBER || "unknown";
   useEffect(() => {
-    fetch(`/api/account/info`, {
-      method: "GET",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    })
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error("Authentication failed");
-        }
-        else{
-        }
-        return res.json();
-      })
+    userApi
+      .getAccountInfo()
       .then((data) => {
         setAuthStatus(`Authenticated as: ${data.email || "Unknown"}`);
       })

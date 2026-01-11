@@ -45,10 +45,12 @@ public class SegmentRepository
                        "end_datetime_utc_offset, "+
                        "name, " +
                        "cost, " +
+                       "currency_id, " +
                        "segment_type_id, " +
                        "comment, " +
                        "start_location_id, " +
-                       "end_location_id" +
+                       "end_location_id, " +
+                       "is_ui_visible" +
                        ") VALUES (" +
                        "@trip_id, " +
                        "@start_datetime_utc, " +
@@ -57,10 +59,12 @@ public class SegmentRepository
                        "@end_datetime_utc_offset, " +
                        "@name, " +
                        "@cost, " +
+                       "@currency_id, " +
                        "@segment_type_id," +
                        "@comment, " +
                        "@start_location_id, " +
-                       "@end_location_id " +
+                       "@end_location_id, " +
+                       "@is_ui_visible " +
                        ")";
         await db.ExecuteAsync(sqlQuery, segment);
     }
@@ -76,10 +80,12 @@ public class SegmentRepository
                        "end_datetime_utc_offset = @end_datetime_utc_offset, " +
                        "name = @name, " +
                        "cost = @cost, " +
+                       "currency_id = @currency_id, " +
                        "segment_type_id = @segment_type_id, " +
                        "comment = @comment, " +
                        "start_location_id = @start_location_id, " +
-                       "end_location_id = @end_location_id " +
+                       "end_location_id = @end_location_id, " +
+                       "is_ui_visible = @is_ui_visible " +
                        "WHERE id = @id";
         await db.ExecuteAsync(sqlQuery, segment);
     }

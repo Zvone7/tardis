@@ -6,10 +6,12 @@ namespace Application.Services;
 public class TripService
 {
     private readonly TripRepository _tripRepository_;
+    private readonly UserService _userService;
 
-    public TripService(TripRepository tripRepository)
+    public TripService(TripRepository tripRepository, UserService userService)
     {
         _tripRepository_ = tripRepository;
+        _userService = userService;
     }
 
     public async Task<List<TripDto>> GetAllAsync(int userId, CancellationToken cancellationToken)
@@ -22,7 +24,8 @@ public class TripService
             Description = t.Description,
             IsActive = t.is_active,
             StartTime = t.StartTime,
-            EndTime = t.EndTime
+            EndTime = t.EndTime,
+            CurrencyId = t.currency_id
         }).ToList();
         return result;
     }
@@ -35,19 +38,22 @@ public class TripService
             Id = trip.Id,
             Name = trip.Name,
             Description = trip.Description,
-            IsActive = trip.is_active
+            IsActive = trip.is_active,
+            CurrencyId = trip.currency_id
         };
         return result;
     }
 
     public async Task<TripDto> CreateAsync(int userId, TripDto trip, CancellationToken cancellationToken)
     {
+        var currencyId = await ResolveCurrencyIdAsync(userId, trip.CurrencyId, cancellationToken);
         var created = await _tripRepository_.CreateAsync(userId,
             new TripDbm
             {
                 Name = trip.Name,
                 Description = trip.Description,
-                is_active = trip.IsActive
+                is_active = trip.IsActive,
+                currency_id = currencyId
             }, cancellationToken);
 
         var result = new TripDto
@@ -55,7 +61,8 @@ public class TripService
             Id = created.Id,
             Name = created.Name,
             Description = created.Description,
-            IsActive = created.is_active
+            IsActive = created.is_active,
+            CurrencyId = created.currency_id
         };
 
         return result;
@@ -63,12 +70,19 @@ public class TripService
 
     public async Task<TripDto> UpdateAsync(TripDto trip, CancellationToken cancellationToken)
     {
+        var persisted = await _tripRepository_.GetAsync(trip.Id, cancellationToken);
+        if (persisted == null)
+        {
+            throw new InvalidOperationException($"Trip with id {trip.Id} was not found.");
+        }
+        var currencyId = trip.CurrencyId == 0 ? persisted?.currency_id ?? 1 : trip.CurrencyId;
         var updated = await _tripRepository_.UpdateAsync(new TripDbm
         {
             Id = trip.Id,
             Name = trip.Name,
             Description = trip.Description,
-            is_active = trip.IsActive
+            is_active = trip.IsActive,
+            currency_id = currencyId
         }, cancellationToken);
 
         var result = new TripDto
@@ -76,7 +90,8 @@ public class TripService
             Id = updated.Id,
             Name = updated.Name,
             Description = updated.Description,
-            IsActive = updated.is_active
+            IsActive = updated.is_active,
+            CurrencyId = updated.currency_id
         };
 
         return result;
@@ -91,6 +106,17 @@ public class TripService
     {
        var res = await _tripRepository_.CheckUserHasAccessToTripAsync(userId, tripId, cancellationToken);
        return res;
+    }
+
+    private async Task<int> ResolveCurrencyIdAsync(int userId, int requestedCurrencyId, CancellationToken cancellationToken)
+    {
+        if (requestedCurrencyId > 0) return requestedCurrencyId;
+
+        var user = await _userService.GetAsync(userId, cancellationToken);
+        var preferredCurrency = user?.UserPreference?.PreferredCurrencyId ?? 0;
+        if (preferredCurrency > 0) return preferredCurrency;
+
+        return 1;
     }
 
 }

@@ -24,11 +24,13 @@ public class UserPreferenceRepository
     {
         using IDbConnection db = new SqlConnection(_connectionString_);
         await db.ExecuteAsync(
-            "INSERT INTO user_preference (app_user_id, preferred_utc_offset) " +
-            "VALUES (@app_user_id, @preferred_utc_offset)",
-            new { 
-                app_user_id = userId, 
-                userPreference.preferred_utc_offset });
+            "INSERT INTO user_preference (app_user_id, preferred_utc_offset, preferred_currency_id, preferred_dark_mode) " +
+            "VALUES (@app_user_id, @preferred_utc_offset, @preferred_currency_id, @preferred_dark_mode)",
+            new {
+                app_user_id = userId,
+                userPreference.preferred_utc_offset,
+                userPreference.preferred_currency_id,
+                userPreference.preferred_dark_mode });
         return userPreference;
     }
 
@@ -36,9 +38,11 @@ public class UserPreferenceRepository
     {
         using IDbConnection db = new SqlConnection(_connectionString_);
         await db.ExecuteAsync(
-            "UPDATE user_preference SET preferred_utc_offset = @preferred_utc_offset " +
+            "UPDATE user_preference SET preferred_utc_offset = @preferred_utc_offset, preferred_currency_id = @preferred_currency_id, preferred_dark_mode = @preferred_dark_mode " +
             "WHERE app_user_id = @userId", new { 
                 userPreference.preferred_utc_offset,
+                userPreference.preferred_currency_id,
+                userPreference.preferred_dark_mode,
                 userId });
         return userPreference;
     }

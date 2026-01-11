@@ -10,6 +10,7 @@ public class OptionDto
     public decimal TotalCost { get; set; }
     public decimal CostPerDay { get; set; }
     public int TotalDays { get; set; }
+    public bool IsUiVisible { get; set; }
     public Dictionary<CostType, decimal> CostPerType { get; set; } = new();
 }
 

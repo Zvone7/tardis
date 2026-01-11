@@ -1,9 +1,12 @@
-name: '[FE] Build and Deploy Workflow'
+name: '[FE][dev] Build and Deploy Workflow'
 
 on:
   push:
     branches:
       - release-fe-dev
+      - feature/**
+    paths:
+      - 'frontend/**'
   workflow_dispatch:
     inputs:
       buildNumber:

@@ -44,11 +44,7 @@ public sealed class LocationIqClient : ILocationIqClient
             if (string.IsNullOrWhiteSpace(_opts.Token))
                 throw new LocationIqException("LOCATIONIQ token is not configured.");
 
-            var baseUrl = string.IsNullOrWhiteSpace(_opts.BaseUrl)
-                ? "https://us1.locationiq.com/v1/search"
-                : _opts.BaseUrl.TrimEnd('/');
-
-            var url = new UriBuilder(baseUrl);
+            var url = new UriBuilder(BuildEndpoint("search"));
             var qp = HttpUtility.ParseQueryString(string.Empty);
             qp["key"] = _opts.Token;
             qp["format"] = "json";
@@ -56,6 +52,7 @@ public sealed class LocationIqClient : ILocationIqClient
             qp["limit"] = limit.ToString();
             qp["addressdetails"] = "1";
             qp["normalizecity"] = "1";
+            qp["tag"] = "place:country,place:city,place:town,place:village";
             if (!string.IsNullOrWhiteSpace(countrycodes)) qp["countrycodes"] = countrycodes;
             if (!string.IsNullOrWhiteSpace(lang)) qp["accept-language"] = lang;
             url.Query = qp.ToString();
@@ -73,12 +70,113 @@ public sealed class LocationIqClient : ILocationIqClient
             var resp = await res.Content.ReadAsStringAsync(ct);
             var data = JsonSerializer.Deserialize<List<LocationIqItem>>(resp, JsonOpts)
                        ?? new List<LocationIqItem>();
-            return data;
+            return NormalizeResults(data);
         }
         catch (Exception e)
         {
             _logger.LogError(e, "LocationIQ ForwardGeocodeAsync failed");
             throw;
         }
+    }
+
+    public async Task<LocationIqItem?> ReverseGeocodeAsync(
+        double latitude,
+        double longitude,
+        string? lang,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_opts.Token))
+                throw new LocationIqException("LOCATIONIQ token is not configured.");
+
+            var url = new UriBuilder(BuildEndpoint("reverse"));
+            var qp = HttpUtility.ParseQueryString(string.Empty);
+            qp["key"] = _opts.Token;
+            qp["format"] = "json";
+            qp["lat"] = latitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            qp["lon"] = longitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            qp["addressdetails"] = "1";
+            if (!string.IsNullOrWhiteSpace(lang)) qp["accept-language"] = lang;
+            url.Query = qp.ToString();
+
+            using var req = new HttpRequestMessage(HttpMethod.Get, url.Uri);
+            using var res = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+
+            if (!res.IsSuccessStatusCode)
+            {
+                var body = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                throw new LocationIqException(
+                    $"LocationIQ upstream {(int)res.StatusCode} {res.ReasonPhrase}: {body}");
+            }
+
+            var resp = await res.Content.ReadAsStringAsync(ct);
+            var item = JsonSerializer.Deserialize<LocationIqItem>(resp, JsonOpts);
+            if (item == null) return null;
+
+            return NormalizeResults(new[] { item }).FirstOrDefault();
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "LocationIQ ReverseGeocodeAsync failed");
+            throw;
+        }
+    }
+
+    private string BuildEndpoint(string endpoint)
+    {
+        var baseUrl = string.IsNullOrWhiteSpace(_opts.BaseUrl)
+            ? "https://us1.locationiq.com/v1"
+            : _opts.BaseUrl.TrimEnd('/');
+
+        var lower = baseUrl.ToLowerInvariant();
+        if (lower.EndsWith("/search") || lower.EndsWith("/reverse"))
+        {
+            baseUrl = baseUrl[..baseUrl.LastIndexOf('/')];
+        }
+
+        return $"{baseUrl}/{endpoint}";
+    }
+
+    private static IReadOnlyList<LocationIqItem> NormalizeResults(IEnumerable<LocationIqItem> results)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var normalized = new List<LocationIqItem>();
+
+        foreach (var item in results)
+        {
+            var name =
+                item.Address?.City
+                ?? item.Address?.Town
+                ?? item.Address?.Village
+                ?? item.Address?.Municipality
+                ?? item.Address?.Hamlet
+                ?? item.DisplayName
+                ?? string.Empty;
+
+            var country = item.Address?.Country ?? string.Empty;
+            name = name.Trim();
+            country = country.Trim();
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(country)) continue;
+
+            var key = $"{name}|{country}";
+            if (!seen.Add(key)) continue;
+
+            normalized.Add(new LocationIqItem
+            {
+                PlaceId = item.PlaceId,
+                Lat = item.Lat,
+                Lon = item.Lon,
+                DisplayName = $"{name}, {country}",
+                Address = new LocationIqAddress
+                {
+                    City = name,
+                    Country = country,
+                    CountryCode = item.Address?.CountryCode
+                }
+            });
+        }
+
+        return normalized;
     }
 }

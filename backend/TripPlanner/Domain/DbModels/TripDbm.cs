@@ -8,4 +8,5 @@ public class TripDbm
     public bool is_active { get; set; }
     public DateTime? StartTime { get; set; }
     public DateTime? EndTime { get; set; } 
+    public int currency_id { get; set; }
 }

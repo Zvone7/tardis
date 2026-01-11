@@ -1,4 +1,6 @@
 import React from "react";
+import { EyeOffIcon } from "lucide-react";
+import { cn } from "../lib/utils";
 
 const PALETTES = [
   { bg: "bg-blue-100 dark:bg-blue-900/30",  fg: "text-blue-800 dark:text-blue-200",  ring: "ring-blue-300/40 dark:ring-blue-800/40" },
@@ -43,26 +45,34 @@ export function OptionBadge({
   name,
   className = "",
   title,
+  isHidden = false,
 }: {
   id?: number; // 👈 now optional
   name: string;
   className?: string;
   title?: string;
+  isHidden?: boolean;
 }) {
   // Prefer id if provided, otherwise use name
   const pal = paletteForKey(name + (id ?? "").toString());
 
+  const baseClasses = [
+    "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
+    "ring-1 ring-inset",
+    className,
+  ];
+
+  const paletteClasses = isHidden
+    ? ["bg-muted", "text-muted-foreground", "ring-muted-foreground/40"]
+    : [pal.bg, pal.fg, pal.ring];
+
   return (
     <span
-      className={[
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-        "ring-1 ring-inset",
-        pal.bg, pal.fg, pal.ring,
-        className,
-      ].join(" ")}
+      className={cn(...baseClasses, ...paletteClasses)}
       title={title ?? name}
       aria-label={name}
     >
+      {isHidden && <EyeOffIcon className="mr-1 h-3 w-3" aria-hidden="true" />}
       {name}
     </span>
   );

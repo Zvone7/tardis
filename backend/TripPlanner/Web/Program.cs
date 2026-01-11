@@ -117,8 +117,13 @@ public class Program
         builder.Services.AddScoped<OptionService>();
         builder.Services.AddScoped<SegmentService>();
         builder.Services.AddScoped<UserService>();
+        builder.Services.AddScoped<CurrencyService>();
         builder.Services.AddScoped<TripAccessFilterAttribute>();
         builder.Services.AddScoped<ILocationIqClient, LocationIqClient>();
+        builder.Services.AddScoped<IAmadeusScrapingService, AmadeusScrapingService>();
+        builder.Services.AddSingleton<IAirportCatalog, AirportCatalog>();
+        builder.Services.AddScoped<IBookingLinkParser, BookingLinkParser>();
+        builder.Services.AddScoped<IGoogleFlightsLinkParser, GoogleFlightsLinkParser>();
         builder.Services.AddHttpClient();
     }
 
@@ -130,6 +135,7 @@ public class Program
         builder.Services.AddScoped<UserRepository>();
         builder.Services.AddScoped<UserPreferenceRepository>();
         builder.Services.AddScoped<LocationRepository>();
+        builder.Services.AddScoped<CurrencyRepository>();
     }
 
     private static void SetupAuthNAuth(WebApplicationBuilder builder, AppSettings appSettings)

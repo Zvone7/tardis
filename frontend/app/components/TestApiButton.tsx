@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Button } from "../components/ui/button"
 import { toast } from "../components/ui/use-toast"
+import { homeApi } from "../utils/apiClient"
 
 export function TestApiButton() {
   const [isLoading, setIsLoading] = useState(false);
@@ -13,18 +14,7 @@ export function TestApiButton() {
     setApiResponse(null);
     
     try {
-      const response = await fetch("/api/home/status", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      
-      if (!response.ok) {
-        throw new Error("API request failed");
-      }
-
-      const data = await response.text();
+      const data = await homeApi.getStatus();
       console.log("------- Response from API -------");
       console.log(data);
       console.log("--------------------------------");

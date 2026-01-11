@@ -1,69 +1,163 @@
 /*
-drop table [dbo].[option_to_segment]
-drop table [dbo].[segment]
-drop table [dbo].[segment_type]
-drop table [dbo].[tripoption]
-drop table [dbo].[trip]
-drop table [dbo].[app_user_to_trip]
-drop table [dbo].[app_user]
+-- Dev cleanup (optional)
+DROP TABLE IF EXISTS option_to_segment;
+DROP TABLE IF EXISTS segment;
+DROP TABLE IF EXISTS segment_type;
+DROP TABLE IF EXISTS tripoption;
+DROP TABLE IF EXISTS trip;
+DROP TABLE IF EXISTS app_user_to_trip;
+DROP TABLE IF EXISTS app_user;
+DROP TABLE IF EXISTS user_preference;
+DROP TABLE IF EXISTS location;
 */
 
+--------------------------------------------------------------------------------
+-- CURRENCY
+--------------------------------------------------------------------------------
+CREATE TABLE currency (
+    id INT PRIMARY KEY IDENTITY,
+    symbol NVARCHAR(8) NOT NULL,
+    short_name NVARCHAR(8) NOT NULL,
+    name NVARCHAR(255) NOT NULL
+);
+
+INSERT INTO currency (symbol, short_name, name) VALUES
+    ('€', 'EUR', 'Euro'),
+    ('$', 'USD', 'US Dollar'),
+    ('kr', 'NOK', 'Norwegian Krone'),
+    ('kr', 'SEK', 'Swedish Krona'),
+    ('kr', 'DKK', 'Danish Krone'),
+    ('¥', 'JPY', 'Japanese Yen'),
+    ('¥', 'CNY', 'Chinese Yuan'),
+    ('Ft', 'HUF', 'Hungarian Forint'),
+    ('zł', 'PLN', 'Polish Zloty');
+
+--------------------------------------------------------------------------------
+-- CURRENCY CONVERSION (rates represent 1 unit of from_currency_id in to_currency_id)
+--------------------------------------------------------------------------------
+CREATE TABLE currency_conversion (
+    from_currency_id INT NOT NULL,
+    to_currency_id INT NOT NULL,
+    rate DECIMAL(18,6) NOT NULL,
+    PRIMARY KEY (from_currency_id, to_currency_id),
+    FOREIGN KEY (from_currency_id) REFERENCES currency(id),
+    FOREIGN KEY (to_currency_id) REFERENCES currency(id)
+);
+
+INSERT INTO currency_conversion (from_currency_id, to_currency_id, rate) VALUES
+    (1, 1, 1.000000),
+    (1, 2, 1.080000), (2, 1, 0.925926),
+    (1, 3, 11.500000), (3, 1, 0.086957),
+    (1, 4, 11.300000), (4, 1, 0.088496),
+    (1, 5, 7.450000), (5, 1, 0.134228),
+    (1, 6, 160.000000), (6, 1, 0.006250),
+    (1, 7, 7.800000), (7, 1, 0.128205),
+    (1, 8, 390.000000), (8, 1, 0.002564),
+    (1, 9, 4.300000), (9, 1, 0.232558);
+
+--------------------------------------------------------------------------------
+-- TRIP
+--------------------------------------------------------------------------------
 CREATE TABLE trip (
     id INT PRIMARY KEY IDENTITY,
     name NVARCHAR(255),
     description NVARCHAR(255),
     user_id INT DEFAULT 1,
-    is_active BIT
+    is_active BIT,
+    currency_id INT NOT NULL DEFAULT 1,
+    FOREIGN KEY (currency_id) REFERENCES currency(id)
 );
 
-GO
-
+--------------------------------------------------------------------------------
+-- TRIP OPTION
+--------------------------------------------------------------------------------
 CREATE TABLE tripoption (
     id INT PRIMARY KEY IDENTITY,
-    trip_id INT,
+    trip_id INT NOT NULL,
     name NVARCHAR(255),
-    start_datetime_utc DATETIME null,
-    end_datetime_utc DATETIME null,
-    total_cost DECIMAL(10, 2) null default 0,
+    start_datetime_utc DATETIME NULL,
+    end_datetime_utc DATETIME NULL,
+    total_cost DECIMAL(10,2) NULL DEFAULT 0,
+    is_ui_visible BIT NOT NULL DEFAULT 1,
     FOREIGN KEY (trip_id) REFERENCES trip(id)
 );
 
-GO
+--------------------------------------------------------------------------------
+-- LOCATION
+--------------------------------------------------------------------------------
+CREATE TABLE location (
+    id INT PRIMARY KEY IDENTITY,
+    provider NVARCHAR(50),
+    provider_place_id NVARCHAR(255),
+    name NVARCHAR(255),
+    country NVARCHAR(255),
+    country_code NVARCHAR(10),
+    lat FLOAT,
+    lng FLOAT,
+    formatted NVARCHAR(512)
+);
 
-CREATE TABLE segment_type(
+--------------------------------------------------------------------------------
+-- SEGMENT TYPES
+--------------------------------------------------------------------------------
+CREATE TABLE segment_type (
     id INT PRIMARY KEY IDENTITY,
     short_name NVARCHAR(255),
     name NVARCHAR(255),
     description NVARCHAR(255),
     color NVARCHAR(16),
     icon_svg NVARCHAR(2048)
-)
-
-GO
-
-CREATE TABLE segment (
-    id INT PRIMARY KEY IDENTITY,
-    segment_type_id INT,
-    trip_id INT,
-    start_datetime_utc DATETIME,
-    start_datetime_utc_offset INT,
-    end_datetime_utc DATETIME,
-    end_datetime_utc_offset INT,
-    name NVARCHAR(255),
-    cost DECIMAL(10, 2),
-    FOREIGN KEY (trip_id) REFERENCES trip(id),
-    FOREIGN KEY (segment_type_id) REFERENCES segment_type(id)
 );
 
-GO
-
-CREATE TABLE option_to_segment(
+--------------------------------------------------------------------------------
+-- SEGMENT
+--------------------------------------------------------------------------------
+CREATE TABLE segment (
     id INT PRIMARY KEY IDENTITY,
-    option_id INT,
-    segment_id INT,
+    segment_type_id INT NOT NULL,
+    trip_id INT NOT NULL,
+
+    start_datetime_utc DATETIME NOT NULL,
+    start_datetime_utc_offset INT NOT NULL,
+
+    end_datetime_utc DATETIME NOT NULL,
+    end_datetime_utc_offset INT NOT NULL,
+
+    name NVARCHAR(255),
+    cost DECIMAL(10,2),
+    currency_id INT NOT NULL DEFAULT 1,
+
+    -- location foreign keys
+    start_location_id INT NULL,
+    end_location_id INT NULL,
+
+    -- visibility
+    is_ui_visible BIT NOT NULL DEFAULT 1,
+
+    -- comment
+    comment NVARCHAR(MAX) NULL,
+
+    FOREIGN KEY (trip_id) REFERENCES trip(id),
+    FOREIGN KEY (segment_type_id) REFERENCES segment_type(id),
+    FOREIGN KEY (start_location_id) REFERENCES location(id),
+    FOREIGN KEY (end_location_id) REFERENCES location(id),
+    FOREIGN KEY (currency_id) REFERENCES currency(id)
+);
+
+--------------------------------------------------------------------------------
+-- OPTION → SEGMENT many-to-many
+--------------------------------------------------------------------------------
+CREATE TABLE option_to_segment (
+    id INT PRIMARY KEY IDENTITY,
+    option_id INT NOT NULL,
+    segment_id INT NOT NULL,
     FOREIGN KEY (option_id) REFERENCES tripoption(id),
     FOREIGN KEY (segment_id) REFERENCES segment(id)
-)
+);
+
+--------------------------------------------------------------------------------
+-- INSERT DEFAULT SEGMENT TYPES
+--------------------------------------------------------------------------------
 
 insert into segment_type (short_name, name, description, color, icon_svg) values ('transport_plane', 'Plane', 'A flight from one location to another', 'blue', '<?xml version="1.0" ?><svg viewBox="0 0 576 512" xmlns="http://www.w3.org/2000/svg"><path d="M482.3 192C516.5 192 576 221 576 256C576 292 516.5 320 482.3 320H365.7L265.2 495.9C259.5 505.8 248.9 512 237.4 512H181.2C170.6 512 162.9 501.8 165.8 491.6L214.9 320H112L68.8 377.6C65.78 381.6 61.04 384 56 384H14.03C6.284 384 0 377.7 0 369.1C0 368.7 .1818 367.4 .5398 366.1L32 256L.5398 145.9C.1818 144.6 0 143.3 0 142C0 134.3 6.284 128 14.03 128H56C61.04 128 65.78 130.4 68.8 134.4L112 192H214.9L165.8 20.4C162.9 10.17 170.6 0 181.2 0H237.4C248.9 0 259.5 6.153 265.2 16.12L365.7 192H482.3z"/></svg>')
 
@@ -83,6 +177,9 @@ insert into segment_type (short_name, name, description, color, icon_svg) values
 
 insert into segment_type (short_name, name, description, color, icon_svg) values ('accomodation_other', 'Other', 'A stay at another type of accomodation', 'purple', '<?xml version="1.0" ?><svg enable-background="new 0 0 32 32" id="Glyph" version="1.1" viewBox="0 0 32 32" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><path d="M30.854,16.548C30.523,17.43,29.703,18,28.764,18H28v11c0,0.552-0.448,1-1,1h-6v-7c0-2.757-2.243-5-5-5  s-5,2.243-5,5v7H5c-0.552,0-1-0.448-1-1V18H3.235c-0.939,0-1.759-0.569-2.09-1.451c-0.331-0.882-0.088-1.852,0.62-2.47L13.444,3.019  c1.434-1.357,3.679-1.357,5.112,0l11.707,11.086C30.941,14.696,31.185,15.666,30.854,16.548z" id="XMLID_219_"/></svg>')
 
+--------------------------------------------------------------------------------
+-- APP USER
+--------------------------------------------------------------------------------
 CREATE TABLE app_user (
     id INT PRIMARY KEY IDENTITY,
     email NVARCHAR(255),
@@ -90,34 +187,32 @@ CREATE TABLE app_user (
     role NVARCHAR(255),
     created_at_utc DATETIME2,
     approved_at_utc DATETIME2 NULL,
-    bit is_approved DEFAULT 0
+    is_approved BIT NOT NULL DEFAULT 0
 );
 
--- UPDATE app_user SET is_approved = 1 WHERE id = 1
--- UPDATE app_user SET role = 'admin' WHERE id = 1
-
+--------------------------------------------------------------------------------
+-- USER TO TRIP PERMISSIONS
+--------------------------------------------------------------------------------
 CREATE TABLE app_user_to_trip (
     id INT PRIMARY KEY IDENTITY,
-    app_user_id INT,
-    trip_id INT,
+    app_user_id INT NOT NULL,
+    trip_id INT NOT NULL,
     FOREIGN KEY (app_user_id) REFERENCES app_user(id),
     FOREIGN KEY (trip_id) REFERENCES trip(id)
-)
-
-CREATE TABLE user_preference (
-    id INT PRIMARY KEY IDENTITY,
-    app_user_id INT UNIQUE,
-    preferred_utc_offset int,
-    FOREIGN KEY (app_user_id) REFERENCES app_user(id)
 );
 
-CREATE UNIQUE INDEX idx_user_preference_app_user_id ON user_preference(app_user_id);
+--------------------------------------------------------------------------------
+-- USER PREFERENCES
+--------------------------------------------------------------------------------
+CREATE TABLE user_preference (
+    id INT PRIMARY KEY IDENTITY,
+    app_user_id INT UNIQUE NOT NULL,
+    preferred_utc_offset INT,
+    preferred_currency_id INT NOT NULL DEFAULT 1,
+    preferred_dark_mode NVARCHAR(10) NOT NULL DEFAULT 'system' CHECK (preferred_dark_mode IN ('system', 'dark', 'light')),
+    FOREIGN KEY (app_user_id) REFERENCES app_user(id),
+    FOREIGN KEY (preferred_currency_id) REFERENCES currency(id)
+);
 
-GO
-
-alter table segment add comment NVARCHAR(MAX) NULL;
-
--- todo later:
--- modify segment table to have a start_destination and end_destination (nullable) which are both strings up to 100 characters
--- ALTER TABLE segment ADD start_destination NVARCHAR(100) NOT NULL;
--- ALTER TABLE segment ADD end_destination NVARCHAR(100) NULL;
+CREATE UNIQUE INDEX idx_user_preference_app_user_id
+    ON user_preference(app_user_id);

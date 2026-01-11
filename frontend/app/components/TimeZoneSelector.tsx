@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useMemo } from "react"
 import { Label } from "./ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
+import { cn } from "../lib/utils"
 
 interface TimezoneSelectorProps {
   label: string
@@ -10,6 +11,9 @@ interface TimezoneSelectorProps {
   onChange: (utcOffset: number) => void
   id: string
   compact?: boolean
+  layout?: "inline" | "stacked"
+  className?: string
+  selectClassName?: string
 }
 
 const timezones = [
@@ -28,7 +32,7 @@ const timezones = [
 ]
 
 export const TimezoneSelector: React.FC<TimezoneSelectorProps> = React.memo(
-  ({ label, value, onChange, id, compact = false }) => {
+  ({ label, value, onChange, id, compact = false, layout = "inline", className, selectClassName }) => {
     const [selectedTimezone, setSelectedTimezone] = useState(
       () => timezones.find((tz) => tz.value === value) || timezones[0],
     )
@@ -68,14 +72,28 @@ export const TimezoneSelector: React.FC<TimezoneSelectorProps> = React.memo(
       )
     }
 
+    if (layout === "stacked") {
+      return (
+        <div className={cn("space-y-2", className)}>
+          {label ? <p className="text-sm text-muted-foreground">{label}</p> : null}
+          <Select value={selectedTimezone.name} onValueChange={handleTimezoneChange}>
+            <SelectTrigger id={id} className={cn("w-full", selectClassName)}>
+              <SelectValue placeholder="Select timezone" />
+            </SelectTrigger>
+            <SelectContent>{timezoneOptions}</SelectContent>
+          </Select>
+        </div>
+      )
+    }
+
     return (
-      <div className="grid grid-cols-4 items-center gap-4">
+      <div className={cn("grid grid-cols-4 items-center gap-4", className)}>
         <Label htmlFor={id} className="text-right">
           {label}
         </Label>
         <div className="col-span-3">
           <Select value={selectedTimezone.name} onValueChange={handleTimezoneChange}>
-            <SelectTrigger id={id}>
+            <SelectTrigger id={id} className={cn("w-full", selectClassName)}>
               <SelectValue placeholder="Select timezone" />
             </SelectTrigger>
             <SelectContent>{timezoneOptions}</SelectContent>

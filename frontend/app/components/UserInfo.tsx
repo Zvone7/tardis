@@ -6,40 +6,27 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../com
 import { Button } from "../components/ui/button"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-
-interface UserData {
-  name: string
-  email: string
-}
+import type { User as UserModel } from "../types/models"
+import { userApi } from "../utils/apiClient"
 
 export function UserInfo() {
-  const [user, setUser] = useState<UserData | null>(null)
+  const [user, setUser] = useState<UserModel | null>(null)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
     async function fetchUserInfo() {
       try {
-        const res = await fetch("/api/account/info", {
-          method: "GET",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-        })
-
-        if (res.status === 307) {
-          console.error("Redirect detected. Location:", res.headers.get("Location"))
-        }
-
-        if (res.ok) {
-          const userData: UserData = await res.json()
-          setUser(userData)
-        }
-
-        if (res.status === 401 && window.location.pathname !== "/" && window.location.pathname !== "/status") {
-          window.location.href = "/"
-        }
+        const userData = await userApi.getAccountInfo()
+        setUser(userData)
       } catch (error) {
         console.error("Failed to fetch user info:", error)
+        if (
+          window.location.pathname !== "/" &&
+          window.location.pathname !== "/status"
+        ) {
+          window.location.href = "/"
+        }
       }
     }
 
@@ -49,18 +36,9 @@ export function UserInfo() {
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true)
-      const res = await fetch("/api/account/logout", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-      })
-
-      if (res.ok) {
-        setUser(null)
-        router.push("/")
-      } else {
-        console.error("Logout failed")
-      }
+      await userApi.logout()
+      setUser(null)
+      router.push("/")
     } catch (error) {
       console.error("Error during logout:", error)
     } finally {

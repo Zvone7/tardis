@@ -1,24 +1,47 @@
 // components/OptionsPageContent.tsx
 "use client";
 
-import { Fragment, useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
-import { PlusIcon, LayoutIcon, EditIcon, TrashIcon } from "lucide-react";
+import { PlusIcon, LayoutIcon, EditIcon, EyeOffIcon } from "lucide-react";
 import OptionModal from "./OptionModal";
-import { formatDateStr } from "../utils/formatters";
+import { formatDateStr, formatWeekday } from "../utils/dateformatters";
+import { OptionFilterPanel, type OptionFilterValue } from "../components/filters/OptionFilterPanel";
+import type { SegmentFilterValue } from "../components/filters/SegmentFilterPanel";
+import type { OptionSortValue } from "../components/sorting/optionSortTypes";
+import { applyOptionFilters, buildOptionMetadata } from "../services/optionFiltering";
+import { cn } from "../lib/utils";
+import { optionsApi, segmentsApi, tripsApi } from "../utils/apiClient";
+import { CurrencyDropdown } from "../components/CurrencyDropdown";
+import { useCurrencies } from "../hooks/useCurrencies";
+import { useCurrencyConversions } from "../hooks/useCurrencyConversions";
+import { useCurrentUser } from "../hooks/useCurrentUser";
+import { formatCurrencyAmount, convertWithFallback } from "../utils/currency";
 
 // shared API types
-import type { OptionApi, OptionSave, SegmentApi, SegmentType } from "../types/models";
+import type { OptionApi, OptionSave, SegmentApi, SegmentType, Currency, CurrencyConversion } from "../types/models";
+
+const formatOptionDateWithWeekday = (iso: string | null) => {
+  if (!iso) return "N/A";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "N/A";
+  const weekday = formatWeekday(iso);
+  const dayMonth = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const timeLabel = date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return `${weekday}, ${dayMonth} · ${timeLabel}`;
+};
+
+const formatLocationLabel = (loc: any | null) => {
+  if (!loc) return "";
+  const name = loc.name ?? "";
+  const country = loc.country ?? "";
+  return country ? `${name}, ${country}` : name ?? "";
+};
 
 /* ---------------------------------- helpers ---------------------------------- */
-
-const CURRENCY = "$";
-
-const formatMoney = (n?: number | null) =>
-  typeof n === "number" && !Number.isNaN(n) ? `${CURRENCY}${n.toFixed(2)}` : "—";
 
 // Normalize backend enum/string keys into { Accommodation, Transport, Other }
 function normalizeCostPerType(raw?: Record<string | number, number> | null) {
@@ -45,14 +68,9 @@ function normalizeCostPerType(raw?: Record<string | number, number> | null) {
   return out;
 }
 
-function percent(part: number, total: number) {
-  if (!total || total <= 0) return 0;
-  return Math.max(0, (part / total) * 100);
-}
-
 /* ---------------------------------- UI bits ---------------------------------- */
 
-function CostSplitBar({
+function CostPieChart({
   accommodation,
   transport,
   other,
@@ -62,119 +80,169 @@ function CostSplitBar({
   other: number;
 }) {
   const total = accommodation + transport + other;
-  const a = percent(accommodation, total);
-  const t = percent(transport, total);
-  const o = percent(other, total);
+  const radius = 32;
+  const circumference = 2 * Math.PI * radius;
+  const segments = [
+    { label: "Transport", value: transport, color: "hsl(var(--chart-1))" },
+    { label: "Accommodation", value: accommodation, color: "hsl(var(--chart-2))" },
+    { label: "Other", value: other, color: "hsl(var(--chart-3))" },
+  ];
+
+  let accumulated = 0;
 
   return (
-    <div className="w-full">
-      <div className="h-3 w-full rounded-full overflow-hidden bg-muted flex ring-1 ring-border/50">
-        {/* Transport (light blue) */}
-        <div className="h-full bg-sky-200" style={{ width: `${t}%` }} title={`Transport: ${formatMoney(transport)}`} />
-        {/* Accommodation (light green) */}
-        <div className="h-full bg-green-200" style={{ width: `${a}%` }} title={`Accommodation: ${formatMoney(accommodation)}`} />
-        {/* Other (gray) */}
-        <div className="h-full bg-gray-300" style={{ width: `${o}%` }} title={`Other: ${formatMoney(other)}`} />
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-sm bg-sky-200" />
-          Transport ({formatMoney(transport)})
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-sm bg-green-200" />
-          Accommodation ({formatMoney(accommodation)})
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-sm bg-gray-300" />
-          Other ({formatMoney(other)})
-        </span>
-      </div>
-    </div>
+    <svg width="90" height="90" viewBox="0 0 90 90" className="shrink-0">
+      <circle cx="45" cy="45" r={radius} fill="transparent" stroke="hsl(var(--muted))" strokeWidth="14" />
+      {total > 0 &&
+        segments.map((segment) => {
+          if (segment.value <= 0) return null;
+          const dash = (segment.value / total) * circumference;
+          const circle = (
+            <circle
+              key={segment.label}
+              cx="45"
+              cy="45"
+              r={radius}
+              fill="transparent"
+              stroke={segment.color}
+              strokeWidth="14"
+              strokeDasharray={`${dash} ${circumference - dash}`}
+              strokeDashoffset={-(accumulated)}
+              strokeLinecap="butt"
+              transform="rotate(-90 45 45)"
+            />
+          );
+          accumulated += dash;
+          return circle;
+        })}
+    </svg>
   );
 }
 
-function CostSummary({ option }: { option: OptionApi }) {
+function CostSummary({
+  option,
+  displayCurrencyId,
+  tripCurrencyId,
+  currencies,
+  conversions,
+}: {
+  option: OptionApi;
+  displayCurrencyId: number | null;
+  tripCurrencyId: number | null;
+  currencies: Currency[];
+  conversions: CurrencyConversion[];
+}) {
   const split = useMemo(() => normalizeCostPerType(option.costPerType), [option.costPerType]);
+  const effectiveCurrencyId = displayCurrencyId ?? tripCurrencyId ?? null;
+  const primaryCurrencyId = effectiveCurrencyId ?? tripCurrencyId ?? null;
+  const totalDisplay = convertWithFallback({
+    amount: option.totalCost ?? 0,
+    fromCurrencyId: tripCurrencyId ?? null,
+    toCurrencyId: effectiveCurrencyId,
+    conversions,
+  });
+  const perDayDisplay = convertWithFallback({
+    amount: option.costPerDay ?? 0,
+    fromCurrencyId: tripCurrencyId ?? null,
+    toCurrencyId: effectiveCurrencyId,
+    conversions,
+  });
+  const totalLabel = formatCurrencyAmount(totalDisplay.amount, totalDisplay.currencyId ?? primaryCurrencyId, currencies);
+  const perDayLabel = formatCurrencyAmount(perDayDisplay.amount, perDayDisplay.currencyId ?? primaryCurrencyId, currencies);
+  const showOriginalTotal =
+    displayCurrencyId !== null && tripCurrencyId !== null && tripCurrencyId !== displayCurrencyId && option.totalCost !== null;
+  const originalTotalLabel = showOriginalTotal
+    ? formatCurrencyAmount(option.totalCost ?? 0, tripCurrencyId, currencies)
+    : null;
+  const convertSplitValue = (value: number) =>
+    convertWithFallback({
+      amount: value,
+      fromCurrencyId: tripCurrencyId ?? null,
+      toCurrencyId: effectiveCurrencyId,
+      conversions,
+    });
+  const displaySplit = {
+    Accommodation: convertSplitValue(split.Accommodation),
+    Transport: convertSplitValue(split.Transport),
+    Other: convertSplitValue(split.Other),
+  };
+  const splitLabel = (value: ReturnType<typeof convertSplitValue>) =>
+    formatCurrencyAmount(value.amount, value.currencyId ?? primaryCurrencyId, currencies);
+
+  const legendEntries = [
+    { key: "Transport", color: "hsl(var(--chart-1))", value: split.Transport, label: splitLabel(displaySplit.Transport) },
+    { key: "Accommodation", color: "hsl(var(--chart-2))", value: split.Accommodation, label: splitLabel(displaySplit.Accommodation) },
+    { key: "Other", color: "hsl(var(--chart-3))", value: split.Other, label: splitLabel(displaySplit.Other) },
+  ].filter((entry) => entry.value > 0)
+
   return (
-    <div className="rounded-md border p-3 space-y-3">
+    <div className="rounded-md border p-3 space-y-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div className="text-sm font-medium">Costs</div>
         <div className="text-sm text-muted-foreground">
-          <span className="font-medium">{formatMoney(option.totalCost)}</span>{" "}
-          <span className="font-medium">
-            ({option.totalDays} {option.totalDays === 1 ? "day" : "days"} at {formatMoney(option.costPerDay)} per day)
-          </span>
+          <span className="font-medium">{totalLabel}</span>
+          {originalTotalLabel ? (
+            <span className="font-medium text-xs text-muted-foreground ml-2">({originalTotalLabel})</span>
+          ) : null}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {option.totalDays} {option.totalDays === 1 ? "day" : "days"} ( {perDayLabel} per day)
         </div>
       </div>
-      <CostSplitBar
-        accommodation={split.Accommodation}
-        transport={split.Transport}
-        other={split.Other}
-      />
+      <div className="flex items-center gap-4">
+        <CostPieChart
+          accommodation={split.Accommodation}
+          transport={split.Transport}
+          other={split.Other}
+        />
+        <div className="space-y-2 text-xs text-muted-foreground">
+          {legendEntries.length === 0 ? (
+            <div className="text-muted-foreground">No categorized costs yet.</div>
+          ) : (
+            legendEntries.map((entry) => (
+              <div key={entry.key} className="flex items-center gap-2">
+                <span
+                  className="inline-block h-2 w-2 rounded-sm ring-1 ring-black/10 dark:ring-white/40"
+                  style={{ backgroundColor: entry.color }}
+                />
+                <span className="text-foreground">{entry.key}</span> ({entry.label})
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
 type ConnectedSegment = SegmentApi & { segmentType: SegmentType };
 
-function SegmentDiagram({ segments }: { segments: ConnectedSegment[] }) {
-  const sorted = [...segments].sort((a, b) => {
-    if (a.startDateTimeUtc && b.startDateTimeUtc) {
-      return new Date(a.startDateTimeUtc).getTime() - new Date(b.startDateTimeUtc).getTime();
-    }
-    return 0;
-  });
-
-  const segmentWidth = sorted.length ? 100 / sorted.length : 100;
-
-  return (
-    <div className="flex w-full space-x-1 overflow-x-auto py-2">
-      {sorted.map((segment) => (
-        <div
-          key={segment.id}
-          className="flex-grow relative"
-          style={{ width: `${segmentWidth}%`, minWidth: "80px" }}
-        >
-          <div
-            className="h-12 flex items-center justify-center relative overflow-hidden rounded-md"
-            style={{
-              backgroundColor: segment.segmentType.color,
-              clipPath: "polygon(0 0, 90% 0, 100% 50%, 90% 100%, 0 100%, 10% 50%)",
-            }}
-            title={`${segment.segmentType.name} - ${segment.name}`}
-          >
-            <div className="relative z-10 flex items-center justify-center w-8 h-8">
-              {segment.segmentType.iconSvg ? (
-                <div
-                  className="w-6 h-6"
-                  dangerouslySetInnerHTML={{ __html: segment.segmentType.iconSvg as string }}
-                />
-              ) : null}
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /* ---------------------------------- Card ---------------------------------- */
 function OptionCard({
   option,
-  connectedSegments,
   onEdit,
-  onDelete,
+  showVisibilityIndicator,
+  displayCurrencyId,
+  tripCurrencyId,
+  currencies,
+  conversions,
 }: {
   option: OptionApi;
-  connectedSegments: ConnectedSegment[];
   onEdit: (option: OptionApi) => void;
-  onDelete: (optionId: number) => void;
+  showVisibilityIndicator: boolean;
+  displayCurrencyId: number | null;
+  tripCurrencyId: number | null;
+  currencies: Currency[];
+  conversions: CurrencyConversion[];
 }) {
+  const isHidden = option.isUiVisible === false;
+
   return (
     <Card
-      className="hover:shadow-sm transition-shadow border cursor-pointer"
+      className={cn(
+        "hover:shadow-sm transition-all duration-200 ease-in-out border cursor-pointer hover:-translate-y-0.5",
+        isHidden && "bg-muted text-muted-foreground border-muted-foreground/40"
+      )}
       onClick={() => onEdit(option)}
       role="button"
       tabIndex={0}
@@ -191,12 +259,21 @@ function OptionCard({
             </CardTitle>
 
             <div className="mt-1 text-sm text-muted-foreground">
-              <div>{option.startDateTimeUtc ? formatDateStr(option.startDateTimeUtc) : "N/A"}</div>
-              <div>{option.endDateTimeUtc ? formatDateStr(option.endDateTimeUtc) : "N/A"}</div>
+              <div>{formatOptionDateWithWeekday(option.startDateTimeUtc)}</div>
+              <div>{formatOptionDateWithWeekday(option.endDateTimeUtc)}</div>
             </div>
           </div>
 
-          <div className="flex space-x-1 ml-4 shrink-0">
+          <div className="flex items-center gap-2 ml-4 shrink-0">
+            {showVisibilityIndicator && isHidden && (
+              <div
+                className="rounded-full border p-1 bg-muted-foreground/20 text-muted-foreground"
+                title="Hidden from UI"
+                aria-label="Hidden from UI"
+              >
+                <EyeOffIcon className="h-5 w-5" />
+              </div>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -208,24 +285,18 @@ function OptionCard({
             >
               <EditIcon className="h-4 w-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(option.id);
-              }}
-              aria-label="Delete option"
-            >
-              <TrashIcon className="h-4 w-4" />
-            </Button>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="pt-0 space-y-3">
-        <CostSummary option={option} />
-        <SegmentDiagram segments={connectedSegments} />
+        <CostSummary
+          option={option}
+          displayCurrencyId={displayCurrencyId}
+          tripCurrencyId={tripCurrencyId}
+          currencies={currencies}
+          conversions={conversions}
+        />
       </CardContent>
     </Card>
   );
@@ -245,6 +316,18 @@ export default function OptionsPageContent() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOption, setEditingOption] = useState<OptionApi | null>(null);
   const [tripName, setTripName] = useState<string>("");
+  const [tripCurrencyId, setTripCurrencyId] = useState<number | null>(null);
+  const [displayCurrencyId, setDisplayCurrencyId] = useState<number | null>(null);
+  const [userPreferredCurrencyId, setUserPreferredCurrencyId] = useState<number | null>(null);
+  const [filterState, setFilterState] = useState<OptionFilterValue>({
+    locations: [],
+    dateRange: { start: "", end: "" },
+    showHidden: false,
+  });
+  const [sortState, setSortState] = useState<OptionSortValue | null>(null);
+  const { currencies, isLoading: isLoadingCurrencies } = useCurrencies();
+  const { conversions } = useCurrencyConversions();
+  const { user } = useCurrentUser();
 
   const searchParams = useSearchParams();
   const tripId = searchParams.get("tripId");
@@ -253,13 +336,13 @@ export default function OptionsPageContent() {
   const fetchTripName = useCallback(async () => {
     if (!tripId) return;
     try {
-      const response = await fetch(`/api/trip/gettripbyid?tripId=${tripId}`);
-      if (!response.ok) throw new Error("Failed to fetch trip details");
-      const data = await response.json();
+      const data = await tripsApi.getById(tripId);
       setTripName(data.name);
+      setTripCurrencyId(data.currencyId ?? null);
     } catch (err) {
       console.error("Error fetching trip details:", err);
       setTripName("Unknown Trip");
+      setTripCurrencyId(null);
     }
   }, [tripId]);
 
@@ -267,10 +350,8 @@ export default function OptionsPageContent() {
     if (!tripId) return;
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/Option/GetOptionsByTripId?tripId=${tripId}`);
-      if (!response.ok) throw new Error("Failed to fetch options");
-      const data: OptionApi[] = await response.json();
-      setOptions(data); // expects totalCost, totalDays, costPerDay, costPerType
+      const data = await optionsApi.getByTripId(tripId);
+      setOptions(data);
     } catch (err) {
       setError("An error occurred while fetching options");
       console.error("Error fetching options:", err);
@@ -282,9 +363,7 @@ export default function OptionsPageContent() {
   const fetchSegments = useCallback(async () => {
     if (!tripId) return;
     try {
-      const response = await fetch(`/api/Segment/GetSegmentsByTripId?tripId=${tripId}`);
-      if (!response.ok) throw new Error("Failed to fetch segments");
-      const data: SegmentApi[] = await response.json();
+      const data = await segmentsApi.getByTripId(tripId);
       setSegments(data);
     } catch (err) {
       console.error("Error fetching segments:", err);
@@ -293,9 +372,7 @@ export default function OptionsPageContent() {
 
   const fetchSegmentTypes = useCallback(async () => {
     try {
-      const response = await fetch("/api/Segment/GetSegmentTypes");
-      if (!response.ok) throw new Error("Failed to fetch segment types");
-      const data: SegmentType[] = await response.json();
+      const data = await segmentsApi.getTypes();
       setSegmentTypes(data);
     } catch (err) {
       console.error("Error fetching segment types:", err);
@@ -305,9 +382,11 @@ export default function OptionsPageContent() {
   const getConnectedSegments = useCallback(
     async (optionId: number): Promise<ConnectedSegment[]> => {
       try {
-        const response = await fetch(`/api/Option/GetConnectedSegments?tripId=${tripId}&optionId=${optionId}`);
-        if (!response.ok) throw new Error("Failed to fetch connected segments");
-        const connected: SegmentApi[] = await response.json();
+        if (!tripId) {
+          setError("No trip ID provided");
+          return [];
+        }
+        const connected = await optionsApi.getConnectedSegments(tripId, optionId);
         return connected.map((segment) => ({
           ...segment,
           segmentType:
@@ -336,17 +415,84 @@ export default function OptionsPageContent() {
   }, [fetchTripName, fetchOptions, fetchSegments, fetchSegmentTypes]);
 
   useEffect(() => {
-    const fetchAllConnected = async () => {
-      const map: Record<number, ConnectedSegment[]> = {};
-      for (const option of options) {
-        map[option.id] = await getConnectedSegments(option.id);
-      }
-      setConnectedSegments(map);
-    };
-    if (options.length > 0 && segmentTypes.length > 0) {
-      void fetchAllConnected();
+    if (!user) return
+    setUserPreferredCurrencyId(user.userPreference?.preferredCurrencyId ?? null)
+  }, [user])
+
+  useEffect(() => {
+    if (displayCurrencyId !== null) return
+    if (tripCurrencyId) {
+      setDisplayCurrencyId(tripCurrencyId)
+      return
     }
-  }, [options, segmentTypes, getConnectedSegments]);
+    if (userPreferredCurrencyId) {
+      setDisplayCurrencyId(userPreferredCurrencyId)
+    }
+  }, [displayCurrencyId, tripCurrencyId, userPreferredCurrencyId])
+
+  const segmentLookup = useMemo(() => {
+    const map = new Map<number, SegmentApi>()
+    segments.forEach((segment) => map.set(segment.id, segment))
+    return map
+  }, [segments])
+
+  useEffect(() => {
+    const fetchAllConnected = async () => {
+      const map: Record<number, ConnectedSegment[]> = {}
+      for (const option of options) {
+        const connected = await getConnectedSegments(option.id)
+        map[option.id] = connected.map((segment) => {
+          const fallback = segmentLookup.get(segment.id)
+          const start =
+            (segment as any).startLocation ??
+            fallback?.startLocation ??
+            null
+          const end =
+            (segment as any).endLocation ??
+            fallback?.endLocation ??
+            null
+
+          return {
+            ...segment,
+            startLocation: start,
+            endLocation: end,
+          }
+        })
+      }
+      setConnectedSegments(map)
+    }
+    if (options.length > 0 && segmentTypes.length > 0) {
+      void fetchAllConnected()
+    }
+  }, [options, segmentTypes, getConnectedSegments, segmentLookup])
+
+  const connectedSegmentList = useMemo(() => {
+    const list: SegmentApi[] = []
+    Object.values(connectedSegments).forEach((segmentsArr) => {
+      list.push(...segmentsArr)
+    })
+    return list
+  }, [connectedSegments])
+
+  const optionMetadata = useMemo(() => {
+    const source = connectedSegmentList.length ? connectedSegmentList : segments
+    return buildOptionMetadata(source)
+  }, [connectedSegmentList, segments])
+
+  const locationOptions = useMemo(() => {
+    const labels = new Set<string>()
+    const addLocations = (segment: SegmentApi) => {
+      const startLoc = (segment as any).startLocation ?? null
+      const endLoc = (segment as any).endLocation ?? null
+      const startLabel = formatLocationLabel(startLoc)
+      const endLabel = formatLocationLabel(endLoc)
+      if (startLabel) labels.add(startLabel)
+      if (endLabel) labels.add(endLabel)
+    }
+    segments.forEach(addLocations)
+    connectedSegmentList.forEach(addLocations)
+    return Array.from(labels).sort((a, b) => a.localeCompare(b))
+  }, [segments, connectedSegmentList])
 
   const handleEditOption = (option: OptionApi) => {
     setEditingOption(option);
@@ -364,22 +510,16 @@ export default function OptionsPageContent() {
   };
 
   const handleSaveOption = async (optionData: OptionSave) => {
+    if (!tripId) {
+      setError("No trip ID provided");
+      return;
+    }
     try {
-      let response: Response;
       if (editingOption) {
-        response = await fetch(`/api/Option/UpdateOption?tripId=${tripId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...optionData, id: editingOption.id }),
-        });
+        await optionsApi.update(tripId, { ...optionData, id: editingOption.id });
       } else {
-        response = await fetch(`/api/Option/CreateOption?tripId=${tripId}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(optionData),
-        });
+        await optionsApi.create(tripId, optionData);
       }
-      if (!response.ok) throw new Error("Failed to save option");
       handleCloseModal();
       await fetchOptions();
     } catch (err) {
@@ -388,27 +528,52 @@ export default function OptionsPageContent() {
     }
   };
 
-  const handleDeleteOption = async (optionId: number) => {
-    if (window.confirm("Are you sure you want to delete this option?")) {
-      try {
-        const response = await fetch(`/api/Option/DeleteOption?tripId=${tripId}&optionId=${optionId}`, {
-          method: "DELETE",
-        });
-        if (!response.ok) throw new Error("Failed to delete option");
-        await fetchOptions();
-      } catch (err) {
-        console.error("Error deleting option:", err);
-        setError("An error occurred while deleting the option");
-      }
+
+  const sortedOptions = useMemo(
+    () => applyOptionFilters(options, filterState, sortState, connectedSegments),
+    [options, filterState, sortState, connectedSegments],
+  )
+
+  const initialModalFilters = useMemo<SegmentFilterValue>(
+    () => ({
+      locations: [...filterState.locations],
+      types: [],
+      dateRange: { ...filterState.dateRange },
+      showHidden: filterState.showHidden,
+    }),
+    [filterState],
+  )
+
+  type ModalSegmentSort = { field: "startDate" | "endDate"; direction: "asc" | "desc" }
+  const initialModalSort = useMemo<ModalSegmentSort | null>(() => {
+    if (!sortState) return null
+    switch (sortState.field) {
+      case "startDate":
+        return { field: "startDate", direction: sortState.direction }
+      case "endDate":
+        return { field: "endDate", direction: sortState.direction }
+      default:
+        return null
     }
-  };
+  }, [sortState])
+
+  const effectiveDisplayCurrencyId = displayCurrencyId ?? tripCurrencyId ?? userPreferredCurrencyId ?? null
+  const selectedCurrencyMeta = useMemo(
+    () => currencies.find((c) => c.id === effectiveDisplayCurrencyId) ?? null,
+    [currencies, effectiveDisplayCurrencyId],
+  )
+  const tripCurrencyMeta = useMemo(
+    () => currencies.find((c) => c.id === (tripCurrencyId ?? undefined)) ?? null,
+    [currencies, tripCurrencyId],
+  )
+
 
   if (!tripId) {
     return <div>No trip ID provided</div>;
   }
 
   return (
-    <Card className="w-full max-w-5xl mx-auto">
+    <Card className="w-full max-w-6xl mx-auto">
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle>Options</CardTitle>
@@ -426,22 +591,49 @@ export default function OptionsPageContent() {
       </CardHeader>
 
       <CardContent>
+        <OptionFilterPanel
+          value={filterState}
+          onChange={setFilterState}
+          sort={sortState}
+          onSortChange={setSortState}
+          availableLocations={locationOptions}
+          minDate={optionMetadata.dateBounds.min}
+          maxDate={optionMetadata.dateBounds.max}
+          toolbarAddon={
+            <CurrencyDropdown
+              value={effectiveDisplayCurrencyId}
+              onChange={setDisplayCurrencyId}
+              currencies={currencies}
+              placeholder={isLoadingCurrencies ? "Loading currencies..." : "Display currency"}
+              disabled={isLoadingCurrencies}
+              className="w-full sm:w-[150px] text-sm"
+              triggerClassName="w-full h-9 text-sm px-3"
+            />
+          }
+        />
+
         {isLoading ? (
           <LoadingSkeleton />
         ) : error ? (
           <p className="text-center text-red-500">{error}</p>
         ) : (
-          // Responsive card grid: 1 col on mobile, 2 on md, 3 on xl
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {options.map((option) => (
-              <OptionCard
-                key={option.id}
-                option={option}
-                connectedSegments={connectedSegments[option.id] || []}
-                onEdit={handleEditOption}
-                onDelete={handleDeleteOption}
-              />
-            ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+            {sortedOptions.length === 0 ? (
+              <p className="text-sm text-muted-foreground col-span-full text-center">No options to display.</p>
+            ) : (
+              sortedOptions.map((option) => (
+                <OptionCard
+                  key={option.id}
+                  option={option}
+                  onEdit={handleEditOption}
+                  showVisibilityIndicator={filterState.showHidden}
+                  displayCurrencyId={effectiveDisplayCurrencyId}
+                  tripCurrencyId={tripCurrencyId}
+                  currencies={currencies}
+                  conversions={conversions}
+                />
+              ))
+            )}
           </div>
         )}
       </CardContent>
@@ -453,6 +645,12 @@ export default function OptionsPageContent() {
         option={editingOption ?? undefined}
         tripId={Number(tripId)}
         refreshOptions={fetchOptions}
+        tripCurrencyId={tripCurrencyId}
+        displayCurrencyId={effectiveDisplayCurrencyId}
+        currencies={currencies}
+        conversions={conversions}
+        initialSegmentFilters={initialModalFilters}
+        initialSegmentSort={initialModalSort}
       />
     </Card>
   );

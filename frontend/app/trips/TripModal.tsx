@@ -1,3 +1,5 @@
+"use client"
+
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog"
 import { Button } from "../components/ui/button"
@@ -5,43 +7,45 @@ import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
 import { Textarea } from "../components/ui/textarea"
 import { Switch } from "../components/ui/switch"
-
-interface Trip {
-  id: number;
-  name: string;
-  description: string;
-  isActive: boolean;
-  startTime: string | null;
-  endTime: string | null;
-}
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select"
+import type { Trip, TripSave } from "../types/models"
+import { useCurrencies, getDefaultCurrencyId } from "../hooks/useCurrencies"
 
 interface TripModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (trip: Omit<Trip, "id">) => void;
+  onSave: (trip: TripSave) => void;
   trip?: Trip | null;
+  defaultCurrencyId?: number | null;
 }
 
-export default function TripModal({ isOpen, onClose, onSave, trip }: TripModalProps) {
+export default function TripModal({ isOpen, onClose, onSave, trip, defaultCurrencyId }: TripModalProps) {
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [isActive, setIsActive] = useState(true)
+  const [currencyId, setCurrencyId] = useState<number | null>(null)
+  const { currencies, isLoading: isLoadingCurrencies } = useCurrencies()
+  const fallbackCurrencyId = currencyId ?? trip?.currencyId ?? defaultCurrencyId ?? getDefaultCurrencyId(currencies) ?? currencies[0]?.id ?? null
 
   useEffect(() => {
     if (trip) {
       setName(trip.name)
       setDescription(trip.description)
       setIsActive(trip.isActive)
+      setCurrencyId(trip.currencyId ?? null)
     } else {
       setName("")
       setDescription("")
       setIsActive(true)
+      setCurrencyId(defaultCurrencyId ?? getDefaultCurrencyId(currencies) ?? currencies[0]?.id ?? null)
     }
-  }, [trip])
+  }, [trip, defaultCurrencyId, currencies])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ name, description, isActive, startTime: null, endTime: null })
+    const selectedCurrencyId = fallbackCurrencyId
+    if (!selectedCurrencyId) return
+    onSave({ name, description, isActive, startTime: null, endTime: null, currencyId: selectedCurrencyId })
   }
 
   return (
@@ -83,6 +87,29 @@ export default function TripModal({ isOpen, onClose, onSave, trip }: TripModalPr
                 checked={isActive}
                 onCheckedChange={setIsActive}
               />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="currency" className="text-right">
+                Currency
+              </Label>
+              <div className="col-span-3">
+                <Select
+                  value={currencyId?.toString() ?? ""}
+                  onValueChange={(value) => setCurrencyId(Number.parseInt(value, 10))}
+                  disabled={isLoadingCurrencies}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={isLoadingCurrencies ? "Loading..." : "Select currency"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currencies.map((currency) => (
+                      <SelectItem key={currency.id} value={currency.id.toString()}>
+                        {currency.symbol} {currency.shortName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
           <DialogFooter>

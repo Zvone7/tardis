@@ -8,6 +8,7 @@ import { Button } from "./ui/button"
 import { ScrollArea } from "./ui/scroll-area"
 import { ArrowLeftRight } from "lucide-react"
 import type { LocationOption } from "../types/models"
+import { geocodingApi } from "../utils/apiClient"
 
 export interface RangeLocationPickerValue {
   start: LocationOption | null
@@ -98,7 +99,7 @@ function Autocomplete({
       return
     }
 
-    let cancelled = false
+    const controller = new AbortController()
     const q = debounced.trim()
     if (q.length < minChars) {
       setItems([])
@@ -109,26 +110,24 @@ function Autocomplete({
     setLoading(true)
     ;(async () => {
       try {
-        const res = await fetch(`${searchEndpoint}?q=${encodeURIComponent(q)}`)
-        if (!res.ok) throw new Error("search failed")
-        const list: LocationOption[] = await res.json()
-        if (!cancelled) {
+        const list = await geocodingApi.search(searchEndpoint, q, controller.signal)
+        if (!controller.signal.aborted) {
           setItems(list)
           setOpen(true)
           setFocusedIdx(list.length ? 0 : -1)
         }
       } catch {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setItems([])
           setOpen(false)
         }
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!controller.signal.aborted) setLoading(false)
       }
     })()
 
     return () => {
-      cancelled = true
+      controller.abort()
     }
   }, [debounced, minChars, searchEndpoint])
 
@@ -308,6 +307,24 @@ export const RangeLocationPicker: React.FC<RangeLocationPickerProps> = React.mem
           </div>
         ) : (
           <div className="space-y-2">
+            {start && end && (
+              <div className={grid}>
+                <Label className="text-right text-sm" />
+                <div className="col-span-3 flex justify-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={handleSwap}
+                    title="Swap start and destination"
+                  >
+                    <ArrowLeftRight className="h-4 w-4" />
+                    <span className="sr-only">Swap start and destination</span>
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className={grid}>
               <Label htmlFor={`${id}-end`} className="text-right text-sm">
                 Destination
@@ -328,19 +345,6 @@ export const RangeLocationPicker: React.FC<RangeLocationPickerProps> = React.mem
             <div className={grid}>
               <Label className="text-right text-sm" />
               <div className="col-span-3 flex items-center gap-2">
-                {/* Swap button - only show when both start and end are provided */}
-                {start && end && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSwap}
-                    title="Swap start and destination"
-                  >
-                    <ArrowLeftRight className="h-4 w-4 mr-1" />
-                    Swap
-                  </Button>
-                )}
                 <Button type="button" variant="outline" size="sm" onClick={() => onChange({ ...value, end: null })}>
                   Remove destination
                 </Button>

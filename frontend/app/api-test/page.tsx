@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { homeApi } from "../utils/apiClient";
 
 const ApiTestPage = () => {
   const [data, setData] = useState<string | null>(null);
@@ -10,11 +11,7 @@ const ApiTestPage = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch("api/home/status");
-        if (!response.ok) {
-          throw new Error("Network response was not ok");
-        }
-        const result = await response.text(); // or .json() if your API returns JSON
+        const result = await homeApi.getStatus();
         setData(result);
       } catch (error: any) {
         console.log("fail:"+error);

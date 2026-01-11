@@ -48,10 +48,11 @@ public class TripController : ControllerBase
     [HttpPut]
     [ServiceFilter(typeof(TripAccessFilterAttribute))]
     [Route(nameof(UpdateTrip))]
-    public async Task<ActionResult> UpdateTrip(int tripId, TripDto trip, CancellationToken cancellationToken)
+    public async Task<ActionResult<TripDto>> UpdateTrip(int tripId, TripDto trip, CancellationToken cancellationToken)
     {
-        await _tripService_.UpdateAsync(trip, cancellationToken);
-        return Ok();
+        trip.Id = tripId;
+        var updated = await _tripService_.UpdateAsync(trip, cancellationToken);
+        return Ok(updated);
     }
 
     [HttpDelete]
