@@ -60,4 +60,23 @@ public class UserController(UserService userService) : Controller
         return BadRequest();
     }
 
+    [HttpPost("UpdateDarkModePreference")]
+    public async Task<ActionResult<UserDto>> UpdateDarkModePreference(
+        DarkModePreferenceDto request,
+        CancellationToken cancellationToken)
+    {
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            var userIdClaim = User.Claims.FirstOrDefault(c => c.Type.ToString() == "UserId");
+            var userId = int.Parse(userIdClaim.Value);
+            var user = await _userService.GetAsync(userId: userId, cancellationToken);
+            if (user != null && user.IsApproved)
+            {
+                var res = await _userService.UpdateDarkModePreferenceAsync(userId, request.PreferredDarkMode, cancellationToken);
+                return res;
+            }
+        }
+        return BadRequest();
+    }
+
 }

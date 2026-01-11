@@ -62,6 +62,72 @@ export interface SegmentSuggestion {
   segmentTypeId?: number | null;
 }
 
+/* -----------------------------------------------------------------------------
+ * Flight search (Amadeus)
+ * ---------------------------------------------------------------------------*/
+export interface FlightLocationInput {
+  iataCode?: string;
+}
+
+export interface AmadeusFlightSearchRequest {
+  startLocation: FlightLocationInput;
+  endLocation: FlightLocationInput;
+  startDateTime: string;
+  endDateTime?: string;
+  adults?: number;
+}
+
+export interface AmadeusFlightOfferResponse {
+  data: AmadeusFlightOffer[];
+  dictionaries?: AmadeusDictionaries;
+}
+
+export interface AmadeusFlightOffer {
+  id?: string;
+  price?: {
+    currency?: string;
+    total?: string;
+  };
+  itineraries?: AmadeusItinerary[];
+}
+
+export interface AmadeusItinerary {
+  duration?: string;
+  segments?: AmadeusSegment[];
+}
+
+export interface AmadeusSegment {
+  departure?: AmadeusFlightPoint;
+  arrival?: AmadeusFlightPoint;
+  carrierCode?: string;
+  number?: string;
+  duration?: string;
+  numberOfStops?: number;
+}
+
+export interface AmadeusFlightPoint {
+  iataCode?: string;
+  terminal?: string;
+  at?: string;
+}
+
+export interface AmadeusDictionaries {
+  carriers?: Record<string, string>;
+}
+
+/* -----------------------------------------------------------------------------
+ * Airports catalog
+ * ---------------------------------------------------------------------------*/
+export interface AirportLookupResult {
+  code: string;
+  name: string;
+  city: string;
+  countryCode: string;
+  latitude: number;
+  longitude: number;
+  timeZone?: string;
+}
+
 export interface SegmentApi {
   id: number;
   tripId?: number; // optional if not always returned

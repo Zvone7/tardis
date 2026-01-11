@@ -11,6 +11,8 @@ public class AppSettings
     public DateTime AppStartedUtc { get; set; }
     public GoogleAuthSettings GoogleAuthSettings { get; set; }
     public LocationIqOptions LocationIq { get; set; }
+    
+    public ScrapingApi ScrapingApi { get; set; }
 }
 
 public class GoogleAuthSettings
@@ -23,4 +25,18 @@ public sealed class LocationIqOptions
 {
     public string Token { get; set; } = string.Empty;
     public string? BaseUrl { get; set; }
+}
+
+public sealed class ScrapingApi
+{
+    public Amadeus Amadeus { get; set; }
+}
+
+public class Amadeus
+{
+    public string BaseUrl { get; set; }
+    public string Key { get; set; }
+    public string Secret { get; set; }
+    public string ApiKey { get; set; }
+    public string ApiSecret { get; set; }
 }

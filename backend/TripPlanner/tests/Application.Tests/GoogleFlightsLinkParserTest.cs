@@ -104,6 +104,15 @@ public class GoogleFlightsLinkParserTest
             return Task.FromResult(_resultsFactory(query));
         }
 
+        public Task<LocationIqItem?> ReverseGeocodeAsync(
+            double latitude,
+            double longitude,
+            string? lang,
+            CancellationToken ct = default)
+        {
+            return Task.FromResult<LocationIqItem?>(null);
+        }
+
         private static IReadOnlyList<LocationIqItem> DefaultResult => new[]
         {
             new LocationIqItem

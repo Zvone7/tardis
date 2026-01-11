@@ -149,5 +149,37 @@ public class UserService
         return user;
     }
 
+    public async Task<UserDto?> UpdateDarkModePreferenceAsync(int userId, string preferredDarkMode, CancellationToken cancellationToken)
+    {
+        UserDto? user = null;
+        var userPreference = await _userPreferenceRepository.GetAsync(userId, cancellationToken);
+        var normalized = NormalizeDarkMode(preferredDarkMode);
+
+        if (userPreference == null)
+        {
+            userPreference = new UserPreference
+            {
+                app_user_id = userId,
+                preferred_utc_offset = 0,
+                preferred_currency_id = 1,
+                preferred_dark_mode = normalized
+            };
+            userPreference = await _userPreferenceRepository.CreateAsync(userPreference, userId, cancellationToken);
+        }
+        else
+        {
+            userPreference.preferred_dark_mode = normalized;
+            userPreference = await _userPreferenceRepository.UpdateAsync(userPreference, userId, cancellationToken);
+        }
+
+        user = await GetAsync(userId, cancellationToken);
+        if (user != null)
+        {
+            user.UserPreference = new UserPreferenceDto(userPreference);
+        }
+
+        return user;
+    }
+
     private static string NormalizeDarkMode(string? preference) => DarkModePreference.Normalize(preference);
 }

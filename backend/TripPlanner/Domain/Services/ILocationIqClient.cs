@@ -9,4 +9,10 @@ public interface ILocationIqClient
         string? countrycodes,
         string? lang,
         CancellationToken ct = default);
+
+    Task<LocationIqItem?> ReverseGeocodeAsync(
+        double latitude,
+        double longitude,
+        string? lang,
+        CancellationToken ct = default);
 }

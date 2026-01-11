@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { UserInfo } from "./components/UserInfo";
+import { DarkModeToggle } from "./components/DarkModeToggle";
 import Link from "next/link";
 import { Home } from "lucide-react";
 import { ThemeProvider } from "./providers/ThemeProvider";
@@ -47,7 +48,10 @@ export default function RootLayout({
               <Home className="w-5 h-5" />
               <span className="ml-2 text-sm font-medium">Trips</span>
             </Link>
-            <UserInfo />
+            <div className="flex items-center gap-2">
+              <DarkModeToggle />
+              <UserInfo />
+            </div>
           </header>
           {children}
         </ThemeProvider>

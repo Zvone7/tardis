@@ -14,6 +14,9 @@ import type {
   Currency,
   CurrencyConversion,
   SegmentSuggestion,
+  AmadeusFlightOfferResponse,
+  AmadeusFlightSearchRequest,
+  AirportLookupResult,
 } from "../types/models"
 
 export type ResponseType = "json" | "text" | "void"
@@ -150,11 +153,21 @@ export const userApi = {
       headers: jsonHeaders,
       body: JSON.stringify(payload),
     }),
+  updateDarkMode: (payload: { preferredDarkMode: string }) =>
+    request<User>("/api/user/UpdateDarkModePreference", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload),
+    }),
 }
 
 export const geocodingApi = {
   search: (endpoint: string, query: string, signal?: AbortSignal) =>
     request<LocationOption[]>(`${endpoint}?q=${encodeURIComponent(query)}`, { signal }),
+  reverse: (lat: number, lon: number, signal?: AbortSignal) =>
+    request<LocationOption | null>(`/api/geocode/reverse?lat=${lat}&lon=${lon}`, { signal }),
+  airport: (code: string, signal?: AbortSignal) =>
+    request<LocationOption | null>(`/api/geocode/airport?code=${encodeURIComponent(code)}`, { signal }),
 }
 
 export const locationApi = {
@@ -171,4 +184,18 @@ export const currencyApi = {
       body: JSON.stringify(payload),
       responseType: "void",
     }),
+}
+
+export const scrapingApi = {
+  searchFlights: (payload: AmadeusFlightSearchRequest) =>
+    request<AmadeusFlightOfferResponse>("/api/scraping/amadeus/flight-offers", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload),
+    }),
+}
+
+export const airportsApi = {
+  search: (query: string, signal?: AbortSignal) =>
+    request<AirportLookupResult[]>(`/api/scraping/airports/search?q=${encodeURIComponent(query)}`, { signal }),
 }

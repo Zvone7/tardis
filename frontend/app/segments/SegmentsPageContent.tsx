@@ -7,6 +7,7 @@ import { Skeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
 import { PlusIcon, ListIcon, EditIcon, EyeOffIcon, Loader2Icon } from "lucide-react";
 import SegmentModal from "../segments/SegmentModal";
+import FlightSearch from "../segments/FlightSearch";
 import { formatDateWithUserOffset, formatWeekday } from "../utils/dateformatters";
 import { OptionBadge } from "../components/OptionBadge";
 import { cn } from "../lib/utils";
@@ -206,6 +207,7 @@ export default function SegmentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isFlightSearchOpen, setIsFlightSearchOpen] = useState(false);
   const [editingSegment, setEditingSegment] = useState<Segment | null | undefined>(null);
   const [tripName, setTripName] = useState<string>("");
   const [tripCurrencyId, setTripCurrencyId] = useState<number | null>(null);
@@ -456,6 +458,9 @@ export default function SegmentsPage() {
           <CardDescription>{tripName ? tripName : `Trip ID: ${tripId}`}</CardDescription>
         </div>
         <div className="flex space-x-2">
+          <Button variant="outline" onClick={() => setIsFlightSearchOpen(true)}>
+            Search flights
+          </Button>
           <Button variant="outline" onClick={() => router.push(`/options?tripId=${tripId}`)}>
             <ListIcon className="mr-2 h-4 w-4" />
             View Options
@@ -534,6 +539,16 @@ export default function SegmentsPage() {
         displayCurrencyId={effectiveDisplayCurrencyId}
         initialOptionFilters={optionModalFilters}
         initialOptionSort={optionModalSort}
+      />
+      <FlightSearch
+        isOpen={isFlightSearchOpen}
+        onClose={() => setIsFlightSearchOpen(false)}
+        tripId={Number(tripId)}
+        tripCurrencyId={tripCurrencyId}
+        onSegmentCreated={fetchSegments}
+        segments={segments}
+        onViewSegment={handleEditSegment}
+        planeIconSvg={segmentTypes.find((type) => type.id === 1)?.iconSvg ?? null}
       />
     </Card>
   );
