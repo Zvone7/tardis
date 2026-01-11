@@ -13,6 +13,7 @@
     <ItemGroup>
       <Content Include="Resources\airports.csv">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       </Content>
     </ItemGroup>
 
