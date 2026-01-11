@@ -5,9 +5,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
-import { PlusIcon, ListIcon, EditIcon, EyeOffIcon, Loader2Icon } from "lucide-react";
+import { PlusIcon, ListIcon, EditIcon, EyeOffIcon, Loader2Icon, Search } from "lucide-react";
 import SegmentModal from "../segments/SegmentModal";
 import FlightSearch from "../segments/FlightSearch";
+import AccomodationSearch from "../segments/AccomodationSearch";
 import { formatDateWithUserOffset, formatWeekday } from "../utils/dateformatters";
 import { OptionBadge } from "../components/OptionBadge";
 import { cn } from "../lib/utils";
@@ -208,6 +209,7 @@ export default function SegmentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isFlightSearchOpen, setIsFlightSearchOpen] = useState(false);
+  const [isAccommodationOpen, setIsAccommodationOpen] = useState(false);
   const [editingSegment, setEditingSegment] = useState<Segment | null | undefined>(null);
   const [tripName, setTripName] = useState<string>("");
   const [tripCurrencyId, setTripCurrencyId] = useState<number | null>(null);
@@ -457,17 +459,26 @@ export default function SegmentsPage() {
           <CardTitle>Segments</CardTitle>
           <CardDescription>{tripName ? tripName : `Trip ID: ${tripId}`}</CardDescription>
         </div>
-        <div className="flex space-x-2">
-          <Button variant="outline" onClick={() => setIsFlightSearchOpen(true)}>
-            Search flights
-          </Button>
-          <Button variant="outline" onClick={() => router.push(`/options?tripId=${tripId}`)}>
-            <ListIcon className="mr-2 h-4 w-4" />
-            View Options
-          </Button>
-          <Button onClick={handleCreateSegment}>
-            <PlusIcon className="h-4 w-4" />
-          </Button>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex space-x-2">
+            <Button variant="outline" onClick={() => router.push(`/options?tripId=${tripId}`)}>
+              <ListIcon className="mr-2 h-4 w-4" />
+              View Options
+            </Button>
+            <Button onClick={handleCreateSegment}>
+              <PlusIcon className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex space-x-2">
+            <Button variant="outline" className="text-muted-foreground" onClick={() => setIsFlightSearchOpen(true)}>
+              <Search className="mr-2 h-4 w-4" />
+              Search flights
+            </Button>
+            <Button variant="outline" className="text-muted-foreground" onClick={() => setIsAccommodationOpen(true)}>
+              <Search className="mr-2 h-4 w-4" />
+              Search stays
+            </Button>
+          </div>
         </div>
       </CardHeader>
 
@@ -549,6 +560,13 @@ export default function SegmentsPage() {
         segments={segments}
         onViewSegment={handleEditSegment}
         planeIconSvg={segmentTypes.find((type) => type.id === 1)?.iconSvg ?? null}
+      />
+      <AccomodationSearch
+        isOpen={isAccommodationOpen}
+        onClose={() => setIsAccommodationOpen(false)}
+        tripId={Number(tripId)}
+        tripCurrencyId={tripCurrencyId}
+        onSegmentCreated={fetchSegments}
       />
     </Card>
   );

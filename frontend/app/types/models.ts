@@ -116,12 +116,57 @@ export interface AmadeusDictionaries {
 }
 
 /* -----------------------------------------------------------------------------
+ * Accommodations (Amadeus)
+ * ---------------------------------------------------------------------------*/
+export interface AmadeusHotelSearchRequest {
+  cityName: string;
+  cityCode?: string;
+  countryCode?: string;
+  checkInDate: string;
+  checkOutDate: string;
+  adults?: number;
+}
+
+export interface AmadeusHotelOfferResponse {
+  data: AmadeusHotelOffer[];
+}
+
+export interface AmadeusHotelOffer {
+  hotel?: AmadeusHotel;
+  offers?: AmadeusHotelOfferItem[];
+}
+
+export interface AmadeusHotel {
+  name?: string;
+  cityCode?: string;
+  rating?: string;
+  address?: AmadeusHotelAddress;
+}
+
+export interface AmadeusHotelAddress {
+  cityName?: string;
+  countryCode?: string;
+}
+
+export interface AmadeusHotelOfferItem {
+  checkInDate?: string;
+  checkOutDate?: string;
+  price?: AmadeusHotelPrice;
+}
+
+export interface AmadeusHotelPrice {
+  currency?: string;
+  total?: string;
+}
+
+/* -----------------------------------------------------------------------------
  * Airports catalog
  * ---------------------------------------------------------------------------*/
 export interface AirportLookupResult {
   code: string;
   name: string;
   city: string;
+  cityCode?: string;
   countryCode: string;
   latitude: number;
   longitude: number;

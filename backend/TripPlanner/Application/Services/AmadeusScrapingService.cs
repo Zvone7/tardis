@@ -89,12 +89,148 @@ public sealed class AmadeusScrapingService : IAmadeusScrapingService
         }
     }
 
+    public async Task<AmadeusHotelOfferResponse> GetHotelOffersAsync(
+        AmadeusHotelSearchRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null) throw new AmadeusException("Request payload is missing.");
+        if (string.IsNullOrWhiteSpace(request.CityName))
+            throw new AmadeusException("CityName is required.");
+        if (request.CheckInDate == default)
+            throw new AmadeusException("CheckInDate is required.");
+        if (request.CheckOutDate == default)
+            throw new AmadeusException("CheckOutDate is required.");
+
+        var adults = request.Adults <= 0 ? 1 : request.Adults;
+        var cityCode = !string.IsNullOrWhiteSpace(request.CityCode)
+            ? request.CityCode.Trim().ToUpperInvariant()
+            : await ResolveCityCodeAsync(request.CityName, request.CountryCode, cancellationToken);
+        if (string.IsNullOrWhiteSpace(cityCode))
+            throw new AmadeusException("Unable to resolve city code for hotel search.");
+
+        var hotelIds = await GetHotelIdsByCityAsync(cityCode, cancellationToken);
+        if (hotelIds.Count == 0)
+            throw new AmadeusException("No hotels found for the selected city.");
+
+        var query = HttpUtility.ParseQueryString(string.Empty);
+        query["hotelIds"] = string.Join(",", hotelIds.Take(25));
+        query["checkInDate"] = request.CheckInDate.ToString("yyyy-MM-dd");
+        query["checkOutDate"] = request.CheckOutDate.ToString("yyyy-MM-dd");
+        query["adults"] = adults.ToString();
+
+        var url = new UriBuilder(BuildUri("/v3/shopping/hotel-offers")) { Query = query.ToString() };
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, url.Uri);
+            await AddAuthHeaderAsync(req, cancellationToken);
+
+            using var res = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            var body = await res.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!res.IsSuccessStatusCode)
+                throw new AmadeusException($"Amadeus upstream {(int)res.StatusCode} {res.ReasonPhrase}: {body}");
+
+            return JsonSerializer.Deserialize<AmadeusHotelOfferResponse>(body, JsonOpts)
+                   ?? new AmadeusHotelOfferResponse();
+        }
+        catch (Exception ex) when (ex is not AmadeusException)
+        {
+            _logger.LogError(ex, "Amadeus GetHotelOffersAsync failed");
+            throw;
+        }
+    }
+
+    private async Task<List<string>> GetHotelIdsByCityAsync(string cityCode, CancellationToken cancellationToken)
+    {
+        var query = HttpUtility.ParseQueryString(string.Empty);
+        query["cityCode"] = cityCode;
+        query["radius"] = "20";
+        query["radiusUnit"] = "KM";
+        query["hotelSource"] = "ALL";
+
+        var url = new UriBuilder(BuildUri("/v1/reference-data/locations/hotels/by-city")) { Query = query.ToString() };
+
+        using var req = new HttpRequestMessage(HttpMethod.Get, url.Uri);
+        await AddAuthHeaderAsync(req, cancellationToken);
+
+        using var res = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        var body = await res.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!res.IsSuccessStatusCode)
+            throw new AmadeusException($"Amadeus hotel lookup failed {(int)res.StatusCode} {res.ReasonPhrase}: {body}");
+
+        var parsed = JsonSerializer.Deserialize<AmadeusHotelListResponse>(body, JsonOpts)
+                     ?? new AmadeusHotelListResponse();
+        return parsed.Data
+            .Select(h => h.HotelId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     private static string? ResolveIata(FlightLocationInput input)
     {
         if (!string.IsNullOrWhiteSpace(input.IataCode))
             return input.IataCode.Trim().ToUpperInvariant();
 
         return null;
+    }
+
+    private async Task<string?> ResolveCityCodeAsync(
+        string cityName,
+        string? countryCode,
+        CancellationToken cancellationToken)
+    {
+        var trimmed = cityName.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed)) return null;
+
+        var city = await FindCityCodeAsync(trimmed, countryCode, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(city)) return city;
+
+        if (!string.IsNullOrWhiteSpace(countryCode))
+        {
+            city = await FindCityCodeAsync(trimmed, null, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(city)) return city;
+        }
+
+        var firstToken = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(firstToken) && !string.Equals(firstToken, trimmed, StringComparison.OrdinalIgnoreCase))
+        {
+            city = await FindCityCodeAsync(firstToken, countryCode, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(city)) return city;
+        }
+
+        return null;
+    }
+
+    private async Task<string?> FindCityCodeAsync(
+        string keyword,
+        string? countryCode,
+        CancellationToken cancellationToken)
+    {
+        var query = HttpUtility.ParseQueryString(string.Empty);
+        query["subType"] = "CITY";
+        query["keyword"] = keyword;
+        if (!string.IsNullOrWhiteSpace(countryCode))
+            query["countryCode"] = countryCode.Trim().ToUpperInvariant();
+
+        var url = new UriBuilder(BuildUri("/v1/reference-data/locations")) { Query = query.ToString() };
+
+        using var req = new HttpRequestMessage(HttpMethod.Get, url.Uri);
+        await AddAuthHeaderAsync(req, cancellationToken);
+
+        using var res = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        var body = await res.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!res.IsSuccessStatusCode)
+            throw new AmadeusException($"Amadeus location lookup failed {(int)res.StatusCode} {res.ReasonPhrase}: {body}");
+
+        var parsed = JsonSerializer.Deserialize<AmadeusLocationResponse>(body, JsonOpts)
+                     ?? new AmadeusLocationResponse();
+        var city = parsed.Data.FirstOrDefault(d => string.Equals(d.SubType, "CITY", StringComparison.OrdinalIgnoreCase));
+        return city?.IataCode;
     }
 
     private async Task AddAuthHeaderAsync(HttpRequestMessage request, CancellationToken cancellationToken)

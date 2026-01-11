@@ -44,6 +44,21 @@ public sealed class AirportCatalog : IAirportCatalog
         return _airports.Value.FirstOrDefault(a => string.Equals(a.Code, normalized, StringComparison.OrdinalIgnoreCase));
     }
 
+    public string? GetCityCode(string cityName, string? countryCode = null)
+    {
+        if (string.IsNullOrWhiteSpace(cityName)) return null;
+        var normalizedCity = cityName.Trim();
+        var normalizedCountry = countryCode?.Trim().ToUpperInvariant();
+
+        var match = _airports.Value.FirstOrDefault(a =>
+            !string.IsNullOrWhiteSpace(a.CityCode) &&
+            string.Equals(a.City, normalizedCity, StringComparison.OrdinalIgnoreCase) &&
+            (string.IsNullOrWhiteSpace(normalizedCountry) ||
+             string.Equals(a.CountryCode, normalizedCountry, StringComparison.OrdinalIgnoreCase)));
+
+        return match?.CityCode;
+    }
+
     private IReadOnlyList<AirportLookupResult> LoadAirports()
     {
         try
@@ -67,6 +82,7 @@ public sealed class AirportCatalog : IAirportCatalog
             int idxCode = GetIndex(map, "code");
             int idxName = GetIndex(map, "name");
             int idxCity = GetIndex(map, "city");
+            int idxCityCode = GetIndex(map, "city_code");
             int idxCountry = GetIndex(map, "country");
             int idxType = GetIndex(map, "type");
             int idxLat = GetIndex(map, "latitude");
@@ -92,6 +108,7 @@ public sealed class AirportCatalog : IAirportCatalog
 
                 var name = SafeGet(row, idxName);
                 var city = SafeGet(row, idxCity);
+                var cityCode = SafeGet(row, idxCityCode).ToUpperInvariant();
                 var country = SafeGet(row, idxCountry);
                 var latRaw = SafeGet(row, idxLat);
                 var lonRaw = SafeGet(row, idxLon);
@@ -104,6 +121,7 @@ public sealed class AirportCatalog : IAirportCatalog
                     Code = code,
                     Name = string.IsNullOrWhiteSpace(name) ? code : name,
                     City = string.IsNullOrWhiteSpace(city) ? (string.IsNullOrWhiteSpace(name) ? code : name) : city,
+                    CityCode = cityCode,
                     CountryCode = country,
                     Latitude = lat,
                     Longitude = lon,

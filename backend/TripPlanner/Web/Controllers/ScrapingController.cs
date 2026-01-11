@@ -46,6 +46,34 @@ public class ScrapingController : ControllerBase
         }
     }
 
+    [HttpPost("amadeus/hotel-offers")]
+    public async Task<ActionResult<AmadeusHotelOfferResponse>> SearchHotels(
+        [FromBody] AmadeusHotelSearchRequest request,
+        CancellationToken ct)
+    {
+        if (request == null)
+            return BadRequest(new { error = "Missing request body." });
+
+        if (string.IsNullOrWhiteSpace(request.CityName))
+            return BadRequest(new { error = "CityName is required." });
+
+        if (request.CheckInDate == default)
+            return BadRequest(new { error = "CheckInDate is required." });
+
+        if (request.CheckOutDate == default)
+            return BadRequest(new { error = "CheckOutDate is required." });
+
+        try
+        {
+            var result = await _amadeus.GetHotelOffersAsync(request, ct);
+            return Ok(result);
+        }
+        catch (AmadeusException ex)
+        {
+            return StatusCode((int)HttpStatusCode.BadGateway, new { error = ex.Message });
+        }
+    }
+
     [HttpGet("airports/search")]
     public ActionResult<IEnumerable<AirportLookupResult>> SearchAirports(
         [FromQuery] string q,
@@ -57,5 +85,16 @@ public class ScrapingController : ControllerBase
 
         var results = _airports.Search(query, limit);
         return Ok(results);
+    }
+
+    [HttpGet("airports/city-code")]
+    public ActionResult<string?> GetCityCode([FromQuery] string city, [FromQuery] string? countryCode = null)
+    {
+        var query = (city ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(query))
+            return BadRequest(new { error = "Missing query parameter ?city=" });
+
+        var code = _airports.GetCityCode(query, countryCode);
+        return Ok(code);
     }
 }

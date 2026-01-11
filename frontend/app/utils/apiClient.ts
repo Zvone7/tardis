@@ -17,6 +17,8 @@ import type {
   AmadeusFlightOfferResponse,
   AmadeusFlightSearchRequest,
   AirportLookupResult,
+  AmadeusHotelOfferResponse,
+  AmadeusHotelSearchRequest,
 } from "../types/models"
 
 export type ResponseType = "json" | "text" | "void"
@@ -193,6 +195,19 @@ export const scrapingApi = {
       headers: jsonHeaders,
       body: JSON.stringify(payload),
     }),
+  searchHotels: (payload: AmadeusHotelSearchRequest) =>
+    request<AmadeusHotelOfferResponse>("/api/scraping/amadeus/hotel-offers", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload),
+    }),
+  resolveCityCode: (city: string, countryCode?: string) => {
+    const params = new URLSearchParams({ city })
+    if (countryCode) params.append("countryCode", countryCode)
+    return request<string | null>(`/api/scraping/airports/city-code?${params.toString()}`, {
+      responseType: "text",
+    })
+  },
 }
 
 export const airportsApi = {
