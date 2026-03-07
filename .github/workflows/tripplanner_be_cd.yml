@@ -1,10 +1,9 @@
 name: '[BE] Deploy workflow'
 
 on:
-  push:
-    branches:
-    # - feature/cicd
-    - release-be-dev-cd
+  # push:
+  #   branches:
+  #   - dev/tripplanner/be-cd
   workflow_dispatch:
     inputs:
       buildNumber:
@@ -21,7 +20,7 @@ on:
 jobs:
   cd:
     name: Deploy
-    uses: ./.github/workflows/template-cd-be.yml
+    uses: ./.github/workflows/_template-cd-be.yml
     with:
       buildNumber: ${{ github.event.inputs.buildNumber || 'latest' }} 
       envCode: ${{ github.event.inputs.envCode || 'dev' }}

@@ -48,7 +48,7 @@ jobs:
                       -t ${{ vars.ACR_NAME }}.azurecr.io/tripplanner/be:$BUILD_NUMBER \
                       --build-arg BUILD_NUMBER=$BUILD_NUMBER\
                       --build-arg ENV_CODE=${{ inputs.envCode }} \
-                      -f Dockerfile.be .
+                      -f projects/tripplanner/Dockerfile.be projects/tripplanner
 
         docker push ${{ vars.ACR_NAME }}.azurecr.io/tripplanner/be:latest
         docker push ${{ vars.ACR_NAME }}.azurecr.io/tripplanner/be:$BUILD_NUMBER

@@ -1,16 +1,16 @@
-name: '[FE][dev] Build and Deploy Workflow'
+name: '[BE][dev] Build and Deploy Workflow'
 
 on:
   push:
     branches:
-      - release-fe-dev
+      - dev/tripplanner/be
       - feature/**
     paths:
-      - 'frontend/**'
+      - 'projects/tripplanner/backend/**'
   workflow_dispatch:
     inputs:
       buildNumber:
-        description: 'Build number to deploy (e.g., latest or a specific tag). Default is GitHub build number.'
+        description: 'Build number to deploy (e.g., latest or a specific tag). Default is GitHub build number. '
         required: false
         default: 'latest'
       envCode:
@@ -21,7 +21,7 @@ on:
 jobs:
   ci:
     name: Build
-    uses: ./.github/workflows/template-ci-fe.yml
+    uses: ./.github/workflows/_template-ci-be.yml
     with:
       buildNumber: ${{ github.event.inputs.buildNumber || github.run_number || 'latest' }}
       envCode: ${{ github.event.inputs.envCode || 'dev' }}
@@ -30,7 +30,7 @@ jobs:
   cd:
     name: Deploy
     needs: ci
-    uses: ./.github/workflows/template-cd-fe.yml
+    uses: ./.github/workflows/_template-cd-be.yml
     with:
       buildNumber: ${{ github.event.inputs.buildNumber || github.run_number || 'latest' }}
       envCode: ${{ github.event.inputs.envCode || 'dev' }}

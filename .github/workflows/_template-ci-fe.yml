@@ -50,7 +50,7 @@ jobs:
                       --build-arg NEXT_PUBLIC_ENV_CODE=${{ inputs.envCode }} \
                       --build-arg NEXT_PUBLIC_BACKEND_ROOT_URL=${{vars.NEXT_PUBLIC_BACKEND_ROOT_URL}} \
                       --build-arg NEXT_PUBLIC_FRONTEND_ROOT_URL=${{vars.NEXT_PUBLIC_FRONTEND_ROOT_URL}} \
-                      -f Dockerfile.fe .
+                      -f projects/tripplanner/Dockerfile.fe projects/tripplanner
 
         docker push ${{ vars.ACR_NAME }}.azurecr.io/tripplanner/fe:latest
         docker push ${{ vars.ACR_NAME }}.azurecr.io/tripplanner/fe:$BUILD_NUMBER
