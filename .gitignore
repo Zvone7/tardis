@@ -72,6 +72,7 @@ secrets.json
 
 # Dev certificates
 *.pem
+*.key
 
 # Temporary files
 *.tmp
