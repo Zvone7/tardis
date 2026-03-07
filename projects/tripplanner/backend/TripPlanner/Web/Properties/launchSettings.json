@@ -1,0 +1,48 @@
+﻿{
+  "$schema": "http://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5156",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "TP [L]": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "https://localhost:7048;http://localhost:5156",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "KEYVAULT_NAME": "kv-tripplanner-dev",
+        "BUILD_NUMBER": "123",
+        "ENV_CODE": "local",
+        "FRONTEND_ROOT_URL": "http://localhost:3000/",
+        "BACKEND_ROOT_URL": "https://localhost:7048/",
+        "CLIENT_ID": "6a15f181-b0e4-477f-af30-e4401cc8d9e6",
+        "CLIENT_SECRET": "",
+        "TENANT_ID": "c91cb6d0-e37c-4b08-a995-a2fa03e81a47"
+      }
+    },
+    "TP [D]": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "https://localhost:7048;http://localhost:5156",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "KEYVAULT_NAME": "kv-tripplanner-dev",
+        "BUILD_NUMBER": "123",
+        "ENV_CODE": "local",
+        "FRONTEND_ROOT_URL": "http://localhost:3000/",
+        "BACKEND_ROOT_URL": "https://localhost:7048/",
+        "CLIENT_ID": "6a15f181-b0e4-477f-af30-e4401cc8d9e6",
+        "CLIENT_SECRET": "",
+        "TENANT_ID": "c91cb6d0-e37c-4b08-a995-a2fa03e81a47"
+      }
+    }
+  }
+}
