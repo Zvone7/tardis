@@ -6,7 +6,7 @@ yarn.lock
 .pnpm-debug.log
 
 # Build Output
-/.next
+.next/
 /out
 /dist
 /.vercel
@@ -70,7 +70,12 @@ local.settings.json
 # User secrets
 secrets.json
 
+# Dev certificates
+*.pem
+
 # Temporary files
 *.tmp
 *.temp
 .ignored/
+
+.claude/settings.local.json

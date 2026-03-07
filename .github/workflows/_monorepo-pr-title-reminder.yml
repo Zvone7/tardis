@@ -1,0 +1,185 @@
+name: "[PR] Title reminder"
+
+on:
+  pull_request_target:
+    branches:
+      - main
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  check-pr-title:
+    name: "Check and update PR title and body"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load project config
+        run: |
+          CONFIG_JSON=$(cat .github/config/project-config.json | jq -c .)
+          echo "CONFIG=$CONFIG_JSON" >> $GITHUB_ENV
+
+      - name: Auto-fix PR title
+        uses: actions/github-script@v7
+        env:
+          CONFIG: ${{ env.CONFIG }}
+        with:
+          script: |
+            if (context.eventName !== "pull_request_target") return
+
+            const config = JSON.parse(process.env.CONFIG)
+
+            const PROJECT_PATTERNS = config.projects.map(p => ({
+              name: p.name,
+              tag: p.tag,
+              paths: p.paths.map(rx => new RegExp(rx, "i"))
+            }))
+
+            const pr = context.payload.pull_request
+            const originalTitle = pr.title.trim()
+            const originalBody = pr.body || ""
+            const prNumber = pr.number
+            const repo = context.repo
+
+            // List changed files
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              { owner: repo.owner, repo: repo.repo, pull_number: prNumber }
+            )
+            const changed = files.map(f => f.filename)
+
+            // Determine affected projects
+            const affected = new Set()
+            const tags = new Set()
+
+            for (const file of changed) {
+              for (const proj of PROJECT_PATTERNS) {
+                if (proj.paths.some(rx => rx.test(file))) {
+                  affected.add(proj.name)
+                  tags.add(proj.tag)
+                }
+              }
+            }
+
+            const sortedProjects = [...affected].sort()
+            if (sortedProjects.length > 0) {
+              core.info(`Affected projects: ${sortedProjects.join(", ")}`)
+            } else {
+              core.info("No affected projects detected.")
+            }
+            const sortedTags = [...tags].sort().join("")
+
+            // PR title message after removing existing brackets
+            let message = originalTitle.replace(/^(\[[^\]]+\])+/, "").trim()
+            if (!message) message = "Commit message"
+
+            // Rebuild title
+            const newTitle = `${sortedTags} ${message}`.trim()
+
+            if (newTitle !== originalTitle) {
+              await github.rest.pulls.update({
+                owner: repo.owner,
+                repo: repo.repo,
+                pull_number: prNumber,
+                title: newTitle
+              })
+              core.info(`Updated PR title → ${newTitle}`)
+            }
+
+            // Build PR body
+            const projectsLine = sortedProjects.length
+              ? `**Affected projects:** ${sortedProjects.join(", ")}`
+              : `**Affected projects:** (none detected)`
+
+            let body = originalBody
+
+            // Insert/update affected projects line
+            const regex = /\*\*Affected projects:\*\*.*(\r?\n|$)/i
+            if (regex.test(body)) {
+              body = body.replace(regex, `${projectsLine}\n`)
+            } else {
+              body = `${projectsLine}\n\n${body}`
+            }
+
+            if (body !== originalBody) {
+              await github.rest.pulls.update({
+                owner: repo.owner,
+                repo: repo.repo,
+                pull_number: prNumber,
+                body
+              })
+              core.info("Updated PR body")
+            }
+
+  verify-merge-message:
+    runs-on: ubuntu-latest
+    needs: check-pr-title
+    permissions:
+      pull-requests: write
+      contents: read
+    if: github.event_name == 'pull_request_target'
+    name: "Verify squash merge will have correct message"
+
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request
+            const prTitle = pr.title.trim()
+
+            // Fetch PR commits
+            const commits = await github.paginate(
+              github.rest.pulls.listCommits,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number
+              }
+            )
+
+            const firstCommit = commits[0]
+            const firstCommitMsg = firstCommit.commit.message.split('\n')[0].trim()
+
+            // Detect manual human title edit
+            const createdAt = new Date(pr.created_at)
+            const updatedAt = new Date(pr.updated_at)
+            const editedByHuman =
+              updatedAt > createdAt &&
+              pr.user?.login !== "github-actions[bot]" &&
+              context.payload.sender?.login !== "github-actions[bot]"
+
+            // If mismatch but manually edited, allow
+            if (firstCommitMsg !== prTitle && editedByHuman) {
+              core.info("PR title differs from original commit message, but was manually edited by user. Safe.")
+              return
+            }
+
+            // If mismatch and NOT manually edited → fail & comment
+            if (firstCommitMsg !== prTitle) {
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body:
+                  `⚠️ **Your PR title does not match the initial commit message.**\n\n` +
+                  `This will cause the *squash merge commit message* to be incorrect.\n\n` +
+                  `### ✅ How to fix it\n` +
+                  `1. Click the **Edit** button next to the PR title.\n` +
+                  `2. **Do not change anything**, just press **Save**.\n\n` +
+                  `GitHub will update the merge dialog accordingly.\n\n` +
+                  `---\n` +
+                  `**PR title:** \`${prTitle}\`\n` +
+                  `**Original commit:** \`${firstCommitMsg}\``
+              });
+
+              core.setFailed(
+                "PR title does not match initial commit. Comment posted with instructions."
+              );
+            } else {
+              core.info("PR title matches the original commit title.")
+            }

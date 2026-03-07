@@ -1,0 +1,46 @@
+{
+    "projects": [
+        {
+            "name": "TripPlanner",
+            "tag": "[TP]",
+            "paths": [
+                "^projects/tripplanner/.*",
+                "^\\.github/workflows/tripplanner.*\\.yml$"
+            ],
+            "autoPrToDev": true,
+            "autoPrToProduction": false,
+            "devTargets": [
+                "dev/tripplanner/fe",
+                "dev/tripplanner/be"
+            ],
+            "productionTargets": []
+        },
+        {
+            "name": "ApartmentPicker",
+            "tag": "[AP]",
+            "paths": [
+                "^projects/apartmentpicker/.*",
+                "^\\.github/workflows/apartmentpicker.*\\.yml$"
+            ],
+            "autoPrToDev": true,
+            "autoPrToProduction": false,
+            "devTargets": [
+                "dev/apartmentpicker/fe",
+                "dev/apartmentpicker/be"
+            ],
+            "productionTargets": []
+        },
+        {
+            "name": "Infrastructure",
+            "tag": "[INFRA]",
+            "paths": [
+                "^\\.github/.*",
+                "^iac/.*"
+            ],
+            "autoPrToDev": false,
+            "autoPrToProduction": false,
+            "devTargets": [],
+            "productionTargets": []
+        }
+    ]
+}
