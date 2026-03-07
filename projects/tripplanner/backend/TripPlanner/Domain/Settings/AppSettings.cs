@@ -13,6 +13,7 @@ public class AppSettings
     public LocationIqOptions LocationIq { get; set; }
     
     public ScrapingApi ScrapingApi { get; set; }
+    public OpenAiSettings OpenAi { get; set; }
 }
 
 public class GoogleAuthSettings
@@ -30,6 +31,12 @@ public sealed class LocationIqOptions
 public sealed class ScrapingApi
 {
     public Amadeus Amadeus { get; set; }
+}
+
+public sealed class OpenAiSettings
+{
+    public string ApiKey { get; set; } = string.Empty;
+    public string Model { get; set; } = "gpt-4o";
 }
 
 public class Amadeus

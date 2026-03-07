@@ -3,6 +3,17 @@
 import { useState, useEffect } from "react"
 import { User, LogOut } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "../components/ui/alert-dialog"
 import { Button } from "../components/ui/button"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -47,15 +58,15 @@ export function UserInfo() {
   }
 
   return (
-    <div className="flex items-center gap-4 group">
+    <div className="flex items-center gap-1 group">
       {user && (
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <Link href="/profile">
-                <div className="flex items-center space-x-2 text-sm">
+                <div className="flex items-center gap-1.5 text-sm">
                   <User className="w-4 h-4" />
-                  <span>{user.name.split(" ")[0]}</span>
+                  <span className="hidden sm:inline">{user.name.split(" ")[0]}</span>
                 </div>
               </Link>
             </TooltipTrigger>
@@ -66,16 +77,33 @@ export function UserInfo() {
         </TooltipProvider>
       )}
 
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={handleLogout}
-        disabled={isLoggingOut}
-        className="flex items-center gap-1 text-xs"
-      >
-        <span className=" opacity-0 group-hover:opacity-100 transition-opacity">Logout</span>
-        <LogOut className="w-3 h-3" />
-      </Button>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={isLoggingOut}
+            className="flex items-center gap-1 text-xs"
+          >
+            <span className="hidden sm:inline opacity-0 group-hover:opacity-100 transition-opacity">Logout</span>
+            <LogOut className="w-3 h-3" />
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Log out?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to log out of TripPlanner?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLogout} disabled={isLoggingOut}>
+              Log out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

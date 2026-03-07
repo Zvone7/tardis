@@ -20,6 +20,7 @@ import { useCurrencies } from "../hooks/useCurrencies";
 import { useCurrencyConversions } from "../hooks/useCurrencyConversions";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { formatCurrencyAmount, convertWithFallback } from "../utils/currency";
+import { useChatContext } from "../chat/ChatProvider";
 
 // shared API types
 import type { OptionApi, OptionSave, SegmentApi, SegmentType, Currency, CurrencyConversion } from "../types/models";
@@ -413,6 +414,16 @@ export default function OptionsPageContent() {
     fetchSegments();
     fetchSegmentTypes();
   }, [fetchTripName, fetchOptions, fetchSegments, fetchSegmentTypes]);
+
+  // Chat assistant integration
+  const chatContext = useChatContext();
+  useEffect(() => {
+    if (tripId) chatContext.setTrip(Number(tripId), tripName);
+    return () => chatContext.setTrip(null, null);
+  }, [tripId, tripName]);
+  useEffect(() => {
+    return chatContext.registerRefreshCallback(fetchOptions);
+  }, [chatContext.registerRefreshCallback, fetchOptions]);
 
   useEffect(() => {
     if (!user) return

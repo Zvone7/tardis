@@ -122,6 +122,7 @@ public class Program
         builder.Services.AddScoped<ILocationIqClient, LocationIqClient>();
         builder.Services.AddScoped<IAmadeusScrapingService, AmadeusScrapingService>();
         builder.Services.AddSingleton<IAirportCatalog, AirportCatalog>();
+        builder.Services.AddScoped<ChatService>();
         builder.Services.AddScoped<IBookingLinkParser, BookingLinkParser>();
         builder.Services.AddScoped<IGoogleFlightsLinkParser, GoogleFlightsLinkParser>();
         builder.Services.AddHttpClient();
