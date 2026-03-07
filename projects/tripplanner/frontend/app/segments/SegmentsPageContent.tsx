@@ -32,6 +32,7 @@ import type {
 } from "../types/models";
 import { formatCurrencyAmount, convertWithFallback } from "../utils/currency";
 import { segmentsApi, tripsApi } from "../utils/apiClient";
+import { useChatContext } from "../chat/ChatProvider";
 
 const getLocationLabel = (loc: any | null) => {
   if (!loc) return "";
@@ -312,6 +313,16 @@ export default function SegmentsPage() {
     fetchSegmentTypes();
     fetchSegments();
   }, [fetchTripName, fetchSegmentTypes, fetchSegments]);
+
+  // Chat assistant integration
+  const chatContext = useChatContext();
+  useEffect(() => {
+    if (tripId) chatContext.setTrip(Number(tripId), tripName);
+    return () => chatContext.setTrip(null, null);
+  }, [tripId, tripName]);
+  useEffect(() => {
+    return chatContext.registerRefreshCallback(fetchSegments);
+  }, [chatContext.registerRefreshCallback, fetchSegments]);
 
   useEffect(() => {
     if (!user) return;
