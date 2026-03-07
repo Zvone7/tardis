@@ -1,0 +1,96 @@
+name: '[AP][BE] Build and Deploy'
+
+on:
+  push:
+    branches:
+      - dev/apartmentpicker/be
+      - ap/feature/**
+    paths:
+      - 'projects/apartmentpicker/backend/**'
+  workflow_dispatch:
+    inputs:
+      buildNumber:
+        description: 'Build number (default: GitHub run number)'
+        required: false
+        default: 'latest'
+      envCode:
+        description: 'Deployment environment (dev, prod)'
+        required: false
+        default: 'dev'
+
+jobs:
+  ci:
+    name: Build
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.envCode || 'dev' }}
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: |
+          {
+            "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
+            "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
+            "tenantId": "${{ secrets.AZURE_TENANT_ID }}",
+            "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          }
+
+    - name: Log in to ACR
+      run: az acr login --name ${{ vars.ACR_NAME }}
+
+    - name: Set Build Number
+      run: |
+        DATE=$(date +%Y%m%d)
+        echo "BUILD_NUMBER=${DATE}.${{ github.event.inputs.buildNumber || github.run_number || 'latest' }}" >> $GITHUB_ENV
+
+    - name: Build and Push Backend Docker Image
+      run: |
+        docker build -t ${{ vars.ACR_NAME }}.azurecr.io/apartmentpicker/be:latest \
+                      -t ${{ vars.ACR_NAME }}.azurecr.io/apartmentpicker/be:$BUILD_NUMBER \
+                      --build-arg BUILD_NUMBER=$BUILD_NUMBER \
+                      --build-arg ENV_CODE=${{ github.event.inputs.envCode || 'dev' }} \
+                      -f projects/apartmentpicker/Dockerfile.be projects/apartmentpicker
+
+        docker push ${{ vars.ACR_NAME }}.azurecr.io/apartmentpicker/be:latest
+        docker push ${{ vars.ACR_NAME }}.azurecr.io/apartmentpicker/be:$BUILD_NUMBER
+
+  cd:
+    name: Deploy
+    needs: ci
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.envCode || 'dev' }}
+    steps:
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: |
+          {
+            "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
+            "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
+            "tenantId": "${{ secrets.AZURE_TENANT_ID }}",
+            "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          }
+
+    - name: Log in to ACR
+      run: az acr login --name ${{ vars.ACR_NAME }}
+
+    - name: Set Build Number
+      run: |
+        DATE=$(date +%Y%m%d)
+        echo "BUILD_NUMBER=${DATE}.${{ github.event.inputs.buildNumber || github.run_number || 'latest' }}" >> $GITHUB_ENV
+
+    - name: Deploy to Azure Web App
+      run: |
+        az webapp config container set \
+          --name ${{ vars.WEB_APP_AP_BE_NAME }} \
+          --resource-group ${{ vars.RESOURCE_GROUP_NAME }} \
+          --container-image-name ${{ vars.ACR_NAME }}.azurecr.io/apartmentpicker/be:$BUILD_NUMBER \
+          --container-registry-url https://${{ vars.ACR_NAME }}.azurecr.io
+
+    - name: Restart Azure Web App
+      run: |
+        az webapp restart --name ${{ vars.WEB_APP_AP_BE_NAME }} \
+          --resource-group ${{ secrets.RESOURCE_GROUP_NAME }}
