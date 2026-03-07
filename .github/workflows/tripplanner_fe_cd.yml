@@ -1,10 +1,9 @@
 name: '[FE] Deploy workflow'
 
 on:
-  push:
-    branches:
-    # - feature/cicd
-    - release-fe-dev-cd
+  # push:
+  #   branches:
+  #   - dev/tripplanner/fe
   workflow_dispatch:
     inputs:
       buildNumber:
@@ -21,7 +20,7 @@ on:
 jobs:
   cd:
     name: Deploy
-    uses: ./.github/workflows/template-cd-fe.yml
+    uses: ./.github/workflows/_template-cd-fe.yml
     with:
       buildNumber: ${{ github.event.inputs.buildNumber || 'latest' }} 
       envCode: ${{ github.event.inputs.envCode || 'dev' }}
