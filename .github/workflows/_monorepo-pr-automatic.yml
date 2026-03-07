@@ -1,0 +1,95 @@
+name: "Create PRs to Dev Branches"
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  create-dev-prs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Load config
+        id: config
+        run: |
+          CONFIG_JSON=$(cat .github/config/project-config.json | jq -c .)
+          echo "CONFIG=$CONFIG_JSON" >> $GITHUB_ENV
+
+      - name: Get changed files in this push
+        id: changes
+        run: |
+          git fetch origin main --depth=100
+          FILES=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }} \
+            | jq -R -s -c 'split("\n")[:-1] | map(.)')
+          printf "files=%s\n" "$FILES" >> "$GITHUB_OUTPUT"
+
+      - name: Determine affected projects
+        id: affected
+        run: |
+          FILES='${{ steps.changes.outputs.files }}'
+
+          echo "Files changed: $FILES"
+          CONFIG=$(echo "$CONFIG" | jq -c .)
+
+          AFFECTED=$(jq -n \
+            --argjson cfg "$CONFIG" \
+            --argjson files "$FILES" \
+            '
+            $cfg.projects
+            | map(select(
+                .autoPrToDev == true
+                and (
+                  .paths
+                  | any(
+                      . as $p
+                      | $files | any(. | test($p))
+                    )
+                )
+              ))
+            ')
+
+          # Convert to compact JSON (required for GitHub outputs)
+          AFFECTED_COMPACT=$(echo "$AFFECTED" | jq -c .)
+
+          echo "affectedProjects=$AFFECTED_COMPACT" >> $GITHUB_OUTPUT
+
+      - name: Create PRs
+        if: ${{ steps.affected.outputs.affectedProjects != '[]' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const affected = JSON.parse(${{
+              toJSON(steps.affected.outputs.affectedProjects)
+            }});
+
+            for (const proj of affected) {
+              if (!proj.devTargets) continue;
+              console.log(`Affected project ${proj.name} has devTargets: ${proj.devTargets} and has autoPrToDev enabled.`);
+
+              for (const target of proj.devTargets) {
+                console.log(`Creating PR: main → ${target}`);
+                await github.rest.pulls.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: `[DEV] ${target}`,
+                  head: "main",
+                  base: target,
+                  body: `Automated sync after changes affecting **${proj.name}**.\n\nTriggered by commit \`${context.sha}\`: ${context.payload.head_commit.message}`,
+                }).catch(e => {
+                  if (e.status === 422) {
+                    console.log(`PR already exists for ${target}, skipping`);
+                  } else {
+                    throw e;
+                  }
+                });
+              }
+            }
