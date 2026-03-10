@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - dev/tripplanner/fe
-      - feature/**
+      - tp/feature/**
     paths:
       - 'projects/tripplanner/frontend/**'
   workflow_dispatch:

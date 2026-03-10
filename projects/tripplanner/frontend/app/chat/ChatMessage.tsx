@@ -13,11 +13,15 @@ export function ChatMessageBubble({ message }: Props) {
   if (message.role === "tool") {
     let statusText = message.name ?? "tool"
     try {
-      const parsed = JSON.parse(message.content ?? "")
+      const contentText =
+        typeof message.content === "string" ? message.content : ""
+      const parsed = JSON.parse(contentText ?? "")
       if (parsed.message) statusText = parsed.message
       else statusText = `${message.name}: done`
     } catch {
-      statusText = `${message.name}: ${message.content?.slice(0, 100) ?? "done"}`
+      const contentText =
+        typeof message.content === "string" ? message.content : ""
+      statusText = `${message.name}: ${contentText.slice(0, 100) || "done"}`
     }
     return (
       <div className="flex justify-center my-1">
