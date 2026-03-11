@@ -356,7 +356,7 @@ export default function OptionModal({
 
   const filteredSegmentsForDisplay = useMemo(() => {
     if (!option) return []
-    return applySegmentFilters(
+    const filtered = applySegmentFilters(
       segments as Segment[],
       segmentFilterState,
       segmentSortState,
@@ -368,6 +368,12 @@ export default function OptionModal({
         conversions,
       },
     )
+    const selectedSet = new Set(selectedSegments)
+    return [...filtered].sort((a, b) => {
+      const aSelected = selectedSet.has(a.id) ? 0 : 1
+      const bSelected = selectedSet.has(b.id) ? 0 : 1
+      return aSelected - bSelected
+    })
   }, [
     option,
     segments,
@@ -378,6 +384,7 @@ export default function OptionModal({
     tripCurrencyId,
     currencies,
     conversions,
+    selectedSegments,
   ])
 
   const selectedSegmentsCount = selectedSegments.length
@@ -407,10 +414,19 @@ export default function OptionModal({
       fallbackCurrencyId: tripCurrencyId ?? null,
       conversions,
     });
+    const typeCounts = new Map<string, number>()
+    selectedConnectedSegments.forEach((seg) => {
+      const typeName = seg.segmentType.name
+      typeCounts.set(typeName, (typeCounts.get(typeName) ?? 0) + 1)
+    })
+    const segmentLabel = typeCounts.size > 0
+      ? Array.from(typeCounts.entries()).map(([typeName, count]) => `${count} ${typeName}`).join(", ")
+      : null
     return buildOptionTitleTokens({
       name,
       fallbackName: option?.name || "New option",
       segmentCount: derived.segmentCount ?? null,
+      segmentLabel,
       startLocationLabel: derived.startLocationLabel ?? undefined,
       endLocationLabel: derived.endLocationLabel ?? undefined,
       startDateIso: derived.startDateIso ?? option?.startDateTimeUtc ?? null,
@@ -419,7 +435,7 @@ export default function OptionModal({
       endOffset: derived.endOffset ?? (option ? 0 : null),
       totalCost: derived.totalCost ?? option?.totalCost ?? null,
     });
-  }, [name, option, selectedSegmentEntities, displayCurrencyId, tripCurrencyId, conversions]);
+  }, [name, option, selectedSegmentEntities, selectedConnectedSegments, displayCurrencyId, tripCurrencyId, conversions]);
 
   const defaultOptionTitle = option ? `Edit Option: ${option.name ?? "Option"}` : "Create Option";
   const optionTitleText = tokensToLabel(optionTitleTokens) || defaultOptionTitle;
@@ -442,17 +458,30 @@ export default function OptionModal({
   }, [optionTitleTokens])
 
   const connectedSummaryTitle = useMemo(() => {
+    let summaryText: string
+    if (selectedSegmentsCount === 0) {
+      summaryText = "No segments linked"
+    } else {
+      const typeCounts = new Map<string, number>()
+      selectedConnectedSegments.forEach((seg) => {
+        const typeName = seg.segmentType.name
+        typeCounts.set(typeName, (typeCounts.get(typeName) ?? 0) + 1)
+      })
+      summaryText = Array.from(typeCounts.entries())
+        .map(([typeName, count]) => `${count} ${typeName}`)
+        .join(", ")
+    }
     return (
       <div className="flex flex-col gap-1 text-left">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           Connected segments
         </span>
         <span className="text-sm font-medium text-foreground">
-          {selectedSegmentsCount ? `${selectedSegmentsCount} selected` : "No segments linked"}
+          {summaryText}
         </span>
       </div>
     )
-  }, [selectedSegmentsCount])
+  }, [selectedSegmentsCount, selectedConnectedSegments])
 
   const handleDialogOpenChange = useCallback(
     (open: boolean) => {

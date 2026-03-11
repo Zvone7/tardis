@@ -4,6 +4,12 @@ import { useEffect, useState } from "react"
 import { LoginButton } from "./components/LoginButton"
 import { Toaster } from "./components/ui/toaster"
 import { homeApi } from "./utils/apiClient"
+import Link from "next/link"
+
+const envCode = process.env.NEXT_PUBLIC_ENV_CODE?.toLowerCase()
+const isLocalOrDev = !envCode
+  ? process.env.NODE_ENV !== "production"
+  : envCode === "local" || envCode === "dev"
 
 export default function Home() {
   const [statusLine, setStatusLine] = useState<string>("Waking backend...")
@@ -28,22 +34,28 @@ export default function Home() {
   }, [])
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-8 bg-gray-100">
+    <div className="min-h-screen flex flex-col items-center justify-center p-8">
       <h1 className="text-4xl font-bold mb-4">Trip Planner</h1>
       <p className="text-xl mb-8">Page used for trip planning.</p>
-      <p className="mb-4 text-sm text-gray-600">This site is using cookies. Site in development. Use at own responsibility.</p>
-      <p className="mb-4 text-sm text-gray-600">After signing in with google, admin will be notified of your application and will approve your account.</p>
+      <p className="mb-4 text-sm text-muted-foreground">This site is using cookies. Site in development. Use at own responsibility.</p>
+      <p className="mb-4 text-sm text-muted-foreground">After signing in with google, admin will be notified of your application and will approve your account.</p>
 
       <LoginButton />
 
-      <a href="/trips" className="text-blue-500 hover:underline mt-4">
+      <a href="/trips" className="text-primary hover:underline mt-4">
         View my trips
       </a>
 
       {statusLine && (
-        <p className="mt-6 text-sm text-gray-600" data-testid="home-backend-status">
+        <p className="mt-6 text-sm text-muted-foreground" data-testid="home-backend-status">
           Backend status: {statusLine}
         </p>
+      )}
+
+      {isLocalOrDev && (
+        <Link href="/status" className="mt-4 text-sm text-muted-foreground hover:text-foreground hover:underline transition-colors">
+          Status
+        </Link>
       )}
 
       <Toaster />

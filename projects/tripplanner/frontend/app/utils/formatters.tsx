@@ -94,6 +94,7 @@ export interface OptionTitleConfig {
   name?: string | null
   fallbackName?: string
   segmentCount?: number | null
+  segmentLabel?: string | null
   startLocationLabel?: string | null
   endLocationLabel?: string | null
   startDateIso?: string | null
@@ -109,6 +110,7 @@ export const buildOptionTitleTokens = (config: OptionTitleConfig): TitleToken[] 
     name,
     fallbackName = "Option",
     segmentCount,
+    segmentLabel,
     startLocationLabel,
     endLocationLabel,
     startDateIso,
@@ -121,7 +123,9 @@ export const buildOptionTitleTokens = (config: OptionTitleConfig): TitleToken[] 
   const displayName = normalizeText(name, fallbackName || "Option")
   if (displayName) tokens.push({ key: "name", text: displayName, emphasize: true })
 
-  if (typeof segmentCount === "number" && segmentCount > 0) {
+  if (segmentLabel) {
+    tokens.push({ key: "count", text: segmentLabel })
+  } else if (typeof segmentCount === "number" && segmentCount > 0) {
     const text = `${segmentCount} segment${segmentCount === 1 ? "" : "s"}`
     tokens.push({ key: "count", text })
   }
@@ -195,7 +199,7 @@ export const buildSegmentConfigFromApi = (
   segmentType?: SegmentType,
 ): SegmentTitleConfig => ({
   name: segment.name,
-  fallbackName: segment.name,
+  fallbackName: segmentType?.name ?? segment.name,
   segmentType: segmentType ?? null,
   startLocationLabel: getStartLocation(segment as any)?.name ?? "",
   endLocationLabel: getEndLocation(segment as any)?.name ?? "",
