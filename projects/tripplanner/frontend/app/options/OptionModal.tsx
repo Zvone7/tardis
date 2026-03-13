@@ -57,6 +57,7 @@ interface OptionModalProps {
   onSave: (option: OptionSave) => Promise<void> | void;
   option?: OptionApi | null;
   tripId: number;
+  tripName?: string;
   refreshOptions: () => void;
   tripCurrencyId: number | null;
   displayCurrencyId: number | null;
@@ -72,6 +73,7 @@ export default function OptionModal({
   onSave,
   option,
   tripId,
+  tripName,
   refreshOptions,
   tripCurrencyId,
   displayCurrencyId,
@@ -440,7 +442,7 @@ export default function OptionModal({
 
   const defaultOptionTitle = option ? `Edit Option: ${option.name ?? "Option"}` : "Create Option";
   const optionTitleText = tokensToLabel(optionTitleTokens) || defaultOptionTitle;
-  const headerTitle = option?.name?.trim() ? option.name.trim() : "New option"
+  const headerTitle = option?.name?.trim() ? option.name.trim() : (tripName || "New option")
   const headerSubtitle = option ? "Editing existing option" : "Creating new option"
 
   const generalSummaryTitle = useMemo(() => {
@@ -503,7 +505,7 @@ export default function OptionModal({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="max-w-lg w-full p-0 flex flex-col h-[90vh]">
+        <DialogContent className="max-w-4xl w-full p-0 flex flex-col h-[90vh]">
           <DialogTitle className="sr-only">{optionTitleText}</DialogTitle>
           <form onSubmit={handleSubmit} className="flex flex-col h-full">
             <div className="border-b bg-background px-4 py-3 pr-10">
@@ -535,24 +537,26 @@ export default function OptionModal({
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="text-muted-foreground"
-                    onClick={() =>
-                      setIsUiVisible((prev) => {
-                        const next = !prev
-                        toast({
-                          title: next ? "Will be shown in list view" : "Won't be shown in list view",
+                  {isEditing && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="text-muted-foreground"
+                      onClick={() =>
+                        setIsUiVisible((prev) => {
+                          const next = !prev
+                          toast({
+                            title: next ? "Will be shown in list view" : "Won't be shown in list view",
+                          })
+                          return next
                         })
-                        return next
-                      })
-                    }
-                    aria-pressed={isUiVisible}
-                  >
-                    {isUiVisible ? <EyeIcon className="h-4 w-4" /> : <EyeOffIcon className="h-4 w-4" />}
-                  </Button>
+                      }
+                      aria-pressed={isUiVisible}
+                    >
+                      {isUiVisible ? <EyeIcon className="h-4 w-4" /> : <EyeOffIcon className="h-4 w-4" />}
+                    </Button>
+                  )}
                   <Button
                     type="submit"
                     size="sm"

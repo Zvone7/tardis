@@ -653,6 +653,7 @@ export default function SegmentsPage() {
         onSave={handleSaveSegment}
         segment={editingSegment}
         tripId={Number(tripId)}
+        tripName={tripName}
         segmentTypes={segmentTypes}
         tripCurrencyId={tripCurrencyId}
         displayCurrencyId={effectiveDisplayCurrencyId}

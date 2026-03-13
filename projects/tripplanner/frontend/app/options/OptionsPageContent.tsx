@@ -814,6 +814,7 @@ export default function OptionsPageContent() {
         onSave={handleSaveOption}
         option={editingOption ?? undefined}
         tripId={Number(tripId)}
+        tripName={tripName}
         refreshOptions={fetchOptions}
         tripCurrencyId={tripCurrencyId}
         displayCurrencyId={effectiveDisplayCurrencyId}

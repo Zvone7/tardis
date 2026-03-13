@@ -38,6 +38,7 @@ import {
   Pencil,
   Plane,
   SlidersHorizontal,
+  LayoutIcon,
 } from "lucide-react"
 import { toLocationDto, normalizeLocation } from "../lib/mapping"
 import { Collapsible } from "../components/Collapsible"
@@ -184,6 +185,7 @@ export default function SegmentModal({
   onSave,
   segment,
   tripId,
+  tripName,
   segmentTypes,
   tripCurrencyId,
   displayCurrencyId,
@@ -362,7 +364,9 @@ export default function SegmentModal({
             />
           </span>
         ) : (
-          <span className="text-xs font-semibold uppercase text-muted-foreground">SEG</span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary/50 text-secondary-foreground shadow-sm">
+            <LayoutIcon className="h-4 w-4" />
+          </span>
         )}
         <span className="flex flex-col leading-tight">
           <span className="font-semibold">{displayName}</span>
@@ -937,8 +941,14 @@ type SegmentBaseline = {
   
   const filteredOptionsForDisplay = useMemo(() => {
     if (!segment || isDuplicateMode) return []
-    return applyOptionFilters(options, optionFilterState, optionSortState, optionConnections)
-  }, [segment, isDuplicateMode, options, optionFilterState, optionSortState, optionConnections])
+    const filtered = applyOptionFilters(options, optionFilterState, optionSortState, optionConnections)
+    const selectedSet = new Set(selectedOptions)
+    return [...filtered].sort((a, b) => {
+      const aSelected = selectedSet.has(a.id) ? 0 : 1
+      const bSelected = selectedSet.has(b.id) ? 0 : 1
+      return aSelected - bSelected
+    })
+  }, [segment, isDuplicateMode, options, optionFilterState, optionSortState, optionConnections, selectedOptions])
 
   const hasChanges = useMemo(() => {
     if (isCreateMode) return true
@@ -1167,7 +1177,7 @@ type SegmentBaseline = {
     ],
   )
 
-  const headerName = (name && name.trim()) || segment?.name || (isCreateMode ? "New segment" : "Segment")
+  const headerName = (name && name.trim()) || segment?.name || (isCreateMode ? (tripName || "New segment") : "Segment")
   const headerSubtitle = isCreateMode ? "Creating new segment" : "Editing existing segment"
   const headerIcon = selectedSegmentType?.iconSvg ? (
     <span className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-secondary-foreground">
@@ -1178,8 +1188,8 @@ type SegmentBaseline = {
       />
     </span>
   ) : (
-    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground text-xs font-semibold uppercase">
-      SEG
+    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary/50 text-secondary-foreground shadow-sm">
+      <LayoutIcon className="h-5 w-5" />
     </span>
   )
 
@@ -1211,9 +1221,9 @@ type SegmentBaseline = {
   return (
     <>
       <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="max-w-4xl w-full h-[85vh] p-0 flex flex-col overflow-hidden" style={{ display: "flex" }}>
+        <DialogContent className="max-w-4xl w-full h-[90vh] p-0 flex flex-col overflow-hidden" style={{ display: "flex" }}>
           <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
-            <div className="sticky top-0 bg-background border-b px-4 py-3 z-10">
+            <div className="sticky top-0 bg-background border-b px-4 py-3 pr-10 z-10">
               <DialogTitle className="sr-only">{headerName}</DialogTitle>
               <div className="mb-3 space-y-1">
                 <div className="flex items-center gap-3 text-lg font-semibold leading-snug">

@@ -208,6 +208,7 @@ export interface SegmentModalProps {
   onSave: (segment: SegmentSave, isUpdate: boolean, originalSegmentId?: number) => Promise<void>;
   segment?: Segment | null;
   tripId: number;
+  tripName?: string;
   segmentTypes: SegmentType[];
   tripCurrencyId?: number | null;
   displayCurrencyId?: number | null;
