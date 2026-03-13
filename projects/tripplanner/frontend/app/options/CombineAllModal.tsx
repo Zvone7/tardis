@@ -17,11 +17,16 @@ import { toast } from "../components/ui/use-toast";
 import { Loader2, CombineIcon } from "lucide-react";
 import { optionsApi } from "../utils/apiClient";
 import { formatDateStr } from "../utils/dateformatters";
-import type { SegmentApi, SegmentType } from "../types/models";
+import { formatCurrencyAmount } from "../utils/currency";
+import { RangeLocationPicker, type RangeLocationPickerValue } from "../components/RangeLocationPicker";
+import type { SegmentApi, SegmentType, Currency, LocationOption } from "../types/models";
 
 interface LocationEntry {
   id: number;
   label: string;
+  lat: number;
+  lng: number;
+  key: string; // "lat,lng" used for deduplication
 }
 
 interface CombineAllModalProps {
@@ -30,6 +35,7 @@ interface CombineAllModalProps {
   onComplete: () => void;
   segments: SegmentApi[];
   segmentTypes: SegmentType[];
+  currencies: Currency[];
   tripId: number;
 }
 
@@ -46,52 +52,82 @@ export default function CombineAllModal({
   onComplete,
   segments,
   segmentTypes,
+  currencies,
   tripId,
 }: CombineAllModalProps) {
-  const [startLocationId, setStartLocationId] = useState<string>("");
-  const [endLocationId, setEndLocationId] = useState<string>("");
+  const [locRange, setLocRange] = useState<RangeLocationPickerValue>({ start: null, end: null });
   const [excludedSegmentIds, setExcludedSegmentIds] = useState<Set<number>>(new Set());
   const [excludedTypeIds, setExcludedTypeIds] = useState<Set<number>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Extract unique locations from all segments
+  // Extract unique locations from all segments, deduplicated by lat/lng
   const locations = useMemo(() => {
-    const map = new Map<number, LocationEntry>();
+    const map = new Map<string, LocationEntry>();
+    const addLoc = (loc: any) => {
+      if (!loc?.id || loc.latitude == null || loc.longitude == null) return;
+      const key = `${loc.latitude},${loc.longitude}`;
+      if (!map.has(key)) {
+        map.set(key, { id: loc.id, label: formatLocationLabel(loc), lat: loc.latitude, lng: loc.longitude, key });
+      }
+    };
     for (const seg of segments) {
-      const startLoc = (seg as any).startLocation;
-      const endLoc = (seg as any).endLocation;
-      if (startLoc?.id) {
-        map.set(startLoc.id, { id: startLoc.id, label: formatLocationLabel(startLoc) });
-      }
-      if (endLoc?.id) {
-        map.set(endLoc.id, { id: endLoc.id, label: formatLocationLabel(endLoc) });
-      }
+      addLoc((seg as any).startLocation);
+      addLoc((seg as any).endLocation);
     }
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
   }, [segments]);
 
-  // Filter segments that match the selected start/end locations
+  // Convert LocationEntry to LocationOption for the picker value
+  const toLocationOption = useCallback((entry: LocationEntry): LocationOption => ({
+    provider: "local",
+    providerPlaceId: entry.key,
+    name: entry.label,
+    lat: entry.lat,
+    lng: entry.lng,
+  }), []);
+
+  // Find LocationEntry by LocationOption's lat/lng
+  const entryFromOption = useCallback(
+    (opt: LocationOption | null): LocationEntry | null => {
+      if (!opt) return null;
+      const key = `${opt.lat},${opt.lng}`;
+      return locations.find((l) => l.key === key) ?? null;
+    },
+    [locations],
+  );
+
+  const startEntry = useMemo(() => entryFromOption(locRange.start), [locRange.start, entryFromOption]);
+  const endEntry = useMemo(() => entryFromOption(locRange.end), [locRange.end, entryFromOption]);
+
+  const locKeyOf = (loc: any): string | null => {
+    if (!loc || loc.latitude == null || loc.longitude == null) return null;
+    return `${loc.latitude},${loc.longitude}`;
+  };
+
+  const hasBothLocations = !!startEntry && !!endEntry;
+
+  // Filter segments that match the selected start/end locations (by lat/lng)
   const matchingSegments = useMemo(() => {
-    if (!startLocationId || !endLocationId) return [];
-    const startId = Number(startLocationId);
-    const endId = Number(endLocationId);
-    const locSet = new Set([startId, endId]);
+    if (!startEntry || !endEntry) return [];
+    const keySet = new Set([startEntry.key, endEntry.key]);
 
     return segments.filter((s) => {
-      const sStart = (s as any).startLocation?.id;
-      const sEnd = (s as any).endLocation?.id;
-      return sStart && sEnd && locSet.has(sStart) && locSet.has(sEnd);
+      const sStartKey = locKeyOf((s as any).startLocation);
+      const sEndKey = locKeyOf((s as any).endLocation);
+      return sStartKey && sEndKey && keySet.has(sStartKey) && keySet.has(sEndKey);
     });
-  }, [segments, startLocationId, endLocationId]);
+  }, [segments, startEntry, endEntry]);
 
-  // Group matching segments into legs by (startLocationId, endLocationId)
+  // Group matching segments into legs by (startLatLng, endLatLng)
   const legs = useMemo(() => {
     const map = new Map<string, { label: string; segments: SegmentApi[] }>();
     for (const seg of matchingSegments) {
       const sStart = (seg as any).startLocation;
       const sEnd = (seg as any).endLocation;
-      if (!sStart?.id || !sEnd?.id) continue;
-      const key = `${sStart.id}->${sEnd.id}`;
+      const sStartKey = locKeyOf(sStart);
+      const sEndKey = locKeyOf(sEnd);
+      if (!sStartKey || !sEndKey) continue;
+      const key = `${sStartKey}->${sEndKey}`;
       if (!map.has(key)) {
         map.set(key, {
           label: `${formatLocationLabel(sStart)} → ${formatLocationLabel(sEnd)}`,
@@ -100,7 +136,6 @@ export default function CombineAllModal({
       }
       map.get(key)!.segments.push(seg);
     }
-    // Sort legs by earliest segment start time
     return Array.from(map.values()).sort((a, b) => {
       const aMin = Math.min(...a.segments.map((s) => new Date(s.startDateTimeUtc).getTime()));
       const bMin = Math.min(...b.segments.map((s) => new Date(s.startDateTimeUtc).getTime()));
@@ -146,13 +181,13 @@ export default function CombineAllModal({
   }, []);
 
   const handleGenerate = async () => {
-    if (includedSegmentIds.length === 0) return;
+    if (includedSegmentIds.length === 0 || !startEntry || !endEntry) return;
     setIsSubmitting(true);
     try {
       const count = await optionsApi.combineAll(tripId, {
         tripId,
-        startLocationId: Number(startLocationId),
-        endLocationId: Number(endLocationId),
+        startLocationId: startEntry.id,
+        endLocationId: endEntry.id,
         segmentIds: includedSegmentIds,
       });
       toast({
@@ -170,8 +205,7 @@ export default function CombineAllModal({
   };
 
   const handleClose = () => {
-    setStartLocationId("");
-    setEndLocationId("");
+    setLocRange({ start: null, end: null });
     setExcludedSegmentIds(new Set());
     setExcludedTypeIds(new Set());
     onClose();
@@ -181,51 +215,54 @@ export default function CombineAllModal({
     return segmentTypes.find((t) => t.id === typeId)?.name ?? "Unknown";
   };
 
+  // Render a Select dropdown from the fixed locations list
+  const renderLocationSelect = useCallback(
+    ({ id: _selectId, placeholder, selected, onSelected }: { id: string; placeholder: string; selected: LocationOption | null; onSelected: (loc: LocationOption | null) => void }) => {
+      const selectedKey = selected ? `${selected.lat},${selected.lng}` : "";
+      return (
+        <Select
+          value={selectedKey}
+          onValueChange={(key) => {
+            const entry = locations.find((l) => l.key === key);
+            onSelected(entry ? toLocationOption(entry) : null);
+          }}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder={placeholder} />
+          </SelectTrigger>
+          <SelectContent>
+            {locations.map((loc) => (
+              <SelectItem key={loc.key} value={loc.key}>
+                {loc.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    },
+    [locations, toLocationOption],
+  );
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogTitle className="flex items-center gap-2">
           <CombineIcon className="h-5 w-5" />
           Combine All
         </DialogTitle>
 
         <div className="space-y-4 mt-2">
-          {/* Location pickers */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Start location</Label>
-              <Select value={startLocationId} onValueChange={setStartLocationId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {locations.map((loc) => (
-                    <SelectItem key={loc.id} value={String(loc.id)}>
-                      {loc.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>End location</Label>
-              <Select value={endLocationId} onValueChange={setEndLocationId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {locations.map((loc) => (
-                    <SelectItem key={loc.id} value={String(loc.id)}>
-                      {loc.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <RangeLocationPicker
+            id="combine-loc"
+            label=""
+            value={locRange}
+            onChange={setLocRange}
+            compact
+            renderPicker={renderLocationSelect}
+          />
 
           {/* Segment type filter */}
-          {startLocationId && endLocationId && presentTypes.length > 0 && (
+          {hasBothLocations && presentTypes.length > 0 && (
             <div className="space-y-1.5">
               <Label>Segment types</Label>
               <div className="flex flex-wrap gap-2">
@@ -245,7 +282,7 @@ export default function CombineAllModal({
           )}
 
           {/* Segment list grouped by leg */}
-          {startLocationId && endLocationId && (
+          {hasBothLocations && (
             <ScrollArea className="max-h-[350px]">
               {legs.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-4">
@@ -272,14 +309,19 @@ export default function CombineAllModal({
                                 disabled={isTypeExcluded}
                                 onCheckedChange={() => toggleSegment(seg.id)}
                               />
-                              <span className="flex-1 truncate">
-                                {seg.name}
-                              </span>
-                              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                {getSegmentTypeName(seg.segmentTypeId)}
-                              </span>
-                              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                {formatDateStr(seg.startDateTimeUtc)}
+                              <span className="flex-1 min-w-0">
+                                {seg.name ? <span className="block truncate">{seg.name}</span> : null}
+                                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                  <span>{getSegmentTypeName(seg.segmentTypeId)}</span>
+                                  <span>·</span>
+                                  <span>{formatDateStr(seg.startDateTimeUtc)}</span>
+                                  {seg.cost ? (
+                                    <>
+                                      <span>·</span>
+                                      <span>{formatCurrencyAmount(seg.cost, seg.currencyId, currencies)}</span>
+                                    </>
+                                  ) : null}
+                                </span>
                               </span>
                             </label>
                           );

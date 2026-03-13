@@ -87,17 +87,19 @@ public class OptionRepository
             .AsList();
     }
 
-    public async Task ConnectOptionWithSegmentsAsync(int optionId, List<int> segmentIds, CancellationToken cancellationToken)
+    public async Task ConnectOptionWithSegmentsAsync(int optionId, List<int> segmentIds, int tripId, CancellationToken cancellationToken)
     {
-        // todo - wrap in transaction
         using IDbConnection db = new SqlConnection(_connectionString_);
         var sqlQueryDeleteExisting = "DELETE from option_to_segment where option_id = @option_id";
         await db.ExecuteAsync(sqlQueryDeleteExisting, new { option_id = optionId });
 
         foreach (var segmentId in segmentIds)
         {
-            var sqlQueryInsertNew = "INSERT into option_to_segment (option_id, segment_id) VALUES(@option_id, @segment_id)";
-            await db.ExecuteAsync(sqlQueryInsertNew, new { option_id = optionId, segment_id = segmentId });
+            var sql = "INSERT INTO option_to_segment (option_id, segment_id) " +
+                      "SELECT @option_id, @segment_id " +
+                      "WHERE EXISTS (SELECT 1 FROM Segment WHERE id = @segment_id AND trip_id = @trip_id) " +
+                      "AND EXISTS (SELECT 1 FROM TripOption WHERE id = @option_id AND trip_id = @trip_id)";
+            await db.ExecuteAsync(sql, new { option_id = optionId, segment_id = segmentId, trip_id = tripId });
         }
     }
     
@@ -111,24 +113,49 @@ public class OptionRepository
         return (await db.QueryAsync<TripOptionDbm>(sqlQuery.ToString(), new { segment_id = segmentId })).AsList();
     }
 
-    public async Task AddSegmentToOptionsAsync(int segmentId, List<int> optionIds, CancellationToken cancellationToken)
+    public async Task AddSegmentToOptionsAsync(int segmentId, List<int> optionIds, int tripId, CancellationToken cancellationToken)
     {
         if (optionIds.Count == 0) return;
         using IDbConnection db = new SqlConnection(_connectionString_);
         foreach (var optionId in optionIds)
         {
             var sql = "IF NOT EXISTS (SELECT 1 FROM option_to_segment WHERE option_id = @option_id AND segment_id = @segment_id) " +
-                      "INSERT INTO option_to_segment (option_id, segment_id) VALUES (@option_id, @segment_id)";
-            await db.ExecuteAsync(sql, new { option_id = optionId, segment_id = segmentId });
+                      "INSERT INTO option_to_segment (option_id, segment_id) " +
+                      "SELECT @option_id, @segment_id " +
+                      "WHERE EXISTS (SELECT 1 FROM Segment WHERE id = @segment_id AND trip_id = @trip_id) " +
+                      "AND EXISTS (SELECT 1 FROM TripOption WHERE id = @option_id AND trip_id = @trip_id)";
+            await db.ExecuteAsync(sql, new { option_id = optionId, segment_id = segmentId, trip_id = tripId });
         }
     }
 
-    public async Task RemoveSegmentFromOptionsAsync(int segmentId, List<int> optionIds, CancellationToken cancellationToken)
+    public async Task RemoveSegmentFromOptionsAsync(int segmentId, List<int> optionIds, int tripId, CancellationToken cancellationToken)
     {
         if (optionIds.Count == 0) return;
         using IDbConnection db = new SqlConnection(_connectionString_);
-        var sql = "DELETE FROM option_to_segment WHERE segment_id = @segment_id AND option_id IN @option_ids";
-        await db.ExecuteAsync(sql, new { segment_id = segmentId, option_ids = optionIds });
+        var sql = "DELETE ots FROM option_to_segment ots " +
+                  "INNER JOIN TripOption o ON o.id = ots.option_id " +
+                  "WHERE ots.segment_id = @segment_id AND ots.option_id IN @option_ids AND o.trip_id = @trip_id";
+        await db.ExecuteAsync(sql, new { segment_id = segmentId, option_ids = optionIds, trip_id = tripId });
     }
 
+    public async Task BatchDeleteAsync(List<int> optionIds, int tripId, CancellationToken cancellationToken)
+    {
+        if (optionIds.Count == 0) return;
+        using IDbConnection db = new SqlConnection(_connectionString_);
+        await db.ExecuteAsync(
+            "DELETE FROM option_to_segment WHERE option_id IN @ids AND option_id IN (SELECT id FROM TripOption WHERE trip_id = @trip_id)",
+            new { ids = optionIds, trip_id = tripId });
+        await db.ExecuteAsync(
+            "DELETE FROM TripOption WHERE id IN @ids AND trip_id = @trip_id",
+            new { ids = optionIds, trip_id = tripId });
+    }
+
+    public async Task BatchSetVisibilityAsync(List<int> optionIds, bool isVisible, int tripId, CancellationToken cancellationToken)
+    {
+        if (optionIds.Count == 0) return;
+        using IDbConnection db = new SqlConnection(_connectionString_);
+        await db.ExecuteAsync(
+            "UPDATE TripOption SET is_ui_visible = @is_visible WHERE id IN @ids AND trip_id = @trip_id",
+            new { ids = optionIds, is_visible = isVisible, trip_id = tripId });
+    }
 }

@@ -274,9 +274,37 @@ public class SegmentService
         await UpdateOptionsRelatedBySegmentIdAsync(segmentId, cancellationToken);
     }
 
+    public async Task<int> BatchDeleteAsync(int tripId, List<int> ids, CancellationToken ct)
+    {
+        // Collect affected options before deleting segments
+        var affectedOptionIds = new HashSet<int>();
+        foreach (var segId in ids)
+        {
+            var opts = await _optionService_.GetAllBySegmentIdAsync(segId, ct);
+            foreach (var o in opts) affectedOptionIds.Add(o.Id);
+        }
+
+        await _segmentRepository_.BatchDeleteAsync(ids, tripId, ct);
+
+        // Recalculate affected options
+        foreach (var optionId in affectedOptionIds)
+        {
+            var recalc = await _optionService_.RecalculateOptionStateAsync(optionId, ct);
+            await _optionService_.UpdateAsync(recalc, ct);
+        }
+
+        return ids.Count;
+    }
+
+    public async Task<int> BatchSetVisibilityAsync(int tripId, List<int> ids, bool isVisible, CancellationToken ct)
+    {
+        await _segmentRepository_.BatchSetVisibilityAsync(ids, isVisible, tripId, ct);
+        return ids.Count;
+    }
+
     public async Task ConnectSegmentWithOptionsAsync(UpdateConnectedOptionsAm am, CancellationToken cancellationToken)
     {
-        await _segmentRepository_.ConnectSegmentsWithOptionAsync(am.SegmentId, am.OptionIds, cancellationToken);
+        await _segmentRepository_.ConnectSegmentsWithOptionAsync(am.SegmentId, am.OptionIds, am.TripId, cancellationToken);
         await UpdateOptionsRelatedBySegmentIdAsync(am.SegmentId, cancellationToken);
     }
 

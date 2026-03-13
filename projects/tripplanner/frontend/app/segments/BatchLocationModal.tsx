@@ -3,15 +3,11 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "../components/ui/dialog";
 import { Button } from "../components/ui/button";
-import { Label } from "../components/ui/label";
 import { toast } from "../components/ui/use-toast";
 import { Loader2, MapPinIcon } from "lucide-react";
-import { Autocomplete } from "../components/RangeLocationPicker";
+import { RangeLocationPicker, type RangeLocationPickerValue } from "../components/RangeLocationPicker";
 import { segmentsApi } from "../utils/apiClient";
 import { toLocationDto } from "../lib/mapping";
-import type { LocationOption } from "../types/models";
-
-type UpdateTarget = "start" | "end" | "both";
 
 interface BatchLocationModalProps {
   isOpen: boolean;
@@ -28,14 +24,15 @@ export default function BatchLocationModal({
   selectedSegmentIds,
   tripId,
 }: BatchLocationModalProps) {
-  const [target, setTarget] = useState<UpdateTarget>("start");
-  const [startLocation, setStartLocation] = useState<LocationOption | null>(null);
-  const [endLocation, setEndLocation] = useState<LocationOption | null>(null);
+  const [locRange, setLocRange] = useState<RangeLocationPickerValue>({
+    start: null,
+    end: null,
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleApply = async () => {
-    const startDto = (target === "start" || target === "both") ? toLocationDto(startLocation) : null;
-    const endDto = (target === "end" || target === "both") ? toLocationDto(endLocation) : null;
+    const startDto = locRange.start ? toLocationDto(locRange.start) : null;
+    const endDto = locRange.end ? toLocationDto(locRange.end) : null;
 
     if (!startDto && !endDto) return;
 
@@ -61,16 +58,11 @@ export default function BatchLocationModal({
   };
 
   const handleClose = () => {
-    setStartLocation(null);
-    setEndLocation(null);
-    setTarget("start");
+    setLocRange({ start: null, end: null });
     onClose();
   };
 
-  const hasLocation =
-    (target === "start" && startLocation) ||
-    (target === "end" && endLocation) ||
-    (target === "both" && (startLocation || endLocation));
+  const hasLocation = locRange.start || locRange.end;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
@@ -85,49 +77,13 @@ export default function BatchLocationModal({
             Updating <strong>{selectedSegmentIds.length}</strong> segment(s)
           </p>
 
-          {/* Target toggle */}
-          <div className="space-y-1.5">
-            <Label>What to update</Label>
-            <div className="flex gap-2">
-              {(["start", "end", "both"] as UpdateTarget[]).map((t) => (
-                <Button
-                  key={t}
-                  size="sm"
-                  variant={target === t ? "default" : "outline"}
-                  onClick={() => setTarget(t)}
-                  className="text-xs capitalize"
-                >
-                  {t === "both" ? "Both" : `${t} location`}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          {/* Start location */}
-          {(target === "start" || target === "both") && (
-            <div className="space-y-1.5">
-              <Label>Start location</Label>
-              <Autocomplete
-                id="batch-start-loc"
-                placeholder="Search for a location..."
-                selected={startLocation}
-                onSelected={setStartLocation}
-              />
-            </div>
-          )}
-
-          {/* End location */}
-          {(target === "end" || target === "both") && (
-            <div className="space-y-1.5">
-              <Label>End location</Label>
-              <Autocomplete
-                id="batch-end-loc"
-                placeholder="Search for a location..."
-                selected={endLocation}
-                onSelected={setEndLocation}
-              />
-            </div>
-          )}
+          <RangeLocationPicker
+            id="batch-loc"
+            label=""
+            value={locRange}
+            onChange={setLocRange}
+            compact
+          />
 
           {/* Apply */}
           <div className="flex justify-end pt-2">

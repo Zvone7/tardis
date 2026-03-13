@@ -130,6 +130,18 @@ public class OptionService
         await _optionRepository_.DeleteAsync(optionId, cancellationToken);
     }
 
+    public async Task<int> BatchDeleteAsync(int tripId, List<int> ids, CancellationToken ct)
+    {
+        await _optionRepository_.BatchDeleteAsync(ids, tripId, ct);
+        return ids.Count;
+    }
+
+    public async Task<int> BatchSetVisibilityAsync(int tripId, List<int> ids, bool isVisible, CancellationToken ct)
+    {
+        await _optionRepository_.BatchSetVisibilityAsync(ids, isVisible, tripId, ct);
+        return ids.Count;
+    }
+
     public async Task<OptionDto> RecalculateOptionStateAsync(int optionId, CancellationToken cancellationToken)
     {
         var segmentsForOption = await _segmentRepository_.GetAllByOptionIdAsync(optionId, cancellationToken);
@@ -204,12 +216,9 @@ public class OptionService
         return result;
     }
 
-    public async Task ConnectOptionWithSegmentsAsync(UpdateConnectedSegmentsAm am, CancellationToken cancellationToken)
+    public async Task ConnectOptionWithSegmentsAsync(int tripId, UpdateConnectedSegmentsAm am, CancellationToken cancellationToken)
     {
-        var option = await _optionRepository_.GetAsync(am.OptionId, cancellationToken);
-        if (option == null)
-            throw new InvalidDataException($"Option with id {am.OptionId} not found.");
-        await _optionRepository_.ConnectOptionWithSegmentsAsync(am.OptionId, am.SegmentIds, cancellationToken);
+        await _optionRepository_.ConnectOptionWithSegmentsAsync(am.OptionId, am.SegmentIds, tripId, cancellationToken);
         var optionFinal = await RecalculateOptionStateAsync(am.OptionId, cancellationToken);
         await UpdateAsync(optionFinal, cancellationToken);
     }
@@ -232,19 +241,15 @@ public class OptionService
         return result;
     }
 
-    public async Task<int> BatchConnectSegmentAsync(BatchConnectSegmentAm am, CancellationToken ct)
+    public async Task<int> BatchConnectSegmentAsync(int tripId, BatchConnectSegmentAm am, CancellationToken ct)
     {
-        var segment = await _segmentRepository_.GetAsync(am.SegmentId, ct);
-        if (segment == null)
-            throw new InvalidDataException($"Segment with id {am.SegmentId} not found.");
-
         if (am.Connect)
         {
-            await _optionRepository_.AddSegmentToOptionsAsync(am.SegmentId, am.OptionIds, ct);
+            await _optionRepository_.AddSegmentToOptionsAsync(am.SegmentId, am.OptionIds, tripId, ct);
         }
         else
         {
-            await _optionRepository_.RemoveSegmentFromOptionsAsync(am.SegmentId, am.OptionIds, ct);
+            await _optionRepository_.RemoveSegmentFromOptionsAsync(am.SegmentId, am.OptionIds, tripId, ct);
         }
 
         foreach (var optionId in am.OptionIds)
@@ -258,7 +263,7 @@ public class OptionService
 
     public async Task<int> CombineAllAsync(CombineAllAm am, CancellationToken ct)
     {
-        var segments = await _segmentRepository_.GetByIdsAsync(am.SegmentIds, ct);
+        var segments = await _segmentRepository_.GetByIdsAndTripAsync(am.SegmentIds, am.TripId, ct);
         var existingOptions = await _optionRepository_.GetOptionsByTripIdAsync(am.TripId, ct);
 
         var existingWithSegments = new List<(int optionId, HashSet<int> segmentIds, bool isVisible)>();
@@ -294,7 +299,7 @@ public class OptionService
                     total_cost = 0
                 }, ct);
 
-                await _optionRepository_.ConnectOptionWithSegmentsAsync(newId, action.SegmentIds, ct);
+                await _optionRepository_.ConnectOptionWithSegmentsAsync(newId, action.SegmentIds, am.TripId, ct);
                 var recalculated = await RecalculateOptionStateAsync(newId, ct);
                 await UpdateAsync(recalculated, ct);
                 count++;
@@ -310,14 +315,10 @@ public class OptionService
         int endLocationId,
         List<(int optionId, HashSet<int> segmentIds, bool isVisible)> existingOptions)
     {
-        var locationSet = new HashSet<int> { startLocationId, endLocationId };
-
-        // Group into legs by (start_location_id, end_location_id) — only include segments
-        // where both locations are in the {start, end} set
+        // Group into legs by (start_location_id, end_location_id)
+        // The frontend already filters to only relevant segments, so we just null-check here
         var legs = segments
-            .Where(s => s.start_location_id.HasValue && s.end_location_id.HasValue
-                        && locationSet.Contains(s.start_location_id.Value)
-                        && locationSet.Contains(s.end_location_id.Value))
+            .Where(s => s.start_location_id.HasValue && s.end_location_id.HasValue)
             .GroupBy(s => (s.start_location_id!.Value, s.end_location_id!.Value))
             .OrderBy(g => g.Min(s => s.start_datetime_utc))
             .Select(g => g.OrderBy(s => s.start_datetime_utc).ToList())
@@ -440,4 +441,5 @@ public class OptionService
 
         return null;
     }
+
 }

@@ -121,6 +121,18 @@ export const segmentsApi = {
       headers: jsonHeaders,
       body: JSON.stringify(payload),
     }),
+  batchDelete: (tripId: string | number, ids: number[]) =>
+    request<number>(`/api/Segment/BatchDelete?tripId=${tripId}`, {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({ ids }),
+    }),
+  batchSetVisibility: (tripId: string | number, ids: number[], isVisible: boolean) =>
+    request<number>(`/api/Segment/BatchSetVisibility?tripId=${tripId}`, {
+      method: "PUT",
+      headers: jsonHeaders,
+      body: JSON.stringify({ ids, isVisible }),
+    }),
 }
 
 export const optionsApi = {
@@ -159,6 +171,18 @@ export const optionsApi = {
       method: "PUT",
       headers: jsonHeaders,
       body: JSON.stringify(payload),
+    }),
+  batchDelete: (tripId: string | number, ids: number[]) =>
+    request<number>(`/api/Option/BatchDelete?tripId=${tripId}`, {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({ ids }),
+    }),
+  batchSetVisibility: (tripId: string | number, ids: number[], isVisible: boolean) =>
+    request<number>(`/api/Option/BatchSetVisibility?tripId=${tripId}`, {
+      method: "PUT",
+      headers: jsonHeaders,
+      body: JSON.stringify({ ids, isVisible }),
     }),
 }
 

@@ -96,6 +96,24 @@ public class SegmentController : ControllerBase
         return Ok(count);
     }
 
+    [HttpPost]
+    [ServiceFilter(typeof(TripAccessFilterAttribute))]
+    [Route(nameof(BatchDelete))]
+    public async Task<ActionResult<int>> BatchDelete([FromQuery] int tripId, BatchDeleteAm am, CancellationToken cancellationToken)
+    {
+        var count = await _segmentService_.BatchDeleteAsync(tripId, am.Ids, cancellationToken);
+        return Ok(count);
+    }
+
+    [HttpPut]
+    [ServiceFilter(typeof(TripAccessFilterAttribute))]
+    [Route(nameof(BatchSetVisibility))]
+    public async Task<ActionResult<int>> BatchSetVisibility([FromQuery] int tripId, BatchSetVisibilityAm am, CancellationToken cancellationToken)
+    {
+        var count = await _segmentService_.BatchSetVisibilityAsync(tripId, am.Ids, am.IsVisible, cancellationToken);
+        return Ok(count);
+    }
+
     [HttpGet("ParseBookingLink")]
     public async Task<ActionResult<SegmentSuggestionDto>> ParseBookingLink([FromQuery] string url, CancellationToken cancellationToken)
     {

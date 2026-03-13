@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
-import { PlusIcon, LayoutIcon, EditIcon, EyeOffIcon, CombineIcon, CheckSquareIcon, XIcon, LinkIcon } from "lucide-react";
+import { PlusIcon, LayoutIcon, EditIcon, EyeOffIcon, EyeIcon, CombineIcon, CheckSquareIcon, XIcon, LinkIcon, Trash2Icon } from "lucide-react";
 import { Checkbox } from "../components/ui/checkbox";
 import OptionModal from "./OptionModal";
 import CombineAllModal from "./CombineAllModal";
@@ -558,6 +558,36 @@ export default function OptionsPageContent() {
     fetchOptions();
   }, [fetchOptions]);
 
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+
+  const handleBatchDelete = useCallback(async () => {
+    if (!tripId || selectedOptionIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedOptionIds.size} option(s)? This cannot be undone.`)) return;
+    setIsBatchDeleting(true);
+    try {
+      await optionsApi.batchDelete(tripId, Array.from(selectedOptionIds));
+      setSelectionMode(false);
+      setSelectedOptionIds(new Set());
+      fetchOptions();
+    } catch (err) {
+      console.error("Batch delete failed:", err);
+    } finally {
+      setIsBatchDeleting(false);
+    }
+  }, [tripId, selectedOptionIds, fetchOptions]);
+
+  const handleBatchSetVisibility = useCallback(async (isVisible: boolean) => {
+    if (!tripId || selectedOptionIds.size === 0) return;
+    try {
+      await optionsApi.batchSetVisibility(tripId, Array.from(selectedOptionIds), isVisible);
+      setSelectionMode(false);
+      setSelectedOptionIds(new Set());
+      fetchOptions();
+    } catch (err) {
+      console.error("Batch visibility failed:", err);
+    }
+  }, [tripId, selectedOptionIds, fetchOptions]);
+
   const handleEditOption = (option: OptionApi) => {
     setEditingOption(option);
     setIsModalOpen(true);
@@ -656,27 +686,9 @@ export default function OptionsPageContent() {
             <CombineIcon className="mr-2 h-4 w-4" />
             Combine All
           </Button>
-          <Button
-            variant={selectionMode ? "default" : "outline"}
-            onClick={toggleSelectionMode}
-          >
-            {selectionMode ? (
-              <>
-                <XIcon className="mr-2 h-4 w-4" />
-                Cancel
-              </>
-            ) : (
-              <>
-                <CheckSquareIcon className="mr-2 h-4 w-4" />
-                Select
-              </>
-            )}
+          <Button onClick={handleCreateOption}>
+            <PlusIcon className="h-4 w-4" />
           </Button>
-          {!selectionMode && (
-            <Button onClick={handleCreateOption}>
-              <PlusIcon className="h-4 w-4" />
-            </Button>
-          )}
         </div>
       </CardHeader>
 
@@ -701,6 +713,26 @@ export default function OptionsPageContent() {
             />
           }
         />
+
+        <div className="flex justify-end mt-3">
+          <Button
+            size="sm"
+            variant={selectionMode ? "default" : "outline"}
+            onClick={toggleSelectionMode}
+          >
+            {selectionMode ? (
+              <>
+                <XIcon className="mr-2 h-4 w-4" />
+                Cancel
+              </>
+            ) : (
+              <>
+                <CheckSquareIcon className="mr-2 h-4 w-4" />
+                Select
+              </>
+            )}
+          </Button>
+        </div>
 
         {isLoading ? (
           <LoadingSkeleton />
@@ -737,6 +769,7 @@ export default function OptionsPageContent() {
         onComplete={fetchOptions}
         segments={segments}
         segmentTypes={segmentTypes}
+        currencies={currencies}
         tripId={Number(tripId)}
       />
 
@@ -775,6 +808,18 @@ export default function OptionsPageContent() {
           <Button size="sm" onClick={() => setIsBatchConnectOpen(true)}>
             <LinkIcon className="mr-2 h-4 w-4" />
             Connect / Disconnect Segment
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => handleBatchSetVisibility(false)}>
+            <EyeOffIcon className="mr-2 h-4 w-4" />
+            Hide
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => handleBatchSetVisibility(true)}>
+            <EyeIcon className="mr-2 h-4 w-4" />
+            Show
+          </Button>
+          <Button size="sm" variant="destructive" onClick={handleBatchDelete} disabled={isBatchDeleting}>
+            <Trash2Icon className="mr-2 h-4 w-4" />
+            Delete
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setSelectedOptionIds(new Set())}>
             Clear

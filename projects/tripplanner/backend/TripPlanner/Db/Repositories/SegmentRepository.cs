@@ -33,6 +33,13 @@ public class SegmentRepository
         return (await db.QueryAsync<SegmentDbm>("SELECT * FROM Segment WHERE id IN @ids", new { ids })).AsList();
     }
 
+    public async Task<List<SegmentDbm>> GetByIdsAndTripAsync(List<int> ids, int tripId, CancellationToken cancellationToken)
+    {
+        if (ids.Count == 0) return [];
+        using IDbConnection db = new SqlConnection(_connectionString_);
+        return (await db.QueryAsync<SegmentDbm>("SELECT * FROM Segment WHERE id IN @ids AND trip_id = @trip_id", new { ids, trip_id = tripId })).AsList();
+    }
+
     public async Task<List<SegmentDbm>> GetAllByOptionIdAsync(int optionId, CancellationToken cancellationToken)
     {
         using IDbConnection db = new SqlConnection(_connectionString_);
@@ -107,17 +114,19 @@ public class SegmentRepository
         await db.ExecuteAsync(sqlQuery, new { id = segmentId });
     }
 
-    public async Task ConnectSegmentsWithOptionAsync(int segmentId, List<int> optionIds, CancellationToken cancellationToken)
+    public async Task ConnectSegmentsWithOptionAsync(int segmentId, List<int> optionIds, int tripId, CancellationToken cancellationToken)
     {
-        // todo - wrap in transaction
         using IDbConnection db = new SqlConnection(_connectionString_);
         var sqlQueryDeleteExisting = "DELETE from option_to_segment where segment_id = @segment_id";
         await db.ExecuteAsync(sqlQueryDeleteExisting, new { segment_id = segmentId });
 
         foreach (var optionId in optionIds)
         {
-            var sqlQueryInsertNew = "INSERT into option_to_segment (option_id, segment_id) VALUES(@option_id, @segment_id)";
-            await db.ExecuteAsync(sqlQueryInsertNew, new { option_id = optionId, segment_id = segmentId });
+            var sql = "INSERT INTO option_to_segment (option_id, segment_id) " +
+                      "SELECT @option_id, @segment_id " +
+                      "WHERE EXISTS (SELECT 1 FROM Segment WHERE id = @segment_id AND trip_id = @trip_id) " +
+                      "AND EXISTS (SELECT 1 FROM TripOption WHERE id = @option_id AND trip_id = @trip_id)";
+            await db.ExecuteAsync(sql, new { option_id = optionId, segment_id = segmentId, trip_id = tripId });
         }
     }
 
@@ -152,6 +161,27 @@ public class SegmentRepository
         using IDbConnection db = new SqlConnection(_connectionString_);
         var sql = $"UPDATE Segment SET {string.Join(", ", setClauses)} WHERE id IN @ids";
         await db.ExecuteAsync(sql, parameters);
+    }
+
+    public async Task BatchDeleteAsync(List<int> segmentIds, int tripId, CancellationToken cancellationToken)
+    {
+        if (segmentIds.Count == 0) return;
+        using IDbConnection db = new SqlConnection(_connectionString_);
+        await db.ExecuteAsync(
+            "DELETE FROM option_to_segment WHERE segment_id IN @ids AND segment_id IN (SELECT id FROM Segment WHERE trip_id = @trip_id)",
+            new { ids = segmentIds, trip_id = tripId });
+        await db.ExecuteAsync(
+            "DELETE FROM Segment WHERE id IN @ids AND trip_id = @trip_id",
+            new { ids = segmentIds, trip_id = tripId });
+    }
+
+    public async Task BatchSetVisibilityAsync(List<int> segmentIds, bool isVisible, int tripId, CancellationToken cancellationToken)
+    {
+        if (segmentIds.Count == 0) return;
+        using IDbConnection db = new SqlConnection(_connectionString_);
+        await db.ExecuteAsync(
+            "UPDATE Segment SET is_ui_visible = @is_visible WHERE id IN @ids AND trip_id = @trip_id",
+            new { ids = segmentIds, is_visible = isVisible, trip_id = tripId });
     }
 
     public async Task<List<SegmentTypeDbm>> GetAllSegmentTypesAsync(CancellationToken cancellationToken)

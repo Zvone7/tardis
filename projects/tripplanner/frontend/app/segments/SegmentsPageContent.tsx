@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
-import { PlusIcon, ListIcon, EditIcon, EyeOffIcon, Loader2Icon, Search, CheckSquareIcon, XIcon, MapPinIcon } from "lucide-react";
+import { PlusIcon, ListIcon, EditIcon, EyeOffIcon, EyeIcon, Loader2Icon, Search, CheckSquareIcon, XIcon, MapPinIcon, Trash2Icon } from "lucide-react";
 import { Checkbox } from "../components/ui/checkbox";
 import SegmentModal from "../segments/SegmentModal";
 import BatchLocationModal from "../segments/BatchLocationModal";
@@ -400,6 +400,36 @@ export default function SegmentsPage() {
     fetchSegments();
   }, [fetchSegments]);
 
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+
+  const handleBatchDelete = useCallback(async () => {
+    if (!tripId || selectedSegmentIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedSegmentIds.size} segment(s)? This cannot be undone.`)) return;
+    setIsBatchDeleting(true);
+    try {
+      await segmentsApi.batchDelete(tripId, Array.from(selectedSegmentIds));
+      setSelectionMode(false);
+      setSelectedSegmentIds(new Set());
+      fetchSegments();
+    } catch (err) {
+      console.error("Batch delete failed:", err);
+    } finally {
+      setIsBatchDeleting(false);
+    }
+  }, [tripId, selectedSegmentIds, fetchSegments]);
+
+  const handleBatchSetVisibility = useCallback(async (isVisible: boolean) => {
+    if (!tripId || selectedSegmentIds.size === 0) return;
+    try {
+      await segmentsApi.batchSetVisibility(tripId, Array.from(selectedSegmentIds), isVisible);
+      setSelectionMode(false);
+      setSelectedSegmentIds(new Set());
+      fetchSegments();
+    } catch (err) {
+      console.error("Batch visibility failed:", err);
+    }
+  }, [tripId, selectedSegmentIds, fetchSegments]);
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingSegment(null);
@@ -529,27 +559,9 @@ export default function SegmentsPage() {
               <ListIcon className="mr-2 h-4 w-4" />
               View Options
             </Button>
-            <Button
-              variant={selectionMode ? "default" : "outline"}
-              onClick={toggleSelectionMode}
-            >
-              {selectionMode ? (
-                <>
-                  <XIcon className="mr-2 h-4 w-4" />
-                  Cancel
-                </>
-              ) : (
-                <>
-                  <CheckSquareIcon className="mr-2 h-4 w-4" />
-                  Select
-                </>
-              )}
+            <Button onClick={handleCreateSegment}>
+              <PlusIcon className="h-4 w-4" />
             </Button>
-            {!selectionMode && (
-              <Button onClick={handleCreateSegment}>
-                <PlusIcon className="h-4 w-4" />
-              </Button>
-            )}
           </div>
           <div className="flex space-x-2">
             <Button variant="outline" className="text-muted-foreground" onClick={() => setIsFlightSearchOpen(true)}>
@@ -586,6 +598,26 @@ export default function SegmentsPage() {
             />
           }
         />
+
+        <div className="flex justify-end mt-3">
+          <Button
+            size="sm"
+            variant={selectionMode ? "default" : "outline"}
+            onClick={toggleSelectionMode}
+          >
+            {selectionMode ? (
+              <>
+                <XIcon className="mr-2 h-4 w-4" />
+                Cancel
+              </>
+            ) : (
+              <>
+                <CheckSquareIcon className="mr-2 h-4 w-4" />
+                Select
+              </>
+            )}
+          </Button>
+        </div>
 
         {isLoading ? (
           <LoadingGridSkeleton />
@@ -671,6 +703,18 @@ export default function SegmentsPage() {
           <Button size="sm" onClick={() => setIsBatchLocationOpen(true)}>
             <MapPinIcon className="mr-2 h-4 w-4" />
             Update Locations
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => handleBatchSetVisibility(false)}>
+            <EyeOffIcon className="mr-2 h-4 w-4" />
+            Hide
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => handleBatchSetVisibility(true)}>
+            <EyeIcon className="mr-2 h-4 w-4" />
+            Show
+          </Button>
+          <Button size="sm" variant="destructive" onClick={handleBatchDelete} disabled={isBatchDeleting}>
+            <Trash2Icon className="mr-2 h-4 w-4" />
+            Delete
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setSelectedSegmentIds(new Set())}>
             Clear
