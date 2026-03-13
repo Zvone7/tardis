@@ -87,6 +87,15 @@ public class SegmentController : ControllerBase
         return await _segmentService_.GetAllSegmentTypesAsync(cancellationToken);
     }
 
+    [HttpPut]
+    [ServiceFilter(typeof(TripAccessFilterAttribute))]
+    [Route(nameof(BatchUpdateLocations))]
+    public async Task<ActionResult<int>> BatchUpdateLocations([FromQuery] int tripId, BatchUpdateLocationsAm am, CancellationToken cancellationToken)
+    {
+        var count = await _segmentService_.BatchUpdateLocationsAsync(am, cancellationToken);
+        return Ok(count);
+    }
+
     [HttpGet("ParseBookingLink")]
     public async Task<ActionResult<SegmentSuggestionDto>> ParseBookingLink([FromQuery] string url, CancellationToken cancellationToken)
     {

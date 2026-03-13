@@ -5,8 +5,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
-import { PlusIcon, ListIcon, EditIcon, EyeOffIcon, Loader2Icon, Search } from "lucide-react";
+import { PlusIcon, ListIcon, EditIcon, EyeOffIcon, Loader2Icon, Search, CheckSquareIcon, XIcon, MapPinIcon } from "lucide-react";
+import { Checkbox } from "../components/ui/checkbox";
 import SegmentModal from "../segments/SegmentModal";
+import BatchLocationModal from "../segments/BatchLocationModal";
 import FlightSearch from "../segments/FlightSearch";
 import AccomodationSearch from "../segments/AccomodationSearch";
 import { formatDateWithUserOffset, formatWeekday } from "../utils/dateformatters";
@@ -61,6 +63,9 @@ function SegmentCard({
   tripCurrencyId,
   currencies,
   conversions,
+  selectionMode = false,
+  isSelected = false,
+  onToggleSelect,
 }: {
   segment: Segment;
   segmentType: SegmentType | undefined;
@@ -73,6 +78,9 @@ function SegmentCard({
   tripCurrencyId: number | null;
   currencies: Currency[];
   conversions: CurrencyConversion[];
+  selectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (segmentId: number) => void;
 }) {
   const getTimezoneDisplayText = () =>
     userPreferredOffset === 0 ? "UTC" : `UTC${userPreferredOffset >= 0 ? "+" : ""}${userPreferredOffset}`;
@@ -102,12 +110,28 @@ function SegmentCard({
     <Card
       className={cn(
         "cursor-pointer hover:bg-muted/50 transition-all duration-200 ease-in-out hover:-translate-y-0.5",
-        isHidden && "bg-muted text-muted-foreground border-muted-foreground/40"
+        isHidden && "bg-muted text-muted-foreground border-muted-foreground/40",
+        selectionMode && isSelected && "ring-2 ring-primary"
       )}
-      onClick={() => onEdit(segment)}
+      onClick={() => {
+        if (selectionMode && onToggleSelect) {
+          onToggleSelect(segment.id);
+        } else {
+          onEdit(segment);
+        }
+      }}
     >
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
+          {selectionMode && (
+            <div className="flex items-center mr-3 mt-1">
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={() => onToggleSelect?.(segment.id)}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          )}
           <div className="flex-1">
             <div className="flex items-center space-x-2 mb-2">
               {segmentType && (
@@ -211,6 +235,9 @@ export default function SegmentsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isFlightSearchOpen, setIsFlightSearchOpen] = useState(false);
   const [isAccommodationOpen, setIsAccommodationOpen] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedSegmentIds, setSelectedSegmentIds] = useState<Set<number>>(new Set());
+  const [isBatchLocationOpen, setIsBatchLocationOpen] = useState(false);
   const [editingSegment, setEditingSegment] = useState<Segment | null | undefined>(null);
   const [tripName, setTripName] = useState<string>("");
   const [tripCurrencyId, setTripCurrencyId] = useState<number | null>(null);
@@ -351,6 +378,28 @@ export default function SegmentsPage() {
     setIsModalOpen(true);
   };
 
+  const toggleSelectionMode = useCallback(() => {
+    setSelectionMode((prev) => {
+      if (prev) setSelectedSegmentIds(new Set());
+      return !prev;
+    });
+  }, []);
+
+  const toggleSegmentSelection = useCallback((segmentId: number) => {
+    setSelectedSegmentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(segmentId)) next.delete(segmentId);
+      else next.add(segmentId);
+      return next;
+    });
+  }, []);
+
+  const handleBatchLocationComplete = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedSegmentIds(new Set());
+    fetchSegments();
+  }, [fetchSegments]);
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingSegment(null);
@@ -442,6 +491,10 @@ export default function SegmentsPage() {
 
   const sortedSegments = filteredSegments
 
+  const selectAllFiltered = useCallback(() => {
+    setSelectedSegmentIds(new Set(sortedSegments.map((s) => s.id)));
+  }, [sortedSegments]);
+
   const optionModalFilters = useMemo<OptionFilterPreset>(
     () => ({
       locations: [...filterState.locations],
@@ -476,9 +529,27 @@ export default function SegmentsPage() {
               <ListIcon className="mr-2 h-4 w-4" />
               View Options
             </Button>
-            <Button onClick={handleCreateSegment}>
-              <PlusIcon className="h-4 w-4" />
+            <Button
+              variant={selectionMode ? "default" : "outline"}
+              onClick={toggleSelectionMode}
+            >
+              {selectionMode ? (
+                <>
+                  <XIcon className="mr-2 h-4 w-4" />
+                  Cancel
+                </>
+              ) : (
+                <>
+                  <CheckSquareIcon className="mr-2 h-4 w-4" />
+                  Select
+                </>
+              )}
             </Button>
+            {!selectionMode && (
+              <Button onClick={handleCreateSegment}>
+                <PlusIcon className="h-4 w-4" />
+              </Button>
+            )}
           </div>
           <div className="flex space-x-2">
             <Button variant="outline" className="text-muted-foreground" onClick={() => setIsFlightSearchOpen(true)}>
@@ -542,6 +613,9 @@ export default function SegmentsPage() {
                     tripCurrencyId={tripCurrencyId}
                     currencies={currencies}
                     conversions={conversions}
+                    selectionMode={selectionMode}
+                    isSelected={selectedSegmentIds.has(segment.id)}
+                    onToggleSelect={toggleSegmentSelection}
                   />
                 )
               })
@@ -579,6 +653,30 @@ export default function SegmentsPage() {
         tripCurrencyId={tripCurrencyId}
         onSegmentCreated={fetchSegments}
       />
+      <BatchLocationModal
+        isOpen={isBatchLocationOpen}
+        onClose={() => setIsBatchLocationOpen(false)}
+        onComplete={handleBatchLocationComplete}
+        selectedSegmentIds={Array.from(selectedSegmentIds)}
+        tripId={Number(tripId)}
+      />
+
+      {/* Floating action bar for selection mode */}
+      {selectionMode && selectedSegmentIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-lg border bg-background px-4 py-3 shadow-lg">
+          <span className="text-sm font-medium">{selectedSegmentIds.size} selected</span>
+          <Button size="sm" variant="outline" onClick={selectAllFiltered}>
+            Select all ({sortedSegments.length})
+          </Button>
+          <Button size="sm" onClick={() => setIsBatchLocationOpen(true)}>
+            <MapPinIcon className="mr-2 h-4 w-4" />
+            Update Locations
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelectedSegmentIds(new Set())}>
+            Clear
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }

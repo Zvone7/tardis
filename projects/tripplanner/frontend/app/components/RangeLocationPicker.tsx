@@ -32,7 +32,7 @@ function clsx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ")
 }
 
-function useDebounced<T>(val: T, delay: number) {
+export function useDebounced<T>(val: T, delay: number) {
   const [d, setD] = useState(val)
   useEffect(() => {
     const t = setTimeout(() => setD(val), delay)
@@ -43,7 +43,7 @@ function useDebounced<T>(val: T, delay: number) {
 
 /* -------------------- Autocomplete input -------------------- */
 
-function Autocomplete({
+export function Autocomplete({
   id,
   placeholder,
   selected,

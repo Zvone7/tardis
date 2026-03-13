@@ -10,6 +10,7 @@ import type {
   User,
   UserPreference,
   LocationOption,
+  LocationDto,
   PendingUser,
   Currency,
   CurrencyConversion,
@@ -113,6 +114,12 @@ export const segmentsApi = {
       headers: jsonHeaders,
       body: JSON.stringify(payload),
       responseType: "void",
+    }),
+  batchUpdateLocations: (tripId: string | number, payload: { segmentIds: number[]; startLocation?: LocationOption | LocationDto | null; endLocation?: LocationOption | LocationDto | null }) =>
+    request<number>(`/api/Segment/BatchUpdateLocations?tripId=${tripId}`, {
+      method: "PUT",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload),
     }),
 }
 

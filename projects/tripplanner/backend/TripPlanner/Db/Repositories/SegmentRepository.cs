@@ -129,6 +129,31 @@ public class SegmentRepository
                                                 ")", new { option_id = optionId })).AsList();
     }
 
+    public async Task UpdateLocationsAsync(List<int> segmentIds, int? startLocationId, int? endLocationId, bool updateStart, bool updateEnd, CancellationToken cancellationToken)
+    {
+        if (segmentIds.Count == 0) return;
+        if (!updateStart && !updateEnd) return;
+
+        var setClauses = new List<string>();
+        var parameters = new DynamicParameters();
+        parameters.Add("ids", segmentIds);
+
+        if (updateStart)
+        {
+            setClauses.Add("start_location_id = @start_location_id");
+            parameters.Add("start_location_id", startLocationId);
+        }
+        if (updateEnd)
+        {
+            setClauses.Add("end_location_id = @end_location_id");
+            parameters.Add("end_location_id", endLocationId);
+        }
+
+        using IDbConnection db = new SqlConnection(_connectionString_);
+        var sql = $"UPDATE Segment SET {string.Join(", ", setClauses)} WHERE id IN @ids";
+        await db.ExecuteAsync(sql, parameters);
+    }
+
     public async Task<List<SegmentTypeDbm>> GetAllSegmentTypesAsync(CancellationToken cancellationToken)
     {
         using IDbConnection db = new SqlConnection(_connectionString_);
