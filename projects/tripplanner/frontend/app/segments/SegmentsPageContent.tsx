@@ -5,7 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
-import { PlusIcon, ListIcon, EditIcon, EyeOffIcon, EyeIcon, Loader2Icon, Search, MapPinIcon, Trash2Icon } from "lucide-react";
+import { PlusIcon, ListIcon, EditIcon, EyeOffIcon, Loader2Icon, MapPinIcon, MoreVerticalIcon, BedDoubleIcon, PlaneIcon } from "lucide-react";
+import SelectPopupMenu from "../components/SelectPopupMenu";
+import { Popover, PopoverTrigger, PopoverContent } from "../components/ui/popover";
 import { Checkbox } from "../components/ui/checkbox";
 import SegmentModal from "../segments/SegmentModal";
 import BatchLocationModal from "../segments/BatchLocationModal";
@@ -535,21 +537,11 @@ export default function SegmentsPage() {
         <div className="flex flex-col items-end gap-2">
           <div className="flex space-x-2">
             <Button variant="outline" onClick={() => router.push(`/options?tripId=${tripId}`)}>
-              <ListIcon className="mr-2 h-4 w-4" />
-              View Options
+              <ListIcon className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Options</span>
             </Button>
             <Button onClick={handleCreateSegment}>
               <PlusIcon className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="flex space-x-2">
-            <Button variant="outline" className="text-muted-foreground" onClick={() => setIsFlightSearchOpen(true)}>
-              <Search className="mr-2 h-4 w-4" />
-              Search flights
-            </Button>
-            <Button variant="outline" className="text-muted-foreground" onClick={() => setIsAccommodationOpen(true)}>
-              <Search className="mr-2 h-4 w-4" />
-              Search stays
             </Button>
           </div>
         </div>
@@ -566,15 +558,43 @@ export default function SegmentsPage() {
           minDate={dateBounds.min}
           maxDate={dateBounds.max}
           toolbarAddon={
-            <CurrencyDropdown
-              value={effectiveDisplayCurrencyId}
-              onChange={setDisplayCurrencyId}
-              currencies={currencies}
-              placeholder={isLoadingCurrencies ? "Loading currencies..." : "Display currency"}
-              disabled={isLoadingCurrencies}
-              className="w-full sm:w-[150px] text-sm"
-              triggerClassName="w-full h-9 text-sm px-3"
-            />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="icon" className="shrink-0 h-9 w-9 border-muted-foreground/50 text-muted-foreground">
+                  <MoreVerticalIcon className="h-5 w-5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-56 p-2 space-y-2">
+                <div>
+                  <span className="text-xs text-muted-foreground px-1">Display currency</span>
+                  <CurrencyDropdown
+                    value={effectiveDisplayCurrencyId}
+                    onChange={setDisplayCurrencyId}
+                    currencies={currencies}
+                    placeholder={isLoadingCurrencies ? "Loading..." : "Display currency"}
+                    disabled={isLoadingCurrencies}
+                    className="w-full text-sm mt-1"
+                    triggerClassName="w-full h-9 text-sm px-3"
+                  />
+                </div>
+                <div className="border-t pt-1">
+                  <button
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent cursor-pointer"
+                    onClick={() => setIsFlightSearchOpen(true)}
+                  >
+                    <PlaneIcon className="h-4 w-4" />
+                    Search flights
+                  </button>
+                  <button
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent cursor-pointer"
+                    onClick={() => setIsAccommodationOpen(true)}
+                  >
+                    <BedDoubleIcon className="h-4 w-4" />
+                    Search stays
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
           }
         />
 
@@ -652,34 +672,23 @@ export default function SegmentsPage() {
         tripId={Number(tripId)}
       />
 
-      {/* Floating action bar for selection mode */}
-      {selectedSegmentIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-lg border bg-background px-4 py-3 shadow-lg">
-          <span className="text-sm font-medium">{selectedSegmentIds.size} selected</span>
-          <Button size="sm" variant="outline" onClick={selectAllFiltered}>
-            Select all ({sortedSegments.length})
-          </Button>
-          <Button size="sm" onClick={() => setIsBatchLocationOpen(true)}>
-            <MapPinIcon className="mr-2 h-4 w-4" />
-            Update Locations
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => handleBatchSetVisibility(false)}>
-            <EyeOffIcon className="mr-2 h-4 w-4" />
-            Hide
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => handleBatchSetVisibility(true)}>
-            <EyeIcon className="mr-2 h-4 w-4" />
-            Show
-          </Button>
-          <Button size="sm" variant="destructive" onClick={handleBatchDelete} disabled={isBatchDeleting}>
-            <Trash2Icon className="mr-2 h-4 w-4" />
-            Delete
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setSelectedSegmentIds(new Set())}>
-            Clear
-          </Button>
-        </div>
-      )}
+      <SelectPopupMenu
+        selectedCount={selectedSegmentIds.size}
+        totalCount={sortedSegments.length}
+        onSelectAll={selectAllFiltered}
+        onHide={() => handleBatchSetVisibility(false)}
+        onShow={() => handleBatchSetVisibility(true)}
+        onDelete={handleBatchDelete}
+        isDeleting={isBatchDeleting}
+        onClear={() => setSelectedSegmentIds(new Set())}
+        extraActions={[
+          {
+            icon: <MapPinIcon className="h-4 w-4" />,
+            label: "Update Locations",
+            onClick: () => setIsBatchLocationOpen(true),
+          },
+        ]}
+      />
     </Card>
   );
 }

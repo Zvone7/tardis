@@ -40,7 +40,7 @@ public class GeocodingController : ControllerBase
             return Ok(normalized);
         }
         catch (LocationIqException ex)
-        1{
+        {
             return StatusCode((int)HttpStatusCode.BadGateway, new { error = ex.Message });
         }
     }

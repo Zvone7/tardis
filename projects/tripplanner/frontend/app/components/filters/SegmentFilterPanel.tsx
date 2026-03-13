@@ -57,7 +57,7 @@ export function SegmentFilterPanel({
   return (
     <div className={cn("space-y-3", className)}>
       <div className="flex flex-wrap items-center justify-end gap-3 sm:flex-nowrap">
-        {toolbarAddon ? <div className="min-w-[140px] sm:min-w-[160px]">{toolbarAddon}</div> : null}
+        {toolbarAddon ?? null}
         <Button
           type="button"
           variant="outline"

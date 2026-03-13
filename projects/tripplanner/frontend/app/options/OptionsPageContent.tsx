@@ -6,7 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
-import { PlusIcon, LayoutIcon, EditIcon, EyeOffIcon, EyeIcon, CombineIcon, LinkIcon, Trash2Icon } from "lucide-react";
+import { PlusIcon, LayoutIcon, EditIcon, EyeOffIcon, CombineIcon, LinkIcon, MoreVerticalIcon } from "lucide-react";
+import SelectPopupMenu from "../components/SelectPopupMenu";
+import { Popover, PopoverTrigger, PopoverContent } from "../components/ui/popover";
 import { Checkbox } from "../components/ui/checkbox";
 import OptionModal from "./OptionModal";
 import CombineAllModal from "./CombineAllModal";
@@ -655,12 +657,8 @@ export default function OptionsPageContent() {
         </div>
         <div className="flex space-x-2">
           <Button variant="outline" onClick={() => router.push(`/segments?tripId=${tripId}`)}>
-            <LayoutIcon className="mr-2 h-4 w-4" />
-            View Segments
-          </Button>
-          <Button variant="outline" onClick={() => setIsCombineAllOpen(true)}>
-            <CombineIcon className="mr-2 h-4 w-4" />
-            Combine All
+            <LayoutIcon className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Segments</span>
           </Button>
           <Button onClick={handleCreateOption}>
             <PlusIcon className="h-4 w-4" />
@@ -678,15 +676,36 @@ export default function OptionsPageContent() {
           minDate={optionMetadata.dateBounds.min}
           maxDate={optionMetadata.dateBounds.max}
           toolbarAddon={
-            <CurrencyDropdown
-              value={effectiveDisplayCurrencyId}
-              onChange={setDisplayCurrencyId}
-              currencies={currencies}
-              placeholder={isLoadingCurrencies ? "Loading currencies..." : "Display currency"}
-              disabled={isLoadingCurrencies}
-              className="w-full sm:w-[150px] text-sm"
-              triggerClassName="w-full h-9 text-sm px-3"
-            />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="icon" className="shrink-0 h-9 w-9 border-muted-foreground/50 text-muted-foreground">
+                  <MoreVerticalIcon className="h-5 w-5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-56 p-2 space-y-2">
+                <div>
+                  <span className="text-xs text-muted-foreground px-1">Display currency</span>
+                  <CurrencyDropdown
+                    value={effectiveDisplayCurrencyId}
+                    onChange={setDisplayCurrencyId}
+                    currencies={currencies}
+                    placeholder={isLoadingCurrencies ? "Loading..." : "Display currency"}
+                    disabled={isLoadingCurrencies}
+                    className="w-full text-sm mt-1"
+                    triggerClassName="w-full h-9 text-sm px-3"
+                  />
+                </div>
+                <div className="border-t pt-1">
+                  <button
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent cursor-pointer"
+                    onClick={() => setIsCombineAllOpen(true)}
+                  >
+                    <CombineIcon className="h-4 w-4" />
+                    Combine All
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
           }
         />
 
@@ -754,34 +773,23 @@ export default function OptionsPageContent() {
         segmentTypes={segmentTypes}
       />
 
-      {/* Floating action bar for selection mode */}
-      {selectedOptionIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-lg border bg-background px-4 py-3 shadow-lg">
-          <span className="text-sm font-medium">{selectedOptionIds.size} selected</span>
-          <Button size="sm" variant="outline" onClick={selectAllFiltered}>
-            Select all ({sortedOptions.length})
-          </Button>
-          <Button size="sm" onClick={() => setIsBatchConnectOpen(true)}>
-            <LinkIcon className="mr-2 h-4 w-4" />
-            Connect / Disconnect Segment
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => handleBatchSetVisibility(false)}>
-            <EyeOffIcon className="mr-2 h-4 w-4" />
-            Hide
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => handleBatchSetVisibility(true)}>
-            <EyeIcon className="mr-2 h-4 w-4" />
-            Show
-          </Button>
-          <Button size="sm" variant="destructive" onClick={handleBatchDelete} disabled={isBatchDeleting}>
-            <Trash2Icon className="mr-2 h-4 w-4" />
-            Delete
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setSelectedOptionIds(new Set())}>
-            Clear
-          </Button>
-        </div>
-      )}
+      <SelectPopupMenu
+        selectedCount={selectedOptionIds.size}
+        totalCount={sortedOptions.length}
+        onSelectAll={selectAllFiltered}
+        onHide={() => handleBatchSetVisibility(false)}
+        onShow={() => handleBatchSetVisibility(true)}
+        onDelete={handleBatchDelete}
+        isDeleting={isBatchDeleting}
+        onClear={() => setSelectedOptionIds(new Set())}
+        extraActions={[
+          {
+            icon: <LinkIcon className="h-4 w-4" />,
+            label: "Connect / Disconnect Segment",
+            onClick: () => setIsBatchConnectOpen(true),
+          },
+        ]}
+      />
     </Card>
   );
 }
