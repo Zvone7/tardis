@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
-import { SaveIcon, Trash2Icon, EyeOffIcon, EyeIcon, LayersIcon, Loader2 } from "lucide-react";
+import { SaveIcon, Trash2Icon, EyeOffIcon, EyeIcon, LayersIcon, Loader2, SlidersHorizontal } from "lucide-react";
 import type { SegmentType, SegmentApi, OptionApi, OptionSave, Currency, CurrencyConversion, Segment } from "../types/models";
 import { cn } from "../lib/utils";
 import { TitleTokens } from "../components/TitleTokens";
@@ -101,6 +101,7 @@ export default function OptionModal({
     showHidden: false,
   })
   const [segmentSortState, setSegmentSortState] = useState<SegmentSortValue | null>(null)
+  const [segmentFilterOpen, setSegmentFilterOpen] = useState(false)
   const resolvedDisplayCurrencyId = displayCurrencyId ?? tripCurrencyId ?? null;
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false)
   const skipClosePromptRef = useRef(false)
@@ -505,7 +506,7 @@ export default function OptionModal({
         <DialogContent className="max-w-lg w-full p-0 flex flex-col h-[90vh]">
           <DialogTitle className="sr-only">{optionTitleText}</DialogTitle>
           <form onSubmit={handleSubmit} className="flex flex-col h-full">
-            <div className="border-b bg-background px-4 py-3">
+            <div className="border-b bg-background px-4 py-3 pr-10">
               <div className="mb-3 space-y-1">
                 <div className="flex items-center gap-2 text-lg font-semibold leading-snug">
                   <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-secondary/50 text-secondary-foreground shadow-sm">
@@ -589,6 +590,20 @@ export default function OptionModal({
                   onToggle={() => setConnectionsOpen((prev) => !prev)}
                 >
                   <div className="space-y-4 pt-4">
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-label="Toggle filters"
+                        onClick={() => setSegmentFilterOpen((prev) => !prev)}
+                        className="relative"
+                      >
+                        <SlidersHorizontal
+                          className={cn("h-4 w-4 transition-transform", segmentFilterOpen ? "text-primary rotate-90" : "")}
+                        />
+                      </Button>
+                    </div>
                     <SegmentFilterPanel
                       value={segmentFilterState}
                       onChange={setSegmentFilterState}
@@ -598,6 +613,8 @@ export default function OptionModal({
                       availableTypes={segmentFilterMetadata.types}
                       minDate={segmentFilterMetadata.dateBounds.min}
                       maxDate={segmentFilterMetadata.dateBounds.max}
+                      open={segmentFilterOpen}
+                      onOpenChange={setSegmentFilterOpen}
                     />
                     <ScrollArea className="h-[320px] border rounded-md p-3">
                       {filteredSegmentsForDisplay.length === 0 ? (

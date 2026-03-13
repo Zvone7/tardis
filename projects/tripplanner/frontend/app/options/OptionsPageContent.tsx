@@ -6,21 +6,22 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
-import { PlusIcon, LayoutIcon, EditIcon, EyeOffIcon, CombineIcon, LinkIcon, MoreVerticalIcon } from "lucide-react";
+import { PlusIcon, LayoutIcon, EditIcon, EyeOffIcon, CombineIcon, LinkIcon, MoreVerticalIcon, SlidersHorizontal } from "lucide-react";
 import SelectPopupMenu from "../components/SelectPopupMenu";
 import { Popover, PopoverTrigger, PopoverContent } from "../components/ui/popover";
 import { Checkbox } from "../components/ui/checkbox";
 import OptionModal from "./OptionModal";
 import CombineAllModal from "./CombineAllModal";
 import BatchConnectSegmentModal from "./BatchConnectSegmentModal";
-import { formatDateStr, formatWeekday } from "../utils/dateformatters";
-import { OptionFilterPanel, type OptionFilterValue } from "../components/filters/OptionFilterPanel";
+import { formatDateWithUserOffset, formatWeekday } from "../utils/dateformatters";
+import { OptionFilterPanel, useOptionFilterHasFilters, type OptionFilterValue } from "../components/filters/OptionFilterPanel";
 import type { SegmentFilterValue } from "../components/filters/SegmentFilterPanel";
 import type { OptionSortValue } from "../components/sorting/optionSortTypes";
 import { applyOptionFilters, buildOptionMetadata } from "../services/optionFiltering";
 import { cn } from "../lib/utils";
 import { optionsApi, segmentsApi, tripsApi } from "../utils/apiClient";
 import { CurrencyDropdown } from "../components/CurrencyDropdown";
+import { UtcOffsetDropdown } from "../components/UtcOffsetDropdown";
 import { useCurrencies } from "../hooks/useCurrencies";
 import { useCurrencyConversions } from "../hooks/useCurrencyConversions";
 import { useCurrentUser } from "../hooks/useCurrentUser";
@@ -30,14 +31,11 @@ import { useChatContext } from "../chat/ChatProvider";
 // shared API types
 import type { OptionApi, OptionSave, SegmentApi, SegmentType, Currency, CurrencyConversion } from "../types/models";
 
-const formatOptionDateWithWeekday = (iso: string | null) => {
+const formatOptionDateWithWeekday = (iso: string | null, offset: number) => {
   if (!iso) return "N/A";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "N/A";
-  const weekday = formatWeekday(iso);
-  const dayMonth = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  const timeLabel = date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-  return `${weekday}, ${dayMonth} · ${timeLabel}`;
+  const weekday = formatWeekday(iso, offset);
+  const formatted = formatDateWithUserOffset(iso, offset);
+  return `${weekday}, ${formatted}`;
 };
 
 const formatLocationLabel = (loc: any | null) => {
@@ -232,6 +230,8 @@ function OptionCard({
   tripCurrencyId,
   currencies,
   conversions,
+  connectedSegments,
+  userPreferredOffset,
   isSelected = false,
   onToggleSelect,
 }: {
@@ -242,10 +242,17 @@ function OptionCard({
   tripCurrencyId: number | null;
   currencies: Currency[];
   conversions: CurrencyConversion[];
+  connectedSegments: ConnectedSegment[];
+  userPreferredOffset: number;
   isSelected?: boolean;
   onToggleSelect?: (optionId: number) => void;
 }) {
   const isHidden = option.isUiVisible === false;
+
+  const sortedSegments = useMemo(
+    () => [...connectedSegments].sort((a, b) => (a.startDateTimeUtc ?? "").localeCompare(b.startDateTimeUtc ?? "")),
+    [connectedSegments]
+  );
 
   return (
     <Card
@@ -262,38 +269,61 @@ function OptionCard({
       }}
       aria-label={`Edit option ${option.name}`}
     >
-      <CardHeader className="pb-3">
-        <div className="flex justify-between items-start">
-          <div className="mr-2 mt-1" onClick={(e) => e.stopPropagation()}>
-            <Checkbox
-              checked={isSelected}
-              onCheckedChange={() => onToggleSelect?.(option.id)}
-            />
-          </div>
-          <div className="flex-1 min-w-0">
-            <CardTitle className="text-lg font-semibold tracking-tight">
-              {option.name}
-            </CardTitle>
-
-            <div className="mt-1 text-sm text-muted-foreground">
-              <div>{formatOptionDateWithWeekday(option.startDateTimeUtc)}</div>
-              <div>{formatOptionDateWithWeekday(option.endDateTimeUtc)}</div>
+      <div className="flex flex-col md:flex-row">
+        {/* Left: checkbox, name, dates, segment icons */}
+        <div className="flex-1 min-w-0 p-4 pb-3 md:pb-4">
+          <div className="flex items-start">
+            <div className="mr-2 mt-1" onClick={(e) => e.stopPropagation()}>
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={() => onToggleSelect?.(option.id)}
+              />
             </div>
-          </div>
-
-          <div className="flex items-center gap-2 ml-4 shrink-0">
-            {showVisibilityIndicator && isHidden && (
-              <div
-                className="rounded-full border p-1 bg-muted-foreground/20 text-muted-foreground"
-                title="Hidden from UI"
-                aria-label="Hidden from UI"
-              >
-                <EyeOffIcon className="h-5 w-5" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-lg font-semibold tracking-tight">
+                  {option.name}
+                </CardTitle>
+                {showVisibilityIndicator && isHidden && (
+                  <div
+                    className="rounded-full border p-1 bg-muted-foreground/20 text-muted-foreground"
+                    title="Hidden from UI"
+                    aria-label="Hidden from UI"
+                  >
+                    <EyeOffIcon className="h-4 w-4" />
+                  </div>
+                )}
               </div>
-            )}
+
+              <div className="mt-1 text-sm text-muted-foreground">
+                <div>{formatOptionDateWithWeekday(option.startDateTimeUtc, userPreferredOffset)}</div>
+                <div>{formatOptionDateWithWeekday(option.endDateTimeUtc, userPreferredOffset)}</div>
+              </div>
+
+              {sortedSegments.length > 0 && (
+                <div className="mt-2 flex items-center gap-1">
+                  {sortedSegments.map((seg, i) =>
+                    seg.segmentType?.iconSvg ? (
+                      <span
+                        key={`${seg.id}-${i}`}
+                        className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary/60 text-secondary-foreground shadow-sm ring-1 ring-black/5 dark:bg-white dark:text-black"
+                        title={seg.segmentType.name}
+                      >
+                        <span
+                          className="w-4 h-4"
+                          dangerouslySetInnerHTML={{ __html: seg.segmentType.iconSvg }}
+                          suppressHydrationWarning
+                        />
+                      </span>
+                    ) : null
+                  )}
+                </div>
+              )}
+            </div>
             <Button
               variant="ghost"
               size="icon"
+              className="shrink-0 ml-2 md:hidden"
               onClick={(e) => {
                 e.stopPropagation();
                 onEdit(option);
@@ -304,17 +334,18 @@ function OptionCard({
             </Button>
           </div>
         </div>
-      </CardHeader>
 
-      <CardContent className="pt-0 space-y-3">
-        <CostSummary
-          option={option}
-          displayCurrencyId={displayCurrencyId}
-          tripCurrencyId={tripCurrencyId}
-          currencies={currencies}
-          conversions={conversions}
-        />
-      </CardContent>
+        {/* Right: cost summary (desktop: side column) */}
+        <div className="md:w-1/2 md:border-l md:shrink-0 p-4 pt-0 md:pt-4">
+          <CostSummary
+            option={option}
+            displayCurrencyId={displayCurrencyId}
+            tripCurrencyId={tripCurrencyId}
+            currencies={currencies}
+            conversions={conversions}
+          />
+        </div>
+      </div>
     </Card>
   );
 }
@@ -339,12 +370,14 @@ export default function OptionsPageContent() {
   const [tripCurrencyId, setTripCurrencyId] = useState<number | null>(null);
   const [displayCurrencyId, setDisplayCurrencyId] = useState<number | null>(null);
   const [userPreferredCurrencyId, setUserPreferredCurrencyId] = useState<number | null>(null);
+  const [userPreferredOffset, setUserPreferredOffset] = useState<number>(0);
   const [filterState, setFilterState] = useState<OptionFilterValue>({
     locations: [],
     dateRange: { start: "", end: "" },
     showHidden: false,
   });
   const [sortState, setSortState] = useState<OptionSortValue | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
   const { currencies, isLoading: isLoadingCurrencies } = useCurrencies();
   const { conversions } = useCurrencyConversions();
   const { user } = useCurrentUser();
@@ -447,6 +480,7 @@ export default function OptionsPageContent() {
   useEffect(() => {
     if (!user) return
     setUserPreferredCurrencyId(user.userPreference?.preferredCurrencyId ?? null)
+    setUserPreferredOffset(user.userPreference?.preferredUtcOffset ?? 0)
   }, [user])
 
   useEffect(() => {
@@ -644,23 +678,77 @@ export default function OptionsPageContent() {
   )
 
 
+  const hasActiveFilters = useOptionFilterHasFilters(filterState, optionMetadata.dateBounds.min, optionMetadata.dateBounds.max)
+
   if (!tripId) {
     return <div>No trip ID provided</div>;
   }
 
   return (
     <Card className="w-full max-w-6xl mx-auto">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle>Options</CardTitle>
-          <CardDescription>{tripName ? tripName : `Trip ID: ${tripId}`}</CardDescription>
+      <CardHeader className="flex flex-row items-center justify-between gap-3">
+        <div className="min-w-0">
+          <CardTitle className="text-lg font-semibold">{tripName ? tripName : `Trip ID: ${tripId}`}</CardTitle>
+          <CardDescription>Options</CardDescription>
         </div>
-        <div className="flex space-x-2">
-          <Button variant="outline" onClick={() => router.push(`/segments?tripId=${tripId}`)}>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="outline" size="sm" onClick={() => router.push(`/segments?tripId=${tripId}`)}>
             <LayoutIcon className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Segments</span>
           </Button>
-          <Button onClick={handleCreateOption}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label="Toggle filters"
+            onClick={() => setFilterOpen((prev) => !prev)}
+            className="relative"
+          >
+            <SlidersHorizontal
+              className={cn("h-4 w-4 transition-transform", filterOpen ? "text-primary rotate-90" : "")}
+            />
+            {hasActiveFilters ? <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-primary" /> : null}
+          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm">
+                <MoreVerticalIcon className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-56 p-2 space-y-2">
+              <div>
+                <span className="text-xs text-muted-foreground px-1">Display currency</span>
+                <CurrencyDropdown
+                  value={effectiveDisplayCurrencyId}
+                  onChange={setDisplayCurrencyId}
+                  currencies={currencies}
+                  placeholder={isLoadingCurrencies ? "Loading..." : "Display currency"}
+                  disabled={isLoadingCurrencies}
+                  className="w-full text-sm mt-1"
+                  triggerClassName="w-full h-9 text-sm px-3"
+                />
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground px-1">Timezone offset</span>
+                <UtcOffsetDropdown
+                  value={userPreferredOffset}
+                  onChange={setUserPreferredOffset}
+                  className="w-full text-sm mt-1"
+                  triggerClassName="w-full h-9 text-sm px-3"
+                />
+              </div>
+              <div className="border-t pt-1">
+                <button
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent cursor-pointer"
+                  onClick={() => setIsCombineAllOpen(true)}
+                >
+                  <CombineIcon className="h-4 w-4" />
+                  Combine All
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Button size="sm" onClick={handleCreateOption}>
             <PlusIcon className="h-4 w-4" />
           </Button>
         </div>
@@ -675,38 +763,8 @@ export default function OptionsPageContent() {
           availableLocations={locationOptions}
           minDate={optionMetadata.dateBounds.min}
           maxDate={optionMetadata.dateBounds.max}
-          toolbarAddon={
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="icon" className="shrink-0 h-9 w-9 border-muted-foreground/50 text-muted-foreground">
-                  <MoreVerticalIcon className="h-5 w-5" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-56 p-2 space-y-2">
-                <div>
-                  <span className="text-xs text-muted-foreground px-1">Display currency</span>
-                  <CurrencyDropdown
-                    value={effectiveDisplayCurrencyId}
-                    onChange={setDisplayCurrencyId}
-                    currencies={currencies}
-                    placeholder={isLoadingCurrencies ? "Loading..." : "Display currency"}
-                    disabled={isLoadingCurrencies}
-                    className="w-full text-sm mt-1"
-                    triggerClassName="w-full h-9 text-sm px-3"
-                  />
-                </div>
-                <div className="border-t pt-1">
-                  <button
-                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent cursor-pointer"
-                    onClick={() => setIsCombineAllOpen(true)}
-                  >
-                    <CombineIcon className="h-4 w-4" />
-                    Combine All
-                  </button>
-                </div>
-              </PopoverContent>
-            </Popover>
-          }
+          open={filterOpen}
+          onOpenChange={setFilterOpen}
         />
 
 
@@ -729,6 +787,8 @@ export default function OptionsPageContent() {
                   tripCurrencyId={tripCurrencyId}
                   currencies={currencies}
                   conversions={conversions}
+                  connectedSegments={connectedSegments[option.id] ?? []}
+                  userPreferredOffset={userPreferredOffset}
                   isSelected={selectedOptionIds.has(option.id)}
                   onToggleSelect={toggleOptionSelection}
                 />

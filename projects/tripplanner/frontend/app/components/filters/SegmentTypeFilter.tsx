@@ -1,6 +1,5 @@
 import { useMemo } from "react"
-import { Button } from "../ui/button"
-import { XIcon } from "lucide-react"
+import { cn } from "../../lib/utils"
 import type { SegmentType } from "../../types/models"
 
 interface SegmentTypeFilterProps {
@@ -16,40 +15,55 @@ export function SegmentTypeFilter({
 }: SegmentTypeFilterProps) {
   const sorted = useMemo(() => types.slice().sort((a, b) => a.name.localeCompare(b.name)), [types])
 
+  // value empty = all visible. value non-empty = only those IDs visible.
+  // UI shows each type as "on" when it IS visible.
+  const isVisible = (id: string) => value.length === 0 || value.includes(id)
+
   const toggle = (id: string) => {
-    if (value.includes(id)) onChange(value.filter((v) => v !== id))
-    else onChange([...value, id])
+    const allIds = sorted.map((t) => t.id.toString())
+    if (value.length === 0) {
+      // currently showing all — remove this one
+      onChange(allIds.filter((v) => v !== id))
+    } else if (value.includes(id)) {
+      const next = value.filter((v) => v !== id)
+      // if removing would leave none, reset to show all
+      onChange(next.length === 0 ? [] : next)
+    } else {
+      const next = [...value, id]
+      // if all are now selected, reset to show all
+      onChange(next.length === allIds.length ? [] : next)
+    }
   }
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {sorted.map((type) => {
-        const active = value.includes(type.id.toString())
+        const on = isVisible(type.id.toString())
         return (
-          <Button
+          <button
             key={type.id}
             type="button"
-            variant={active ? "default" : "outline"}
-            size="sm"
-            className="h-8 gap-1.5 px-2.5"
             onClick={() => toggle(type.id.toString())}
+            title={type.name}
+            className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-full shadow-sm ring-1 transition-opacity",
+              on
+                ? "bg-secondary/60 text-secondary-foreground ring-black/5 dark:bg-white dark:text-black"
+                : "bg-muted text-muted-foreground ring-black/5 opacity-50 dark:bg-muted dark:text-muted-foreground"
+            )}
           >
             {type.iconSvg ? (
               <span
-                className="w-4 h-4 shrink-0"
+                className="w-4 h-4"
                 dangerouslySetInnerHTML={{ __html: type.iconSvg }}
                 suppressHydrationWarning
               />
-            ) : null}
-            {type.name}
-          </Button>
+            ) : (
+              <span className="text-xs font-medium">{type.shortName?.[0] ?? type.name[0]}</span>
+            )}
+          </button>
         )
       })}
-      {value.length > 0 && (
-        <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => onChange([])}>
-          <XIcon className="h-3.5 w-3.5" />
-        </Button>
-      )}
     </div>
   )
 }

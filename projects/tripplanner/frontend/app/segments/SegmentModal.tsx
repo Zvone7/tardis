@@ -37,6 +37,7 @@ import {
   Globe,
   Pencil,
   Plane,
+  SlidersHorizontal,
 } from "lucide-react"
 import { toLocationDto, normalizeLocation } from "../lib/mapping"
 import { Collapsible } from "../components/Collapsible"
@@ -245,6 +246,7 @@ export default function SegmentModal({
     showHidden: false,
   })
   const [optionSortState, setOptionSortState] = useState<OptionSortValue | null>(null)
+  const [optionFilterOpen, setOptionFilterOpen] = useState(false)
   const [optionConnections, setOptionConnections] = useState<Record<number, SegmentApi[]>>({})
   const [showDescriptionModal, setShowDescriptionModal] = useState(false)
   const [descriptionDraft, setDescriptionDraft] = useState("")
@@ -1460,6 +1462,20 @@ type SegmentBaseline = {
                 onToggle={() => setConnectedOptionsOpen((o) => !o)}
               >
                 <div className="pt-4">
+                  <div className="flex justify-end mb-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      aria-label="Toggle filters"
+                      onClick={() => setOptionFilterOpen((prev) => !prev)}
+                      className="relative"
+                    >
+                      <SlidersHorizontal
+                        className={cn("h-4 w-4 transition-transform", optionFilterOpen ? "text-primary rotate-90" : "")}
+                      />
+                    </Button>
+                  </div>
                   <OptionFilterPanel
                     value={optionFilterState}
                     onChange={setOptionFilterState}
@@ -1468,6 +1484,8 @@ type SegmentBaseline = {
                     availableLocations={optionMetadata.locations}
                     minDate={optionMetadata.dateBounds.min}
                     maxDate={optionMetadata.dateBounds.max}
+                    open={optionFilterOpen}
+                    onOpenChange={setOptionFilterOpen}
                     className="mb-3"
                   />
                   <ScrollArea className="h-[150px] border rounded-md p-3">
