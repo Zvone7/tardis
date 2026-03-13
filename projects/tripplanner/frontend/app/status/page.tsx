@@ -22,8 +22,7 @@ export default function Authenticated() {
       .then((data) => {
         setAuthStatus(`Authenticated as: ${data.email || "Unknown"}`);
       })
-      .catch((err) => {
-        console.error("Authentication failed", err);
+      .catch(() => {
         setAuthStatus("Not authenticated");
       });
   }, [router]);

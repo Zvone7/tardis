@@ -19,6 +19,7 @@ if (backendUrl.includes("localhost")) {
 }
 
 const nextConfig = {
+  devIndicators: false,
   async rewrites() {
 
     return [

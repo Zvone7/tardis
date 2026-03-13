@@ -43,12 +43,14 @@ export function DarkModeToggle() {
     }
   }
 
+  const label = resolvedTheme === "dark" ? "Light mode" : "Dark mode"
+
   if (!isMounted) {
     return (
       <Button
         variant="ghost"
         size="sm"
-        className="flex items-center gap-2 text-xs w-[72px]"
+        className="flex items-center gap-1 text-xs"
         aria-hidden
         disabled
         suppressHydrationWarning
@@ -62,9 +64,10 @@ export function DarkModeToggle() {
       size="sm"
       onClick={handleToggle}
       disabled={isUpdating}
-      className="flex items-center gap-2 text-xs"
+      className="group/dm flex items-center gap-1 text-xs"
       title={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
     >
+      <span className="hidden sm:inline overflow-hidden max-w-0 group-hover/dm:max-w-[6rem] transition-all duration-300 whitespace-nowrap">{label}</span>
       {icon}
     </Button>
   )
