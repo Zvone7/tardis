@@ -154,6 +154,12 @@ export const optionsApi = {
       headers: jsonHeaders,
       body: JSON.stringify(payload),
     }),
+  batchConnectSegment: (tripId: string | number, payload: { optionIds: number[]; segmentId: number; connect: boolean }) =>
+    request<number>(`/api/Option/BatchConnectSegment?tripId=${tripId}`, {
+      method: "PUT",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload),
+    }),
 }
 
 export const userApi = {

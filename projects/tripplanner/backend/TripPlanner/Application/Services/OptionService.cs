@@ -232,6 +232,30 @@ public class OptionService
         return result;
     }
 
+    public async Task<int> BatchConnectSegmentAsync(BatchConnectSegmentAm am, CancellationToken ct)
+    {
+        var segment = await _segmentRepository_.GetAsync(am.SegmentId, ct);
+        if (segment == null)
+            throw new InvalidDataException($"Segment with id {am.SegmentId} not found.");
+
+        if (am.Connect)
+        {
+            await _optionRepository_.AddSegmentToOptionsAsync(am.SegmentId, am.OptionIds, ct);
+        }
+        else
+        {
+            await _optionRepository_.RemoveSegmentFromOptionsAsync(am.SegmentId, am.OptionIds, ct);
+        }
+
+        foreach (var optionId in am.OptionIds)
+        {
+            var recalculated = await RecalculateOptionStateAsync(optionId, ct);
+            await UpdateAsync(recalculated, ct);
+        }
+
+        return am.OptionIds.Count;
+    }
+
     public async Task<int> CombineAllAsync(CombineAllAm am, CancellationToken ct)
     {
         var segments = await _segmentRepository_.GetByIdsAsync(am.SegmentIds, ct);

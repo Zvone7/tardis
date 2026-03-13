@@ -82,6 +82,15 @@ public class OptionController : ControllerBase
         return Ok();
     }
 
+    [HttpPut]
+    [ServiceFilter(typeof(TripAccessFilterAttribute))]
+    [Route(nameof(BatchConnectSegment))]
+    public async Task<ActionResult<int>> BatchConnectSegment([FromQuery] int tripId, BatchConnectSegmentAm am, CancellationToken cancellationToken)
+    {
+        var count = await _optionService_.BatchConnectSegmentAsync(am, cancellationToken);
+        return Ok(count);
+    }
+
     [HttpPost]
     [ServiceFilter(typeof(TripAccessFilterAttribute))]
     [Route(nameof(CombineAll))]

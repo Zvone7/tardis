@@ -111,4 +111,24 @@ public class OptionRepository
         return (await db.QueryAsync<TripOptionDbm>(sqlQuery.ToString(), new { segment_id = segmentId })).AsList();
     }
 
+    public async Task AddSegmentToOptionsAsync(int segmentId, List<int> optionIds, CancellationToken cancellationToken)
+    {
+        if (optionIds.Count == 0) return;
+        using IDbConnection db = new SqlConnection(_connectionString_);
+        foreach (var optionId in optionIds)
+        {
+            var sql = "IF NOT EXISTS (SELECT 1 FROM option_to_segment WHERE option_id = @option_id AND segment_id = @segment_id) " +
+                      "INSERT INTO option_to_segment (option_id, segment_id) VALUES (@option_id, @segment_id)";
+            await db.ExecuteAsync(sql, new { option_id = optionId, segment_id = segmentId });
+        }
+    }
+
+    public async Task RemoveSegmentFromOptionsAsync(int segmentId, List<int> optionIds, CancellationToken cancellationToken)
+    {
+        if (optionIds.Count == 0) return;
+        using IDbConnection db = new SqlConnection(_connectionString_);
+        var sql = "DELETE FROM option_to_segment WHERE segment_id = @segment_id AND option_id IN @option_ids";
+        await db.ExecuteAsync(sql, new { segment_id = segmentId, option_ids = optionIds });
+    }
+
 }

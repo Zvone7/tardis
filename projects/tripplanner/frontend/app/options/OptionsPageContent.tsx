@@ -6,9 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
-import { PlusIcon, LayoutIcon, EditIcon, EyeOffIcon, CombineIcon } from "lucide-react";
+import { PlusIcon, LayoutIcon, EditIcon, EyeOffIcon, CombineIcon, CheckSquareIcon, XIcon, LinkIcon } from "lucide-react";
+import { Checkbox } from "../components/ui/checkbox";
 import OptionModal from "./OptionModal";
 import CombineAllModal from "./CombineAllModal";
+import BatchConnectSegmentModal from "./BatchConnectSegmentModal";
 import { formatDateStr, formatWeekday } from "../utils/dateformatters";
 import { OptionFilterPanel, type OptionFilterValue } from "../components/filters/OptionFilterPanel";
 import type { SegmentFilterValue } from "../components/filters/SegmentFilterPanel";
@@ -228,6 +230,9 @@ function OptionCard({
   tripCurrencyId,
   currencies,
   conversions,
+  selectionMode = false,
+  isSelected = false,
+  onToggleSelect,
 }: {
   option: OptionApi;
   onEdit: (option: OptionApi) => void;
@@ -236,6 +241,9 @@ function OptionCard({
   tripCurrencyId: number | null;
   currencies: Currency[];
   conversions: CurrencyConversion[];
+  selectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (optionId: number) => void;
 }) {
   const isHidden = option.isUiVisible === false;
 
@@ -243,18 +251,36 @@ function OptionCard({
     <Card
       className={cn(
         "hover:shadow-sm transition-all duration-200 ease-in-out border cursor-pointer hover:-translate-y-0.5",
-        isHidden && "bg-muted text-muted-foreground border-muted-foreground/40"
+        isHidden && "bg-muted text-muted-foreground border-muted-foreground/40",
+        selectionMode && isSelected && "ring-2 ring-primary"
       )}
-      onClick={() => onEdit(option)}
+      onClick={() => {
+        if (selectionMode && onToggleSelect) {
+          onToggleSelect(option.id);
+        } else {
+          onEdit(option);
+        }
+      }}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onEdit(option);
+        if (e.key === "Enter" || e.key === " ") {
+          if (selectionMode && onToggleSelect) onToggleSelect(option.id);
+          else onEdit(option);
+        }
       }}
       aria-label={`Edit option ${option.name}`}
     >
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
+          {selectionMode && (
+            <div className="mr-2 mt-1" onClick={(e) => e.stopPropagation()}>
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={() => onToggleSelect?.(option.id)}
+              />
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <CardTitle className="text-lg font-semibold tracking-tight">
               {option.name}
@@ -317,6 +343,9 @@ export default function OptionsPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCombineAllOpen, setIsCombineAllOpen] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedOptionIds, setSelectedOptionIds] = useState<Set<number>>(new Set());
+  const [isBatchConnectOpen, setIsBatchConnectOpen] = useState(false);
   const [editingOption, setEditingOption] = useState<OptionApi | null>(null);
   const [tripName, setTripName] = useState<string>("");
   const [tripCurrencyId, setTripCurrencyId] = useState<number | null>(null);
@@ -507,6 +536,28 @@ export default function OptionsPageContent() {
     return Array.from(labels).sort((a, b) => a.localeCompare(b))
   }, [segments, connectedSegmentList])
 
+  const toggleSelectionMode = useCallback(() => {
+    setSelectionMode((prev) => {
+      if (prev) setSelectedOptionIds(new Set());
+      return !prev;
+    });
+  }, []);
+
+  const toggleOptionSelection = useCallback((optionId: number) => {
+    setSelectedOptionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(optionId)) next.delete(optionId);
+      else next.add(optionId);
+      return next;
+    });
+  }, []);
+
+  const handleBatchConnectComplete = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedOptionIds(new Set());
+    fetchOptions();
+  }, [fetchOptions]);
+
   const handleEditOption = (option: OptionApi) => {
     setEditingOption(option);
     setIsModalOpen(true);
@@ -546,6 +597,10 @@ export default function OptionsPageContent() {
     () => applyOptionFilters(options, filterState, sortState, connectedSegments),
     [options, filterState, sortState, connectedSegments],
   )
+
+  const selectAllFiltered = useCallback(() => {
+    setSelectedOptionIds(new Set(sortedOptions.map((o) => o.id)));
+  }, [sortedOptions]);
 
   const initialModalFilters = useMemo<SegmentFilterValue>(
     () => ({
@@ -601,9 +656,27 @@ export default function OptionsPageContent() {
             <CombineIcon className="mr-2 h-4 w-4" />
             Combine All
           </Button>
-          <Button onClick={handleCreateOption}>
-            <PlusIcon className="h-4 w-4" />
+          <Button
+            variant={selectionMode ? "default" : "outline"}
+            onClick={toggleSelectionMode}
+          >
+            {selectionMode ? (
+              <>
+                <XIcon className="mr-2 h-4 w-4" />
+                Cancel
+              </>
+            ) : (
+              <>
+                <CheckSquareIcon className="mr-2 h-4 w-4" />
+                Select
+              </>
+            )}
           </Button>
+          {!selectionMode && (
+            <Button onClick={handleCreateOption}>
+              <PlusIcon className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </CardHeader>
 
@@ -648,6 +721,9 @@ export default function OptionsPageContent() {
                   tripCurrencyId={tripCurrencyId}
                   currencies={currencies}
                   conversions={conversions}
+                  selectionMode={selectionMode}
+                  isSelected={selectedOptionIds.has(option.id)}
+                  onToggleSelect={toggleOptionSelection}
                 />
               ))
             )}
@@ -678,6 +754,33 @@ export default function OptionsPageContent() {
         initialSegmentFilters={initialModalFilters}
         initialSegmentSort={initialModalSort}
       />
+
+      <BatchConnectSegmentModal
+        isOpen={isBatchConnectOpen}
+        onClose={() => setIsBatchConnectOpen(false)}
+        onComplete={handleBatchConnectComplete}
+        selectedOptionIds={Array.from(selectedOptionIds)}
+        tripId={Number(tripId)}
+        segments={segments}
+        segmentTypes={segmentTypes}
+      />
+
+      {/* Floating action bar for selection mode */}
+      {selectionMode && selectedOptionIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-lg border bg-background px-4 py-3 shadow-lg">
+          <span className="text-sm font-medium">{selectedOptionIds.size} selected</span>
+          <Button size="sm" variant="outline" onClick={selectAllFiltered}>
+            Select all ({sortedOptions.length})
+          </Button>
+          <Button size="sm" onClick={() => setIsBatchConnectOpen(true)}>
+            <LinkIcon className="mr-2 h-4 w-4" />
+            Connect / Disconnect Segment
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelectedOptionIds(new Set())}>
+            Clear
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }
