@@ -275,6 +275,7 @@ public class OptionService
 
         var actions = BuildCombinations(segments, am.StartLocationId, am.EndLocationId, existingWithSegments);
         var count = 0;
+        var letterIndex = 0;
 
         foreach (var action in actions)
         {
@@ -290,10 +291,15 @@ public class OptionService
             }
             else
             {
+                var optionName = letterIndex < 26
+                    ? ((char)('A' + letterIndex)).ToString()
+                    : $"A{letterIndex - 25}";
+                letterIndex++;
+
                 var newId = await _optionRepository_.CreateAndReturnIdAsync(new TripOptionDbm
                 {
                     trip_id = am.TripId,
-                    name = action.Name,
+                    name = optionName,
                     start_datetime_utc = null,
                     end_datetime_utc = null,
                     total_cost = 0
@@ -355,7 +361,6 @@ public class OptionService
                 {
                     Type = CombineActionType.Create,
                     SegmentIds = comboIds.ToList(),
-                    Name = string.Join(" + ", combo.Select(s => s.name))
                 });
             }
         }

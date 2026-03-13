@@ -521,7 +521,7 @@ export default function FlightSearch({
 
     const payload = {
       tripId,
-      name: `${first?.departure?.iataCode ?? "?"} → ${last?.arrival?.iataCode ?? "?"}`,
+      name: "",
       startDateTimeUtc: `${start}:00`,
       endDateTimeUtc: `${end}:00`,
       startDateTimeUtcOffset: 0,
@@ -574,7 +574,7 @@ export default function FlightSearch({
 
     const payload = {
       tripId,
-      name: segment.name,
+      name: "",
       startDateTimeUtc: `${start}:00`,
       endDateTimeUtc: `${end}:00`,
       startDateTimeUtcOffset: segment.startDateTimeUtcOffset ?? 0,

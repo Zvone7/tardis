@@ -470,9 +470,6 @@ export default function SegmentModal({
   }, [fetchOptions])
 
   const applyBookingSuggestion = (suggestion: SegmentSuggestion) => {
-    if (suggestion.name && !name) {
-      setName(suggestion.name)
-    }
 
     setRange((prev) => ({
       ...prev,
