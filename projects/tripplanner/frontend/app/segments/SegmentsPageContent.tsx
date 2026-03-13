@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
-import { PlusIcon, ListIcon, EditIcon, EyeOffIcon, EyeIcon, Loader2Icon, Search, CheckSquareIcon, XIcon, MapPinIcon, Trash2Icon } from "lucide-react";
+import { PlusIcon, ListIcon, EditIcon, EyeOffIcon, EyeIcon, Loader2Icon, Search, MapPinIcon, Trash2Icon } from "lucide-react";
 import { Checkbox } from "../components/ui/checkbox";
 import SegmentModal from "../segments/SegmentModal";
 import BatchLocationModal from "../segments/BatchLocationModal";
@@ -63,7 +63,6 @@ function SegmentCard({
   tripCurrencyId,
   currencies,
   conversions,
-  selectionMode = false,
   isSelected = false,
   onToggleSelect,
 }: {
@@ -78,7 +77,6 @@ function SegmentCard({
   tripCurrencyId: number | null;
   currencies: Currency[];
   conversions: CurrencyConversion[];
-  selectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (segmentId: number) => void;
 }) {
@@ -111,27 +109,18 @@ function SegmentCard({
       className={cn(
         "cursor-pointer hover:bg-muted/50 transition-all duration-200 ease-in-out hover:-translate-y-0.5",
         isHidden && "bg-muted text-muted-foreground border-muted-foreground/40",
-        selectionMode && isSelected && "ring-2 ring-primary"
+        isSelected && "ring-2 ring-primary"
       )}
-      onClick={() => {
-        if (selectionMode && onToggleSelect) {
-          onToggleSelect(segment.id);
-        } else {
-          onEdit(segment);
-        }
-      }}
+      onClick={() => onEdit(segment)}
     >
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
-          {selectionMode && (
-            <div className="flex items-center mr-3 mt-1">
-              <Checkbox
-                checked={isSelected}
-                onCheckedChange={() => onToggleSelect?.(segment.id)}
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
-          )}
+          <div className="flex items-center mr-3 mt-1" onClick={(e) => e.stopPropagation()}>
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={() => onToggleSelect?.(segment.id)}
+            />
+          </div>
           <div className="flex-1">
             <div className="flex items-center space-x-2 mb-2">
               {segmentType && (
@@ -235,7 +224,6 @@ export default function SegmentsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isFlightSearchOpen, setIsFlightSearchOpen] = useState(false);
   const [isAccommodationOpen, setIsAccommodationOpen] = useState(false);
-  const [selectionMode, setSelectionMode] = useState(false);
   const [selectedSegmentIds, setSelectedSegmentIds] = useState<Set<number>>(new Set());
   const [isBatchLocationOpen, setIsBatchLocationOpen] = useState(false);
   const [editingSegment, setEditingSegment] = useState<Segment | null | undefined>(null);
@@ -378,12 +366,6 @@ export default function SegmentsPage() {
     setIsModalOpen(true);
   };
 
-  const toggleSelectionMode = useCallback(() => {
-    setSelectionMode((prev) => {
-      if (prev) setSelectedSegmentIds(new Set());
-      return !prev;
-    });
-  }, []);
 
   const toggleSegmentSelection = useCallback((segmentId: number) => {
     setSelectedSegmentIds((prev) => {
@@ -395,7 +377,6 @@ export default function SegmentsPage() {
   }, []);
 
   const handleBatchLocationComplete = useCallback(() => {
-    setSelectionMode(false);
     setSelectedSegmentIds(new Set());
     fetchSegments();
   }, [fetchSegments]);
@@ -408,7 +389,6 @@ export default function SegmentsPage() {
     setIsBatchDeleting(true);
     try {
       await segmentsApi.batchDelete(tripId, Array.from(selectedSegmentIds));
-      setSelectionMode(false);
       setSelectedSegmentIds(new Set());
       fetchSegments();
     } catch (err) {
@@ -422,7 +402,6 @@ export default function SegmentsPage() {
     if (!tripId || selectedSegmentIds.size === 0) return;
     try {
       await segmentsApi.batchSetVisibility(tripId, Array.from(selectedSegmentIds), isVisible);
-      setSelectionMode(false);
       setSelectedSegmentIds(new Set());
       fetchSegments();
     } catch (err) {
@@ -599,32 +578,13 @@ export default function SegmentsPage() {
           }
         />
 
-        <div className="flex justify-end mt-3">
-          <Button
-            size="sm"
-            variant={selectionMode ? "default" : "outline"}
-            onClick={toggleSelectionMode}
-          >
-            {selectionMode ? (
-              <>
-                <XIcon className="mr-2 h-4 w-4" />
-                Cancel
-              </>
-            ) : (
-              <>
-                <CheckSquareIcon className="mr-2 h-4 w-4" />
-                Select
-              </>
-            )}
-          </Button>
-        </div>
 
         {isLoading ? (
           <LoadingGridSkeleton />
         ) : error ? (
           <p className="text-center text-red-500">{error}</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div className="grid grid-cols-1 gap-4 mt-4">
             {sortedSegments.length === 0 ? (
               <p className="text-sm text-muted-foreground col-span-full text-center">No segments to display.</p>
             ) : (
@@ -645,7 +605,6 @@ export default function SegmentsPage() {
                     tripCurrencyId={tripCurrencyId}
                     currencies={currencies}
                     conversions={conversions}
-                    selectionMode={selectionMode}
                     isSelected={selectedSegmentIds.has(segment.id)}
                     onToggleSelect={toggleSegmentSelection}
                   />
@@ -694,7 +653,7 @@ export default function SegmentsPage() {
       />
 
       {/* Floating action bar for selection mode */}
-      {selectionMode && selectedSegmentIds.size > 0 && (
+      {selectedSegmentIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-lg border bg-background px-4 py-3 shadow-lg">
           <span className="text-sm font-medium">{selectedSegmentIds.size} selected</span>
           <Button size="sm" variant="outline" onClick={selectAllFiltered}>
@@ -727,7 +686,7 @@ export default function SegmentsPage() {
 
 function LoadingGridSkeleton() {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 gap-4">
       {[...Array(6)].map((_, i) => (
         <Skeleton key={i} className="h-40 w-full" />
       ))}

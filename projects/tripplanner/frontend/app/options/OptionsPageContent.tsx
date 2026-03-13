@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
-import { PlusIcon, LayoutIcon, EditIcon, EyeOffIcon, EyeIcon, CombineIcon, CheckSquareIcon, XIcon, LinkIcon, Trash2Icon } from "lucide-react";
+import { PlusIcon, LayoutIcon, EditIcon, EyeOffIcon, EyeIcon, CombineIcon, LinkIcon, Trash2Icon } from "lucide-react";
 import { Checkbox } from "../components/ui/checkbox";
 import OptionModal from "./OptionModal";
 import CombineAllModal from "./CombineAllModal";
@@ -230,7 +230,6 @@ function OptionCard({
   tripCurrencyId,
   currencies,
   conversions,
-  selectionMode = false,
   isSelected = false,
   onToggleSelect,
 }: {
@@ -241,7 +240,6 @@ function OptionCard({
   tripCurrencyId: number | null;
   currencies: Currency[];
   conversions: CurrencyConversion[];
-  selectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (optionId: number) => void;
 }) {
@@ -252,35 +250,24 @@ function OptionCard({
       className={cn(
         "hover:shadow-sm transition-all duration-200 ease-in-out border cursor-pointer hover:-translate-y-0.5",
         isHidden && "bg-muted text-muted-foreground border-muted-foreground/40",
-        selectionMode && isSelected && "ring-2 ring-primary"
+        isSelected && "ring-2 ring-primary"
       )}
-      onClick={() => {
-        if (selectionMode && onToggleSelect) {
-          onToggleSelect(option.id);
-        } else {
-          onEdit(option);
-        }
-      }}
+      onClick={() => onEdit(option)}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          if (selectionMode && onToggleSelect) onToggleSelect(option.id);
-          else onEdit(option);
-        }
+        if (e.key === "Enter" || e.key === " ") onEdit(option);
       }}
       aria-label={`Edit option ${option.name}`}
     >
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
-          {selectionMode && (
-            <div className="mr-2 mt-1" onClick={(e) => e.stopPropagation()}>
-              <Checkbox
-                checked={isSelected}
-                onCheckedChange={() => onToggleSelect?.(option.id)}
-              />
-            </div>
-          )}
+          <div className="mr-2 mt-1" onClick={(e) => e.stopPropagation()}>
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={() => onToggleSelect?.(option.id)}
+            />
+          </div>
           <div className="flex-1 min-w-0">
             <CardTitle className="text-lg font-semibold tracking-tight">
               {option.name}
@@ -343,7 +330,6 @@ export default function OptionsPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCombineAllOpen, setIsCombineAllOpen] = useState(false);
-  const [selectionMode, setSelectionMode] = useState(false);
   const [selectedOptionIds, setSelectedOptionIds] = useState<Set<number>>(new Set());
   const [isBatchConnectOpen, setIsBatchConnectOpen] = useState(false);
   const [editingOption, setEditingOption] = useState<OptionApi | null>(null);
@@ -536,13 +522,6 @@ export default function OptionsPageContent() {
     return Array.from(labels).sort((a, b) => a.localeCompare(b))
   }, [segments, connectedSegmentList])
 
-  const toggleSelectionMode = useCallback(() => {
-    setSelectionMode((prev) => {
-      if (prev) setSelectedOptionIds(new Set());
-      return !prev;
-    });
-  }, []);
-
   const toggleOptionSelection = useCallback((optionId: number) => {
     setSelectedOptionIds((prev) => {
       const next = new Set(prev);
@@ -553,7 +532,6 @@ export default function OptionsPageContent() {
   }, []);
 
   const handleBatchConnectComplete = useCallback(() => {
-    setSelectionMode(false);
     setSelectedOptionIds(new Set());
     fetchOptions();
   }, [fetchOptions]);
@@ -566,7 +544,6 @@ export default function OptionsPageContent() {
     setIsBatchDeleting(true);
     try {
       await optionsApi.batchDelete(tripId, Array.from(selectedOptionIds));
-      setSelectionMode(false);
       setSelectedOptionIds(new Set());
       fetchOptions();
     } catch (err) {
@@ -580,7 +557,6 @@ export default function OptionsPageContent() {
     if (!tripId || selectedOptionIds.size === 0) return;
     try {
       await optionsApi.batchSetVisibility(tripId, Array.from(selectedOptionIds), isVisible);
-      setSelectionMode(false);
       setSelectedOptionIds(new Set());
       fetchOptions();
     } catch (err) {
@@ -714,32 +690,13 @@ export default function OptionsPageContent() {
           }
         />
 
-        <div className="flex justify-end mt-3">
-          <Button
-            size="sm"
-            variant={selectionMode ? "default" : "outline"}
-            onClick={toggleSelectionMode}
-          >
-            {selectionMode ? (
-              <>
-                <XIcon className="mr-2 h-4 w-4" />
-                Cancel
-              </>
-            ) : (
-              <>
-                <CheckSquareIcon className="mr-2 h-4 w-4" />
-                Select
-              </>
-            )}
-          </Button>
-        </div>
 
         {isLoading ? (
           <LoadingSkeleton />
         ) : error ? (
           <p className="text-center text-red-500">{error}</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+          <div className="grid grid-cols-1 gap-4 mt-4">
             {sortedOptions.length === 0 ? (
               <p className="text-sm text-muted-foreground col-span-full text-center">No options to display.</p>
             ) : (
@@ -753,7 +710,6 @@ export default function OptionsPageContent() {
                   tripCurrencyId={tripCurrencyId}
                   currencies={currencies}
                   conversions={conversions}
-                  selectionMode={selectionMode}
                   isSelected={selectedOptionIds.has(option.id)}
                   onToggleSelect={toggleOptionSelection}
                 />
@@ -799,7 +755,7 @@ export default function OptionsPageContent() {
       />
 
       {/* Floating action bar for selection mode */}
-      {selectionMode && selectedOptionIds.size > 0 && (
+      {selectedOptionIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-lg border bg-background px-4 py-3 shadow-lg">
           <span className="text-sm font-medium">{selectedOptionIds.size} selected</span>
           <Button size="sm" variant="outline" onClick={selectAllFiltered}>
@@ -832,7 +788,7 @@ export default function OptionsPageContent() {
 
 function LoadingSkeleton() {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 gap-4">
       {[...Array(6)].map((_, i) => (
         <Skeleton key={i} className="h-56 w-full" />
       ))}
