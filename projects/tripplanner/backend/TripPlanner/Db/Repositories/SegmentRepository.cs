@@ -26,6 +26,13 @@ public class SegmentRepository
         return await db.QuerySingleOrDefaultAsync<SegmentDbm>("SELECT * FROM Segment WHERE id = @id", new { id = segmentId });
     }
     
+    public async Task<List<SegmentDbm>> GetByIdsAsync(List<int> ids, CancellationToken cancellationToken)
+    {
+        if (ids.Count == 0) return [];
+        using IDbConnection db = new SqlConnection(_connectionString_);
+        return (await db.QueryAsync<SegmentDbm>("SELECT * FROM Segment WHERE id IN @ids", new { ids })).AsList();
+    }
+
     public async Task<List<SegmentDbm>> GetAllByOptionIdAsync(int optionId, CancellationToken cancellationToken)
     {
         using IDbConnection db = new SqlConnection(_connectionString_);

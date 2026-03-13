@@ -141,6 +141,12 @@ export const optionsApi = {
       body: JSON.stringify({ OptionId: optionId, SegmentIds: segmentIds }),
       responseType: "void",
     }),
+  combineAll: (tripId: string | number, payload: { tripId: number; startLocationId: number; endLocationId: number; segmentIds: number[] }) =>
+    request<number>(`/api/Option/CombineAll?tripId=${tripId}`, {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload),
+    }),
 }
 
 export const userApi = {

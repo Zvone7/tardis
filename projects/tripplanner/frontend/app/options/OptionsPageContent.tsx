@@ -6,8 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
-import { PlusIcon, LayoutIcon, EditIcon, EyeOffIcon } from "lucide-react";
+import { PlusIcon, LayoutIcon, EditIcon, EyeOffIcon, CombineIcon } from "lucide-react";
 import OptionModal from "./OptionModal";
+import CombineAllModal from "./CombineAllModal";
 import { formatDateStr, formatWeekday } from "../utils/dateformatters";
 import { OptionFilterPanel, type OptionFilterValue } from "../components/filters/OptionFilterPanel";
 import type { SegmentFilterValue } from "../components/filters/SegmentFilterPanel";
@@ -315,6 +316,7 @@ export default function OptionsPageContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCombineAllOpen, setIsCombineAllOpen] = useState(false);
   const [editingOption, setEditingOption] = useState<OptionApi | null>(null);
   const [tripName, setTripName] = useState<string>("");
   const [tripCurrencyId, setTripCurrencyId] = useState<number | null>(null);
@@ -595,6 +597,10 @@ export default function OptionsPageContent() {
             <LayoutIcon className="mr-2 h-4 w-4" />
             View Segments
           </Button>
+          <Button variant="outline" onClick={() => setIsCombineAllOpen(true)}>
+            <CombineIcon className="mr-2 h-4 w-4" />
+            Combine All
+          </Button>
           <Button onClick={handleCreateOption}>
             <PlusIcon className="h-4 w-4" />
           </Button>
@@ -648,6 +654,15 @@ export default function OptionsPageContent() {
           </div>
         )}
       </CardContent>
+
+      <CombineAllModal
+        isOpen={isCombineAllOpen}
+        onClose={() => setIsCombineAllOpen(false)}
+        onComplete={fetchOptions}
+        segments={segments}
+        segmentTypes={segmentTypes}
+        tripId={Number(tripId)}
+      />
 
       <OptionModal
         isOpen={isModalOpen}

@@ -81,4 +81,13 @@ public class OptionController : ControllerBase
         await _optionService_.ConnectOptionWithSegmentsAsync(am, cancellationToken);
         return Ok();
     }
+
+    [HttpPost]
+    [ServiceFilter(typeof(TripAccessFilterAttribute))]
+    [Route(nameof(CombineAll))]
+    public async Task<ActionResult<int>> CombineAll([FromQuery] int tripId, CombineAllAm am, CancellationToken cancellationToken)
+    {
+        var count = await _optionService_.CombineAllAsync(am, cancellationToken);
+        return Ok(count);
+    }
 }

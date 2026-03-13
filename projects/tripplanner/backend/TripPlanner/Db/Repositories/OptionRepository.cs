@@ -35,6 +35,16 @@ public class OptionRepository
         await db.ExecuteAsync(sqlQuery, option);
     }
 
+    public async Task<int> CreateAndReturnIdAsync(TripOptionDbm option, CancellationToken cancellationToken)
+    {
+        using IDbConnection db = new SqlConnection(_connectionString_);
+        var sqlQuery = "INSERT INTO TripOption (trip_id, name, start_datetime_utc, end_datetime_utc, total_cost, is_ui_visible) " +
+                       "OUTPUT INSERTED.id " +
+                       "VALUES " +
+                       "(@trip_id, @name, @start_datetime_utc, @end_datetime_utc, @total_cost, 1)";
+        return await db.QuerySingleAsync<int>(sqlQuery, option);
+    }
+
     public async Task UpdateLightAsync(TripOptionDbm option, CancellationToken cancellationToken)
     {
         using IDbConnection db = new SqlConnection(_connectionString_);
