@@ -21,6 +21,7 @@ import {
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
 import { SaveIcon, Trash2Icon, EyeOffIcon, EyeIcon, LayersIcon, Loader2, SlidersHorizontal } from "lucide-react";
+import { SegmentSelectCard } from "../components/SegmentSelectCard";
 import type { SegmentType, SegmentApi, OptionApi, OptionSave, Currency, CurrencyConversion, Segment } from "../types/models";
 import { cn } from "../lib/utils";
 import { TitleTokens } from "../components/TitleTokens";
@@ -635,39 +636,20 @@ export default function OptionModal({
                           const summaryLabel = tokensToLabel(tokens) || segment.name
                           const isHiddenSegment = segment.isUiVisible === false
                           const dimmed = !segmentFilterState.showHidden && isHiddenSegment
+                          const dateRangeLabel = `${formatSegmentDateWithWeekday(segment.startDateTimeUtc)} → ${formatSegmentDateWithWeekday(segment.endDateTimeUtc)}`
 
                           return (
-                            <label
+                            <SegmentSelectCard
                               key={segment.id}
-                              htmlFor={`segment-${segment.id}`}
-                              className={cn(
-                                "flex items-start gap-3 rounded-md p-2 hover:bg-muted/60 cursor-pointer",
-                                dimmed && "bg-muted text-muted-foreground",
-                              )}
-                            >
-                              <Checkbox
-                                id={`segment-${segment.id}`}
-                                checked={selectedSegments.includes(segment.id)}
-                                onCheckedChange={(checked) => handleSegmentCheckedChange(segment.id, checked)}
-                                className="mt-1"
-                                aria-label={`Select ${summaryLabel}`}
-                              />
-
-                              <div className="flex-1 min-w-0" aria-label={summaryLabel}>
-                                <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-sm">
-                                  <TitleTokens tokens={tokens} size="sm" />
-                                </div>
-                                {segmentCostLabel ? (
-                                  <div className="mt-0.5 text-xs text-muted-foreground">{segmentCostLabel}</div>
-                                ) : null}
-                                <div className="mt-1 text-xs text-muted-foreground leading-snug">
-                                  {formatSegmentDateWithWeekday(segment.startDateTimeUtc)}
-                                  <span className="mx-1 text-muted-foreground">→</span>
-                                  {formatSegmentDateWithWeekday(segment.endDateTimeUtc)}
-                                </div>
-                              </div>
-                              {dimmed && <EyeOffIcon className="mt-1 h-4 w-4" aria-hidden="true" />}
-                            </label>
+                              segmentId={segment.id}
+                              checked={selectedSegments.includes(segment.id)}
+                              onCheckedChange={(checked) => handleSegmentCheckedChange(segment.id, checked)}
+                              tokens={tokens}
+                              summaryLabel={summaryLabel}
+                              costLabel={segmentCostLabel}
+                              dateRangeLabel={dateRangeLabel}
+                              dimmed={dimmed}
+                            />
                           )
                         })
                       )}

@@ -834,6 +834,10 @@ export default function OptionsPageContent() {
         tripId={Number(tripId)}
         segments={segments}
         segmentTypes={segmentTypes}
+        currencies={currencies}
+        conversions={conversions}
+        tripCurrencyId={tripCurrencyId}
+        displayCurrencyId={displayCurrencyId}
       />
 
       <SelectPopupMenu

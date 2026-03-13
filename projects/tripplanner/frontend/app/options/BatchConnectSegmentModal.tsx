@@ -1,14 +1,21 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Dialog, DialogContent, DialogTitle } from "../components/ui/dialog";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
+import { ScrollArea } from "../components/ui/scroll-area";
 import { toast } from "../components/ui/use-toast";
-import { Loader2, LinkIcon, UnlinkIcon } from "lucide-react";
+import { Loader2, LinkIcon, UnlinkIcon, SlidersHorizontal } from "lucide-react";
 import { optionsApi } from "../utils/apiClient";
-import type { SegmentApi, SegmentType } from "../types/models";
+import type { SegmentApi, SegmentType, Segment, Currency, CurrencyConversion } from "../types/models";
 import { cn } from "../lib/utils";
+import { SegmentSelectCard } from "../components/SegmentSelectCard";
+import { buildSegmentTitleTokens, buildSegmentConfigFromApi, tokensToLabel } from "../utils/formatters";
+import { formatCurrencyAmount, formatConvertedAmount } from "../utils/currency";
+import { SegmentFilterPanel, type SegmentFilterValue } from "../components/filters/SegmentFilterPanel";
+import type { SegmentSortValue } from "../components/sorting/segmentSortTypes";
+import { applySegmentFilters, buildSegmentMetadata } from "../services/segmentFiltering";
 
 interface BatchConnectSegmentModalProps {
   isOpen: boolean;
@@ -18,6 +25,10 @@ interface BatchConnectSegmentModalProps {
   tripId: number;
   segments: SegmentApi[];
   segmentTypes: SegmentType[];
+  currencies: Currency[];
+  conversions: CurrencyConversion[];
+  tripCurrencyId: number | null;
+  displayCurrencyId: number | null;
 }
 
 export default function BatchConnectSegmentModal({
@@ -28,43 +39,91 @@ export default function BatchConnectSegmentModal({
   tripId,
   segments,
   segmentTypes,
+  currencies,
+  conversions,
+  tripCurrencyId,
+  displayCurrencyId,
 }: BatchConnectSegmentModalProps) {
   const [connect, setConnect] = useState(true);
-  const [selectedSegmentId, setSelectedSegmentId] = useState<number | null>(null);
+  const [selectedSegmentIds, setSelectedSegmentIds] = useState<number[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [search, setSearch] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterState, setFilterState] = useState<SegmentFilterValue>({
+    locations: [],
+    types: [],
+    dateRange: { start: "", end: "" },
+    showHidden: false,
+  });
+  const [sortState, setSortState] = useState<SegmentSortValue | null>(null);
 
-  const segmentTypeMap = useMemo(() => {
-    const map = new Map<number, SegmentType>();
-    segmentTypes.forEach((st) => map.set(st.id, st));
-    return map;
-  }, [segmentTypes]);
+  const resolvedDisplayCurrencyId = displayCurrencyId ?? tripCurrencyId ?? null;
+
+  const filterMetadata = useMemo(() => {
+    return buildSegmentMetadata((segments as Segment[]) ?? [], segmentTypes);
+  }, [segments, segmentTypes]);
+
+  const formatSegmentCost = useCallback(
+    (segment: SegmentApi) => {
+      if (segment.cost === null || segment.cost === undefined) return null;
+      return (
+        formatConvertedAmount({
+          amount: segment.cost,
+          fromCurrencyId: segment.currencyId ?? tripCurrencyId ?? null,
+          toCurrencyId: resolvedDisplayCurrencyId,
+          currencies,
+          conversions,
+        }) ?? formatCurrencyAmount(segment.cost, segment.currencyId ?? tripCurrencyId ?? null, currencies)
+      );
+    },
+    [tripCurrencyId, resolvedDisplayCurrencyId, currencies, conversions],
+  );
 
   const filteredSegments = useMemo(() => {
-    const q = search.toLowerCase();
-    return segments.filter((s) => {
-      if (!q) return true;
-      const name = (s.name ?? "").toLowerCase();
-      const type = segmentTypeMap.get(s.segmentTypeId)?.shortName?.toLowerCase() ?? "";
-      const startLoc = ((s as any).startLocation?.name ?? "").toLowerCase();
-      const endLoc = ((s as any).endLocation?.name ?? "").toLowerCase();
-      return name.includes(q) || type.includes(q) || startLoc.includes(q) || endLoc.includes(q);
+    const filtered = applySegmentFilters(
+      segments as Segment[],
+      filterState,
+      sortState,
+      segmentTypes,
+      {
+        targetCurrencyId: resolvedDisplayCurrencyId,
+        fallbackCurrencyId: tripCurrencyId ?? null,
+        currencies,
+        conversions,
+      },
+    );
+    const selectedSet = new Set(selectedSegmentIds);
+    return [...filtered].sort((a, b) => {
+      const aSelected = selectedSet.has(a.id) ? 0 : 1;
+      const bSelected = selectedSet.has(b.id) ? 0 : 1;
+      return aSelected - bSelected;
     });
-  }, [segments, search, segmentTypeMap]);
+  }, [segments, filterState, sortState, segmentTypes, resolvedDisplayCurrencyId, tripCurrencyId, currencies, conversions, selectedSegmentIds]);
+
+  const handleSegmentCheckedChange = useCallback((segmentId: number, checked: boolean | "indeterminate") => {
+    const isChecked = checked === true;
+    setSelectedSegmentIds((prev) => {
+      if (isChecked) return prev.includes(segmentId) ? prev : [...prev, segmentId];
+      return prev.filter((id) => id !== segmentId);
+    });
+  }, []);
 
   const handleApply = async () => {
-    if (selectedSegmentId == null) return;
+    if (selectedSegmentIds.length === 0) return;
 
     setIsSubmitting(true);
     try {
-      const count = await optionsApi.batchConnectSegment(tripId, {
-        optionIds: selectedOptionIds,
-        segmentId: selectedSegmentId,
-        connect,
-      });
+      let totalUpdated = 0;
+      for (const segmentId of selectedSegmentIds) {
+        const count = await optionsApi.batchConnectSegment(tripId, {
+          optionIds: selectedOptionIds,
+          segmentId,
+          connect,
+        });
+        totalUpdated += count;
+      }
       toast({
-        title: connect ? "Segment connected" : "Segment disconnected",
-        description: `${count} option(s) updated.`,
+        title: connect ? "Segments connected" : "Segments disconnected",
+        description: `${selectedSegmentIds.length} segment(s) × ${selectedOptionIds.length} option(s) — ${totalUpdated} link(s) updated.`,
       });
       onComplete();
       handleClose();
@@ -77,35 +136,37 @@ export default function BatchConnectSegmentModal({
   };
 
   const handleClose = () => {
-    setSelectedSegmentId(null);
-    setSearch("");
+    setSelectedSegmentIds([]);
+    setFilterState({ locations: [], types: [], dateRange: { start: "", end: "" }, showHidden: false });
+    setSortState(null);
+    setFilterOpen(false);
     setConnect(true);
     onClose();
   };
 
-  const formatDate = (iso: string | null) => {
-    if (!iso) return "";
+  const formatSegmentDateLabel = (iso: string | null) => {
+    if (!iso) return "N/A";
     const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "";
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    if (Number.isNaN(d.getTime())) return "N/A";
+    const weekday = d.toLocaleDateString(undefined, { weekday: "short" });
+    const dayMonth = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const timeLabel = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    return `${weekday}, ${dayMonth} · ${timeLabel}`;
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="max-w-md">
-        <DialogTitle className="flex items-center gap-2">
-          {connect ? <LinkIcon className="h-5 w-5" /> : <UnlinkIcon className="h-5 w-5" />}
-          {connect ? "Connect" : "Disconnect"} Segment
-        </DialogTitle>
-
-        <div className="space-y-4 mt-2">
-          <p className="text-sm text-muted-foreground">
+      <DialogContent className="max-w-4xl w-full p-0 flex flex-col h-[90vh]">
+        <div className="border-b bg-background px-4 py-3 pr-10">
+          <DialogTitle className="flex items-center gap-2">
+            {connect ? <LinkIcon className="h-5 w-5" /> : <UnlinkIcon className="h-5 w-5" />}
+            {connect ? "Connect" : "Disconnect"} Segments
+          </DialogTitle>
+          <p className="text-sm text-muted-foreground mt-1">
             Updating <strong>{selectedOptionIds.length}</strong> option(s)
           </p>
 
-          {/* Connect / Disconnect toggle */}
-          <div className="space-y-1.5">
-            <Label>Action</Label>
+          <div className="flex items-center justify-between gap-2 mt-3">
             <div className="flex gap-2">
               <Button
                 size="sm"
@@ -126,68 +187,78 @@ export default function BatchConnectSegmentModal({
                 Disconnect
               </Button>
             </div>
-          </div>
-
-          {/* Segment picker */}
-          <div className="space-y-1.5">
-            <Label>Select a segment</Label>
-            <input
-              type="text"
-              placeholder="Search segments..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            />
-            <div className="max-h-60 overflow-y-auto rounded-md border">
-              {filteredSegments.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No segments found.</p>
-              ) : (
-                filteredSegments.map((segment) => {
-                  const st = segmentTypeMap.get(segment.segmentTypeId);
-                  const startLoc = (segment as any).startLocation;
-                  const endLoc = (segment as any).endLocation;
-                  const isSelected = selectedSegmentId === segment.id;
-                  return (
-                    <button
-                      key={segment.id}
-                      type="button"
-                      onClick={() => setSelectedSegmentId(isSelected ? null : segment.id)}
-                      className={cn(
-                        "w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors border-b last:border-b-0",
-                        isSelected && "bg-accent ring-1 ring-primary"
-                      )}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium truncate">{segment.name}</span>
-                        {st && (
-                          <span className="text-xs text-muted-foreground ml-2 shrink-0">
-                            {st.shortName}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {formatDate(segment.startDateTimeUtc)}
-                        {startLoc?.name && endLoc?.name && (
-                          <span className="ml-2">{startLoc.name} → {endLoc.name}</span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* Apply */}
-          <div className="flex justify-end pt-2">
             <Button
               onClick={handleApply}
-              disabled={isSubmitting || selectedSegmentId == null}
+              size="sm"
+              disabled={isSubmitting || selectedSegmentIds.length === 0}
             >
               {isSubmitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              {connect ? "Connect" : "Disconnect"}
+              {connect ? "Connect" : "Disconnect"} {selectedSegmentIds.length > 0 ? `(${selectedSegmentIds.length})` : ""}
             </Button>
           </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <Label>Select segments ({selectedSegmentIds.length} selected)</Label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label="Toggle filters"
+              onClick={() => setFilterOpen((prev) => !prev)}
+              className="relative"
+            >
+              <SlidersHorizontal
+                className={cn("h-4 w-4 transition-transform", filterOpen ? "text-primary rotate-90" : "")}
+              />
+            </Button>
+          </div>
+          <SegmentFilterPanel
+            value={filterState}
+            onChange={setFilterState}
+            sort={sortState}
+            onSortChange={setSortState}
+            availableLocations={filterMetadata.locations}
+            availableTypes={filterMetadata.types}
+            minDate={filterMetadata.dateBounds.min}
+            maxDate={filterMetadata.dateBounds.max}
+            open={filterOpen}
+            onOpenChange={setFilterOpen}
+          />
+          <ScrollArea className="h-[calc(100%-80px)] border rounded-md p-3">
+            {filteredSegments.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No segments found.</p>
+            ) : (
+              filteredSegments.map((segment) => {
+                const segmentType = segmentTypes.find((st) => st.id === segment.segmentTypeId) ?? undefined;
+                const segmentCostLabel = formatSegmentCost(segment);
+                const segmentConfig = buildSegmentConfigFromApi(segment, segmentType);
+                const tokens = buildSegmentTitleTokens({
+                  ...segmentConfig,
+                  cost: segmentCostLabel ?? segmentConfig.cost,
+                });
+                const summaryLabel = tokensToLabel(tokens) || segment.name;
+                const isHiddenSegment = segment.isUiVisible === false;
+                const dimmed = !filterState.showHidden && isHiddenSegment;
+                const dateRangeLabel = `${formatSegmentDateLabel(segment.startDateTimeUtc)} → ${formatSegmentDateLabel(segment.endDateTimeUtc)}`;
+
+                return (
+                  <SegmentSelectCard
+                    key={segment.id}
+                    segmentId={segment.id}
+                    checked={selectedSegmentIds.includes(segment.id)}
+                    onCheckedChange={(checked) => handleSegmentCheckedChange(segment.id, checked)}
+                    tokens={tokens}
+                    summaryLabel={summaryLabel}
+                    costLabel={segmentCostLabel}
+                    dateRangeLabel={dateRangeLabel}
+                    dimmed={dimmed}
+                  />
+                );
+              })
+            )}
+          </ScrollArea>
         </div>
       </DialogContent>
     </Dialog>
