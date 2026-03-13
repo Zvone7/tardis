@@ -36,7 +36,7 @@ function TripCard({
   currencies: Currency[]
 }) {
   const tripCurrency = currencies.find((currency) => currency.id === trip.currencyId)
-  const currencyLabel = tripCurrency ? `${tripCurrency.symbol} ${tripCurrency.shortName}` : "—"
+  const currencyLabel = tripCurrency ? tripCurrency.shortName : "—"
 
   return (
     <Card

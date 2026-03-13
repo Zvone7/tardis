@@ -180,17 +180,19 @@ function CostSummary({
   ].filter((entry) => entry.value > 0)
 
   return (
-    <div className="rounded-md border p-3 space-y-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="text-sm font-medium">Costs</div>
-        <div className="text-sm text-muted-foreground">
-          <span className="font-medium">{totalLabel}</span>
-          {originalTotalLabel ? (
-            <span className="font-medium text-xs text-muted-foreground ml-2">({originalTotalLabel})</span>
-          ) : null}
+    <div className="space-y-4">
+      <div className="space-y-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <div className="text-sm font-medium">Costs</div>
+          <div className="text-sm text-muted-foreground">
+            <span className="font-medium">{totalLabel}</span>
+            {originalTotalLabel ? (
+              <span className="font-medium text-xs text-muted-foreground ml-2">({originalTotalLabel})</span>
+            ) : null}
+          </div>
         </div>
         <div className="text-xs text-muted-foreground">
-          {option.totalDays} {option.totalDays === 1 ? "day" : "days"} ( {perDayLabel} per day)
+          {option.totalDays} {option.totalDays === 1 ? "day" : "days"} ({perDayLabel} per day)
         </div>
       </div>
       <div className="flex items-center gap-4">
@@ -336,7 +338,7 @@ function OptionCard({
         </div>
 
         {/* Right: cost summary (desktop: side column) */}
-        <div className="md:w-1/2 md:border-l md:shrink-0 p-4 pt-0 md:pt-4">
+        <div className="md:w-1/2 md:shrink-0 p-4 pt-0 md:pt-4">
           <CostSummary
             option={option}
             displayCurrencyId={displayCurrencyId}
