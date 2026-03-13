@@ -55,7 +55,7 @@ export function SegmentFilterPanel({
   const hasFilters = value.locations.length > 0 || value.types.length > 0 || hasDateFilter
 
   return (
-    <div className={cn("space-y-3", className)}>
+    <div className={cn("space-y-3 lg:sticky lg:top-0 lg:z-10 lg:bg-card", className)}>
       <div className="flex flex-wrap items-center justify-end gap-3 sm:flex-nowrap">
         {toolbarAddon ?? null}
         <Button
@@ -75,9 +75,15 @@ export function SegmentFilterPanel({
 
       {open && (
         <div className="space-y-4 rounded-md border p-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <LocationFilter locations={availableLocations} value={value.locations} onChange={(locations) => update({ locations })} />
-            <SegmentTypeFilter types={availableTypes} value={value.types} onChange={(types) => update({ types })} />
+          <div className="space-y-3">
+            <div>
+              <Label className="text-sm font-medium mb-1.5 block">Locations</Label>
+              <LocationFilter locations={availableLocations} value={value.locations} onChange={(locations) => update({ locations })} />
+            </div>
+            <div>
+              <Label className="text-sm font-medium mb-1.5 block">Segment types</Label>
+              <SegmentTypeFilter types={availableTypes} value={value.types} onChange={(types) => update({ types })} />
+            </div>
           </div>
 
           <DateRangeFilter

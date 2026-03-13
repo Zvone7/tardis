@@ -1,50 +1,55 @@
 import { useMemo } from "react"
-import { Label } from "../ui/label"
-import { MultiSelect, type OptionType } from "../ui/multiselect"
+import { Button } from "../ui/button"
+import { XIcon } from "lucide-react"
 import type { SegmentType } from "../../types/models"
 
 interface SegmentTypeFilterProps {
   types: SegmentType[]
   value: string[]
   onChange: (next: string[]) => void
-  label?: string
-  placeholder?: string
 }
 
 export function SegmentTypeFilter({
   types,
   value,
   onChange,
-  label = "Segment types",
-  placeholder = "Select segment types",
 }: SegmentTypeFilterProps) {
-  const options: OptionType[] = useMemo(() => {
-    return types
-      .slice()
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map((type) => ({
-        value: type.id.toString(),
-        label: (
-          <span className="flex items-center gap-2">
-            {type.iconSvg ? (
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary/60 text-secondary-foreground shadow-sm ring-1 ring-black/5 dark:bg-white dark:text-black">
-                <span
-                  className="w-4 h-4"
-                  dangerouslySetInnerHTML={{ __html: type.iconSvg }}
-                  suppressHydrationWarning
-                />
-              </span>
-            ) : null}
-            <span>{type.name}</span>
-          </span>
-        ),
-      }))
-  }, [types])
+  const sorted = useMemo(() => types.slice().sort((a, b) => a.name.localeCompare(b.name)), [types])
+
+  const toggle = (id: string) => {
+    if (value.includes(id)) onChange(value.filter((v) => v !== id))
+    else onChange([...value, id])
+  }
 
   return (
-    <div className="space-y-1.5">
-      <Label className="text-sm font-medium">{label}</Label>
-      <MultiSelect options={options} selected={value} onChange={onChange} placeholder={placeholder} />
+    <div className="flex flex-wrap items-center gap-1.5">
+      {sorted.map((type) => {
+        const active = value.includes(type.id.toString())
+        return (
+          <Button
+            key={type.id}
+            type="button"
+            variant={active ? "default" : "outline"}
+            size="sm"
+            className="h-8 gap-1.5 px-2.5"
+            onClick={() => toggle(type.id.toString())}
+          >
+            {type.iconSvg ? (
+              <span
+                className="w-4 h-4 shrink-0"
+                dangerouslySetInnerHTML={{ __html: type.iconSvg }}
+                suppressHydrationWarning
+              />
+            ) : null}
+            {type.name}
+          </Button>
+        )
+      })}
+      {value.length > 0 && (
+        <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => onChange([])}>
+          <XIcon className="h-3.5 w-3.5" />
+        </Button>
+      )}
     </div>
   )
 }

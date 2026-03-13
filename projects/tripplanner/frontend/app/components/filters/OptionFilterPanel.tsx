@@ -48,7 +48,7 @@ export function OptionFilterPanel({
   const hasFilters = value.locations.length > 0 || hasDateFilter
 
   return (
-    <div className={cn("space-y-3", className)}>
+    <div className={cn("space-y-3 lg:sticky lg:top-0 lg:z-10 lg:bg-card", className)}>
       <div className="flex flex-wrap items-center justify-end gap-3 sm:flex-nowrap">
         {toolbarAddon ?? null}
         <Button
@@ -68,7 +68,10 @@ export function OptionFilterPanel({
 
       {open && (
         <div className="space-y-4 rounded-md border p-4">
-          <LocationFilter locations={availableLocations} value={value.locations} onChange={(locations) => update({ locations })} />
+          <div>
+            <Label className="text-sm font-medium mb-1.5 block">Locations</Label>
+            <LocationFilter locations={availableLocations} value={value.locations} onChange={(locations) => update({ locations })} />
+          </div>
           <DateRangeFilter
             value={value.dateRange}
             onChange={(dateRange) => update({ dateRange })}
