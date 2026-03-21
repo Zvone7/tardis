@@ -5,17 +5,22 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
-import { PlusIcon, ListIcon, EditIcon, EyeOffIcon, Loader2Icon, Search } from "lucide-react";
+import { PlusIcon, ListIcon, EditIcon, EyeOffIcon, Loader2Icon, MapPinIcon, MoreVerticalIcon, BedDoubleIcon, PlaneIcon, SlidersHorizontal } from "lucide-react";
+import SelectPopupMenu from "../components/SelectPopupMenu";
+import { Popover, PopoverTrigger, PopoverContent } from "../components/ui/popover";
+import { Checkbox } from "../components/ui/checkbox";
 import SegmentModal from "../segments/SegmentModal";
+import BatchLocationModal from "../segments/BatchLocationModal";
 import FlightSearch from "../segments/FlightSearch";
 import AccomodationSearch from "../segments/AccomodationSearch";
 import { formatDateWithUserOffset, formatWeekday } from "../utils/dateformatters";
 import { OptionBadge } from "../components/OptionBadge";
 import { cn } from "../lib/utils";
-import { SegmentFilterPanel, type SegmentFilterValue } from "../components/filters/SegmentFilterPanel";
+import { SegmentFilterPanel, useSegmentFilterHasFilters, type SegmentFilterValue } from "../components/filters/SegmentFilterPanel";
 import type { SegmentSortValue } from "../components/sorting/segmentSortTypes";
 import { applySegmentFilters, buildSegmentMetadata } from "../services/segmentFiltering";
 import { CurrencyDropdown } from "../components/CurrencyDropdown";
+import { UtcOffsetDropdown } from "../components/UtcOffsetDropdown";
 import { useCurrencies } from "../hooks/useCurrencies";
 import { useCurrencyConversions } from "../hooks/useCurrencyConversions";
 import { useCurrentUser } from "../hooks/useCurrentUser";
@@ -61,6 +66,8 @@ function SegmentCard({
   tripCurrencyId,
   currencies,
   conversions,
+  isSelected = false,
+  onToggleSelect,
 }: {
   segment: Segment;
   segmentType: SegmentType | undefined;
@@ -73,10 +80,9 @@ function SegmentCard({
   tripCurrencyId: number | null;
   currencies: Currency[];
   conversions: CurrencyConversion[];
+  isSelected?: boolean;
+  onToggleSelect?: (segmentId: number) => void;
 }) {
-  const getTimezoneDisplayText = () =>
-    userPreferredOffset === 0 ? "UTC" : `UTC${userPreferredOffset >= 0 ? "+" : ""}${userPreferredOffset}`;
-
   // location can arrive as startLocation/StartLocation or endLocation/EndLocation
   const startLoc = (segment as any).startLocation ?? null;
   const endLoc = (segment as any).endLocation ?? null;
@@ -102,32 +108,30 @@ function SegmentCard({
     <Card
       className={cn(
         "cursor-pointer hover:bg-muted/50 transition-all duration-200 ease-in-out hover:-translate-y-0.5",
-        isHidden && "bg-muted text-muted-foreground border-muted-foreground/40"
+        isHidden && "bg-muted text-muted-foreground border-muted-foreground/40",
+        isSelected && "ring-2 ring-primary"
       )}
       onClick={() => onEdit(segment)}
     >
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
+          <div className="flex items-center mr-3 mt-1" onClick={(e) => e.stopPropagation()}>
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={() => onToggleSelect?.(segment.id)}
+            />
+          </div>
           <div className="flex-1">
-            <div className="flex items-center space-x-2 mb-2">
-              {segmentType && (
-                <>
-                  {segmentType.iconSvg ? (
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary/60 text-secondary-foreground shadow-sm ring-1 ring-black/5 dark:bg-white dark:text-black">
-                      <span
-                        dangerouslySetInnerHTML={{ __html: segmentType.iconSvg }}
-                        className="w-4 h-4"
-                        suppressHydrationWarning
-                      />
-                    </span>
-                  ) : null}
-                  <span className="text-sm text-muted-foreground">{segmentType.name}</span>
-                </>
-              )}
-            </div>
-            <CardTitle className="text-lg">{segment.name}</CardTitle>
-
-            <div className="mt-2 flex flex-wrap gap-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              {segmentType?.iconSvg ? (
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary/60 text-secondary-foreground shadow-sm ring-1 ring-black/5 dark:bg-white dark:text-black shrink-0" title={segmentType.name}>
+                  <span
+                    dangerouslySetInnerHTML={{ __html: segmentType.iconSvg }}
+                    className="w-4 h-4"
+                    suppressHydrationWarning
+                  />
+                </span>
+              ) : null}
               {isLoadingConnections ? (
                 <span className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Loader2Icon className="h-3 w-3 animate-spin" />
@@ -149,6 +153,7 @@ function SegmentCard({
                 <span className="text-xs text-muted-foreground">No connected options</span>
               )}
             </div>
+            <CardTitle className="text-lg">{segment.name}</CardTitle>
 
             <div className="mt-2 text-sm text-muted-foreground space-y-1">
               <div className="space-y-1">
@@ -166,7 +171,6 @@ function SegmentCard({
                     <span className="ml-2 text-xs text-muted-foreground">({originalLabel})</span>
                   ) : null}
                 </div>
-                <div className="text-xs text-muted-foreground">Times shown in {getTimezoneDisplayText()}</div>
               </div>
             </div>
           </div>
@@ -211,6 +215,8 @@ export default function SegmentsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isFlightSearchOpen, setIsFlightSearchOpen] = useState(false);
   const [isAccommodationOpen, setIsAccommodationOpen] = useState(false);
+  const [selectedSegmentIds, setSelectedSegmentIds] = useState<Set<number>>(new Set());
+  const [isBatchLocationOpen, setIsBatchLocationOpen] = useState(false);
   const [editingSegment, setEditingSegment] = useState<Segment | null | undefined>(null);
   const [tripName, setTripName] = useState<string>("");
   const [tripCurrencyId, setTripCurrencyId] = useState<number | null>(null);
@@ -224,6 +230,7 @@ export default function SegmentsPage() {
     showHidden: false,
   });
   const [sortState, setSortState] = useState<SegmentSortValue | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
   const { currencies, isLoading: isLoadingCurrencies } = useCurrencies();
   const { conversions } = useCurrencyConversions();
   const { user } = useCurrentUser();
@@ -351,6 +358,49 @@ export default function SegmentsPage() {
     setIsModalOpen(true);
   };
 
+
+  const toggleSegmentSelection = useCallback((segmentId: number) => {
+    setSelectedSegmentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(segmentId)) next.delete(segmentId);
+      else next.add(segmentId);
+      return next;
+    });
+  }, []);
+
+  const handleBatchLocationComplete = useCallback(() => {
+    setSelectedSegmentIds(new Set());
+    fetchSegments();
+  }, [fetchSegments]);
+
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+
+  const handleBatchDelete = useCallback(async () => {
+    if (!tripId || selectedSegmentIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedSegmentIds.size} segment(s)? This cannot be undone.`)) return;
+    setIsBatchDeleting(true);
+    try {
+      await segmentsApi.batchDelete(tripId, Array.from(selectedSegmentIds));
+      setSelectedSegmentIds(new Set());
+      fetchSegments();
+    } catch (err) {
+      console.error("Batch delete failed:", err);
+    } finally {
+      setIsBatchDeleting(false);
+    }
+  }, [tripId, selectedSegmentIds, fetchSegments]);
+
+  const handleBatchSetVisibility = useCallback(async (isVisible: boolean) => {
+    if (!tripId || selectedSegmentIds.size === 0) return;
+    try {
+      await segmentsApi.batchSetVisibility(tripId, Array.from(selectedSegmentIds), isVisible);
+      setSelectedSegmentIds(new Set());
+      fetchSegments();
+    } catch (err) {
+      console.error("Batch visibility failed:", err);
+    }
+  }, [tripId, selectedSegmentIds, fetchSegments]);
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingSegment(null);
@@ -442,6 +492,10 @@ export default function SegmentsPage() {
 
   const sortedSegments = filteredSegments
 
+  const selectAllFiltered = useCallback(() => {
+    setSelectedSegmentIds(new Set(sortedSegments.map((s) => s.id)));
+  }, [sortedSegments]);
+
   const optionModalFilters = useMemo<OptionFilterPreset>(
     () => ({
       locations: [...filterState.locations],
@@ -459,37 +513,86 @@ export default function SegmentsPage() {
     return null
   }, [sortState])
 
+  const hasActiveFilters = useSegmentFilterHasFilters(filterState, dateBounds.min, dateBounds.max)
+
   if (!tripId) {
     return <div>No trip ID provided</div>;
   }
 
   return (
     <Card className="w-full max-w-6xl mx-auto">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle>Segments</CardTitle>
-          <CardDescription>{tripName ? tripName : `Trip ID: ${tripId}`}</CardDescription>
+      <CardHeader className="flex flex-row items-center justify-between gap-3">
+        <div className="min-w-0">
+          <CardTitle className="text-lg font-semibold">{tripName ? tripName : `Trip ID: ${tripId}`}</CardTitle>
+          <CardDescription>Segments</CardDescription>
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <div className="flex space-x-2">
-            <Button variant="outline" onClick={() => router.push(`/options?tripId=${tripId}`)}>
-              <ListIcon className="mr-2 h-4 w-4" />
-              View Options
-            </Button>
-            <Button onClick={handleCreateSegment}>
-              <PlusIcon className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="flex space-x-2">
-            <Button variant="outline" className="text-muted-foreground" onClick={() => setIsFlightSearchOpen(true)}>
-              <Search className="mr-2 h-4 w-4" />
-              Search flights
-            </Button>
-            <Button variant="outline" className="text-muted-foreground" onClick={() => setIsAccommodationOpen(true)}>
-              <Search className="mr-2 h-4 w-4" />
-              Search stays
-            </Button>
-          </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="outline" size="sm" onClick={() => router.push(`/options?tripId=${tripId}`)}>
+            <ListIcon className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Options</span>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label="Toggle filters"
+            onClick={() => setFilterOpen((prev) => !prev)}
+            className="relative"
+          >
+            <SlidersHorizontal
+              className={cn("h-4 w-4 transition-transform", filterOpen ? "text-primary rotate-90" : "")}
+            />
+            {hasActiveFilters ? <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-primary" /> : null}
+          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm">
+                <MoreVerticalIcon className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-56 p-2 space-y-2">
+              <div>
+                <span className="text-xs text-muted-foreground px-1">Display currency</span>
+                <CurrencyDropdown
+                  value={effectiveDisplayCurrencyId}
+                  onChange={setDisplayCurrencyId}
+                  currencies={currencies}
+                  placeholder={isLoadingCurrencies ? "Loading..." : "Display currency"}
+                  disabled={isLoadingCurrencies}
+                  className="w-full text-sm mt-1"
+                  triggerClassName="w-full h-9 text-sm px-3"
+                />
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground px-1">Timezone offset</span>
+                <UtcOffsetDropdown
+                  value={userPreferredOffset}
+                  onChange={setUserPreferredOffset}
+                  className="w-full text-sm mt-1"
+                  triggerClassName="w-full h-9 text-sm px-3"
+                />
+              </div>
+              <div className="border-t pt-1">
+                <button
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent cursor-pointer"
+                  onClick={() => setIsFlightSearchOpen(true)}
+                >
+                  <PlaneIcon className="h-4 w-4" />
+                  Search flights
+                </button>
+                <button
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent cursor-pointer"
+                  onClick={() => setIsAccommodationOpen(true)}
+                >
+                  <BedDoubleIcon className="h-4 w-4" />
+                  Search stays
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Button size="sm" onClick={handleCreateSegment}>
+            <PlusIcon className="h-4 w-4" />
+          </Button>
         </div>
       </CardHeader>
 
@@ -503,25 +606,17 @@ export default function SegmentsPage() {
           availableTypes={availableSegmentTypes}
           minDate={dateBounds.min}
           maxDate={dateBounds.max}
-          toolbarAddon={
-            <CurrencyDropdown
-              value={effectiveDisplayCurrencyId}
-              onChange={setDisplayCurrencyId}
-              currencies={currencies}
-              placeholder={isLoadingCurrencies ? "Loading currencies..." : "Display currency"}
-              disabled={isLoadingCurrencies}
-              className="w-full sm:w-[150px] text-sm"
-              triggerClassName="w-full h-9 text-sm px-3"
-            />
-          }
+          open={filterOpen}
+          onOpenChange={setFilterOpen}
         />
+
 
         {isLoading ? (
           <LoadingGridSkeleton />
         ) : error ? (
           <p className="text-center text-red-500">{error}</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div className="grid grid-cols-1 gap-4 mt-2">
             {sortedSegments.length === 0 ? (
               <p className="text-sm text-muted-foreground col-span-full text-center">No segments to display.</p>
             ) : (
@@ -542,6 +637,8 @@ export default function SegmentsPage() {
                     tripCurrencyId={tripCurrencyId}
                     currencies={currencies}
                     conversions={conversions}
+                    isSelected={selectedSegmentIds.has(segment.id)}
+                    onToggleSelect={toggleSegmentSelection}
                   />
                 )
               })
@@ -556,6 +653,7 @@ export default function SegmentsPage() {
         onSave={handleSaveSegment}
         segment={editingSegment}
         tripId={Number(tripId)}
+        tripName={tripName}
         segmentTypes={segmentTypes}
         tripCurrencyId={tripCurrencyId}
         displayCurrencyId={effectiveDisplayCurrencyId}
@@ -579,13 +677,38 @@ export default function SegmentsPage() {
         tripCurrencyId={tripCurrencyId}
         onSegmentCreated={fetchSegments}
       />
+      <BatchLocationModal
+        isOpen={isBatchLocationOpen}
+        onClose={() => setIsBatchLocationOpen(false)}
+        onComplete={handleBatchLocationComplete}
+        selectedSegmentIds={Array.from(selectedSegmentIds)}
+        tripId={Number(tripId)}
+      />
+
+      <SelectPopupMenu
+        selectedCount={selectedSegmentIds.size}
+        totalCount={sortedSegments.length}
+        onSelectAll={selectAllFiltered}
+        onHide={() => handleBatchSetVisibility(false)}
+        onShow={() => handleBatchSetVisibility(true)}
+        onDelete={handleBatchDelete}
+        isDeleting={isBatchDeleting}
+        onClear={() => setSelectedSegmentIds(new Set())}
+        extraActions={[
+          {
+            icon: <MapPinIcon className="h-4 w-4" />,
+            label: "Update Locations",
+            onClick: () => setIsBatchLocationOpen(true),
+          },
+        ]}
+      />
     </Card>
   );
 }
 
 function LoadingGridSkeleton() {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 gap-4">
       {[...Array(6)].map((_, i) => (
         <Skeleton key={i} className="h-40 w-full" />
       ))}

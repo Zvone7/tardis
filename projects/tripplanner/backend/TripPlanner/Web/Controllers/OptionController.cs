@@ -78,7 +78,43 @@ public class OptionController : ControllerBase
     [Route(nameof(UpdateConnectedSegments))]
     public async Task<ActionResult> UpdateConnectedSegments([FromQuery] int tripId, UpdateConnectedSegmentsAm am, CancellationToken cancellationToken)
     {
-        await _optionService_.ConnectOptionWithSegmentsAsync(am, cancellationToken);
+        await _optionService_.ConnectOptionWithSegmentsAsync(tripId, am, cancellationToken);
         return Ok();
+    }
+
+    [HttpPut]
+    [ServiceFilter(typeof(TripAccessFilterAttribute))]
+    [Route(nameof(BatchConnectSegment))]
+    public async Task<ActionResult<int>> BatchConnectSegment([FromQuery] int tripId, BatchConnectSegmentAm am, CancellationToken cancellationToken)
+    {
+        var count = await _optionService_.BatchConnectSegmentAsync(tripId, am, cancellationToken);
+        return Ok(count);
+    }
+
+    [HttpPost]
+    [ServiceFilter(typeof(TripAccessFilterAttribute))]
+    [Route(nameof(CombineAll))]
+    public async Task<ActionResult<int>> CombineAll([FromQuery] int tripId, CombineAllAm am, CancellationToken cancellationToken)
+    {
+        var count = await _optionService_.CombineAllAsync(am, cancellationToken);
+        return Ok(count);
+    }
+
+    [HttpPost]
+    [ServiceFilter(typeof(TripAccessFilterAttribute))]
+    [Route(nameof(BatchDelete))]
+    public async Task<ActionResult<int>> BatchDelete([FromQuery] int tripId, BatchDeleteAm am, CancellationToken cancellationToken)
+    {
+        var count = await _optionService_.BatchDeleteAsync(tripId, am.Ids, cancellationToken);
+        return Ok(count);
+    }
+
+    [HttpPut]
+    [ServiceFilter(typeof(TripAccessFilterAttribute))]
+    [Route(nameof(BatchSetVisibility))]
+    public async Task<ActionResult<int>> BatchSetVisibility([FromQuery] int tripId, BatchSetVisibilityAm am, CancellationToken cancellationToken)
+    {
+        var count = await _optionService_.BatchSetVisibilityAsync(tripId, am.Ids, am.IsVisible, cancellationToken);
+        return Ok(count);
     }
 }

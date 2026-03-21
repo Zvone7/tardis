@@ -15,6 +15,13 @@ export interface RangeLocationPickerValue {
   end: LocationOption | null
 }
 
+export interface PickerRenderProps {
+  id: string
+  placeholder: string
+  selected: LocationOption | null
+  onSelected: (loc: LocationOption | null) => void
+}
+
 interface RangeLocationPickerProps {
   id: string
   label?: string
@@ -24,6 +31,7 @@ interface RangeLocationPickerProps {
   searchEndpoint?: string
   minChars?: number
   debounceMs?: number
+  renderPicker?: (props: PickerRenderProps) => React.ReactNode
 }
 
 /* -------------------- small utilities -------------------- */
@@ -32,7 +40,7 @@ function clsx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ")
 }
 
-function useDebounced<T>(val: T, delay: number) {
+export function useDebounced<T>(val: T, delay: number) {
   const [d, setD] = useState(val)
   useEffect(() => {
     const t = setTimeout(() => setD(val), delay)
@@ -43,7 +51,7 @@ function useDebounced<T>(val: T, delay: number) {
 
 /* -------------------- Autocomplete input -------------------- */
 
-function Autocomplete({
+export function Autocomplete({
   id,
   placeholder,
   selected,
@@ -260,6 +268,7 @@ export const RangeLocationPicker: React.FC<RangeLocationPickerProps> = React.mem
     searchEndpoint = "/api/geocode/search",
     minChars = 2,
     debounceMs = 250,
+    renderPicker,
   }) => {
     const { start, end } = value
     const grid = compact ? "grid grid-cols-4 items-center gap-2" : "grid grid-cols-4 items-center gap-3"
@@ -278,15 +287,18 @@ export const RangeLocationPicker: React.FC<RangeLocationPickerProps> = React.mem
             Start
           </Label>
           <div className="col-span-3 flex items-center gap-2">
-            <Autocomplete
-              id={`${id}-start`}
-              placeholder="Search a start location"
-              selected={start}
-              onSelected={(loc) => onChange({ ...value, start: loc })}
-              searchEndpoint={searchEndpoint}
-              minChars={minChars}
-              debounceMs={debounceMs}
-            />
+            {renderPicker
+              ? renderPicker({ id: `${id}-start`, placeholder: "Select start...", selected: start, onSelected: (loc) => onChange({ ...value, start: loc }) })
+              : <Autocomplete
+                  id={`${id}-start`}
+                  placeholder="Search a start location"
+                  selected={start}
+                  onSelected={(loc) => onChange({ ...value, start: loc })}
+                  searchEndpoint={searchEndpoint}
+                  minChars={minChars}
+                  debounceMs={debounceMs}
+                />
+            }
           </div>
         </div>
 
@@ -330,15 +342,18 @@ export const RangeLocationPicker: React.FC<RangeLocationPickerProps> = React.mem
                 Destination
               </Label>
               <div className="col-span-3 flex items-center gap-2">
-                <Autocomplete
-                  id={`${id}-end`}
-                  placeholder="Search an end location"
-                  selected={end}
-                  onSelected={(loc) => onChange({ ...value, end: loc })}
-                  searchEndpoint={searchEndpoint}
-                  minChars={minChars}
-                  debounceMs={debounceMs}
-                />
+                {renderPicker
+                  ? renderPicker({ id: `${id}-end`, placeholder: "Select destination...", selected: end, onSelected: (loc) => onChange({ ...value, end: loc }) })
+                  : <Autocomplete
+                      id={`${id}-end`}
+                      placeholder="Search an end location"
+                      selected={end}
+                      onSelected={(loc) => onChange({ ...value, end: loc })}
+                      searchEndpoint={searchEndpoint}
+                      minChars={minChars}
+                      debounceMs={debounceMs}
+                    />
+                }
               </div>
             </div>
 

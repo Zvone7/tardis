@@ -3,9 +3,13 @@
 import { MessageCircle } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { useChatContext } from "./ChatProvider"
+import { useCurrentUser } from "../hooks/useCurrentUser"
 
 export function ChatButton() {
   const { isOpen, setIsOpen } = useChatContext()
+  const { user, isLoading } = useCurrentUser()
+
+  if (isLoading || !user) return null
 
   return (
     <Button

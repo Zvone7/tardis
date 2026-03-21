@@ -20,7 +20,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
-import { SaveIcon, Trash2Icon, EyeOffIcon, EyeIcon, LayersIcon, Loader2 } from "lucide-react";
+import { SaveIcon, Trash2Icon, EyeOffIcon, EyeIcon, LayersIcon, Loader2, SlidersHorizontal } from "lucide-react";
+import { SegmentSelectCard } from "../components/SegmentSelectCard";
 import type { SegmentType, SegmentApi, OptionApi, OptionSave, Currency, CurrencyConversion, Segment } from "../types/models";
 import { cn } from "../lib/utils";
 import { TitleTokens } from "../components/TitleTokens";
@@ -57,6 +58,7 @@ interface OptionModalProps {
   onSave: (option: OptionSave) => Promise<void> | void;
   option?: OptionApi | null;
   tripId: number;
+  tripName?: string;
   refreshOptions: () => void;
   tripCurrencyId: number | null;
   displayCurrencyId: number | null;
@@ -72,6 +74,7 @@ export default function OptionModal({
   onSave,
   option,
   tripId,
+  tripName,
   refreshOptions,
   tripCurrencyId,
   displayCurrencyId,
@@ -101,6 +104,7 @@ export default function OptionModal({
     showHidden: false,
   })
   const [segmentSortState, setSegmentSortState] = useState<SegmentSortValue | null>(null)
+  const [segmentFilterOpen, setSegmentFilterOpen] = useState(false)
   const resolvedDisplayCurrencyId = displayCurrencyId ?? tripCurrencyId ?? null;
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false)
   const skipClosePromptRef = useRef(false)
@@ -356,7 +360,7 @@ export default function OptionModal({
 
   const filteredSegmentsForDisplay = useMemo(() => {
     if (!option) return []
-    return applySegmentFilters(
+    const filtered = applySegmentFilters(
       segments as Segment[],
       segmentFilterState,
       segmentSortState,
@@ -368,6 +372,12 @@ export default function OptionModal({
         conversions,
       },
     )
+    const selectedSet = new Set(selectedSegments)
+    return [...filtered].sort((a, b) => {
+      const aSelected = selectedSet.has(a.id) ? 0 : 1
+      const bSelected = selectedSet.has(b.id) ? 0 : 1
+      return aSelected - bSelected
+    })
   }, [
     option,
     segments,
@@ -378,6 +388,7 @@ export default function OptionModal({
     tripCurrencyId,
     currencies,
     conversions,
+    selectedSegments,
   ])
 
   const selectedSegmentsCount = selectedSegments.length
@@ -407,10 +418,19 @@ export default function OptionModal({
       fallbackCurrencyId: tripCurrencyId ?? null,
       conversions,
     });
+    const typeCounts = new Map<string, number>()
+    selectedConnectedSegments.forEach((seg) => {
+      const typeName = seg.segmentType.name
+      typeCounts.set(typeName, (typeCounts.get(typeName) ?? 0) + 1)
+    })
+    const segmentLabel = typeCounts.size > 0
+      ? Array.from(typeCounts.entries()).map(([typeName, count]) => `${count} ${typeName}`).join(", ")
+      : null
     return buildOptionTitleTokens({
       name,
       fallbackName: option?.name || "New option",
       segmentCount: derived.segmentCount ?? null,
+      segmentLabel,
       startLocationLabel: derived.startLocationLabel ?? undefined,
       endLocationLabel: derived.endLocationLabel ?? undefined,
       startDateIso: derived.startDateIso ?? option?.startDateTimeUtc ?? null,
@@ -419,11 +439,11 @@ export default function OptionModal({
       endOffset: derived.endOffset ?? (option ? 0 : null),
       totalCost: derived.totalCost ?? option?.totalCost ?? null,
     });
-  }, [name, option, selectedSegmentEntities, displayCurrencyId, tripCurrencyId, conversions]);
+  }, [name, option, selectedSegmentEntities, selectedConnectedSegments, displayCurrencyId, tripCurrencyId, conversions]);
 
   const defaultOptionTitle = option ? `Edit Option: ${option.name ?? "Option"}` : "Create Option";
   const optionTitleText = tokensToLabel(optionTitleTokens) || defaultOptionTitle;
-  const headerTitle = option?.name?.trim() ? option.name.trim() : "New option"
+  const headerTitle = option?.name?.trim() ? option.name.trim() : (tripName || "New option")
   const headerSubtitle = option ? "Editing existing option" : "Creating new option"
 
   const generalSummaryTitle = useMemo(() => {
@@ -442,17 +462,30 @@ export default function OptionModal({
   }, [optionTitleTokens])
 
   const connectedSummaryTitle = useMemo(() => {
+    let summaryText: string
+    if (selectedSegmentsCount === 0) {
+      summaryText = "No segments linked"
+    } else {
+      const typeCounts = new Map<string, number>()
+      selectedConnectedSegments.forEach((seg) => {
+        const typeName = seg.segmentType.name
+        typeCounts.set(typeName, (typeCounts.get(typeName) ?? 0) + 1)
+      })
+      summaryText = Array.from(typeCounts.entries())
+        .map(([typeName, count]) => `${count} ${typeName}`)
+        .join(", ")
+    }
     return (
       <div className="flex flex-col gap-1 text-left">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           Connected segments
         </span>
         <span className="text-sm font-medium text-foreground">
-          {selectedSegmentsCount ? `${selectedSegmentsCount} selected` : "No segments linked"}
+          {summaryText}
         </span>
       </div>
     )
-  }, [selectedSegmentsCount])
+  }, [selectedSegmentsCount, selectedConnectedSegments])
 
   const handleDialogOpenChange = useCallback(
     (open: boolean) => {
@@ -473,10 +506,10 @@ export default function OptionModal({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="max-w-lg w-full p-0 flex flex-col h-[90vh]">
+        <DialogContent className="max-w-4xl w-full p-0 flex flex-col h-[90vh]">
           <DialogTitle className="sr-only">{optionTitleText}</DialogTitle>
           <form onSubmit={handleSubmit} className="flex flex-col h-full">
-            <div className="border-b bg-background px-4 py-3">
+            <div className="border-b bg-background px-4 py-3 pr-10">
               <div className="mb-3 space-y-1">
                 <div className="flex items-center gap-2 text-lg font-semibold leading-snug">
                   <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-secondary/50 text-secondary-foreground shadow-sm">
@@ -505,24 +538,26 @@ export default function OptionModal({
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="text-muted-foreground"
-                    onClick={() =>
-                      setIsUiVisible((prev) => {
-                        const next = !prev
-                        toast({
-                          title: next ? "Will be shown in list view" : "Won't be shown in list view",
+                  {isEditing && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="text-muted-foreground"
+                      onClick={() =>
+                        setIsUiVisible((prev) => {
+                          const next = !prev
+                          toast({
+                            title: next ? "Will be shown in list view" : "Won't be shown in list view",
+                          })
+                          return next
                         })
-                        return next
-                      })
-                    }
-                    aria-pressed={isUiVisible}
-                  >
-                    {isUiVisible ? <EyeIcon className="h-4 w-4" /> : <EyeOffIcon className="h-4 w-4" />}
-                  </Button>
+                      }
+                      aria-pressed={isUiVisible}
+                    >
+                      {isUiVisible ? <EyeIcon className="h-4 w-4" /> : <EyeOffIcon className="h-4 w-4" />}
+                    </Button>
+                  )}
                   <Button
                     type="submit"
                     size="sm"
@@ -560,6 +595,20 @@ export default function OptionModal({
                   onToggle={() => setConnectionsOpen((prev) => !prev)}
                 >
                   <div className="space-y-4 pt-4">
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-label="Toggle filters"
+                        onClick={() => setSegmentFilterOpen((prev) => !prev)}
+                        className="relative"
+                      >
+                        <SlidersHorizontal
+                          className={cn("h-4 w-4 transition-transform", segmentFilterOpen ? "text-primary rotate-90" : "")}
+                        />
+                      </Button>
+                    </div>
                     <SegmentFilterPanel
                       value={segmentFilterState}
                       onChange={setSegmentFilterState}
@@ -569,6 +618,8 @@ export default function OptionModal({
                       availableTypes={segmentFilterMetadata.types}
                       minDate={segmentFilterMetadata.dateBounds.min}
                       maxDate={segmentFilterMetadata.dateBounds.max}
+                      open={segmentFilterOpen}
+                      onOpenChange={setSegmentFilterOpen}
                     />
                     <ScrollArea className="h-[320px] border rounded-md p-3">
                       {filteredSegmentsForDisplay.length === 0 ? (
@@ -585,39 +636,20 @@ export default function OptionModal({
                           const summaryLabel = tokensToLabel(tokens) || segment.name
                           const isHiddenSegment = segment.isUiVisible === false
                           const dimmed = !segmentFilterState.showHidden && isHiddenSegment
+                          const dateRangeLabel = `${formatSegmentDateWithWeekday(segment.startDateTimeUtc)} → ${formatSegmentDateWithWeekday(segment.endDateTimeUtc)}`
 
                           return (
-                            <label
+                            <SegmentSelectCard
                               key={segment.id}
-                              htmlFor={`segment-${segment.id}`}
-                              className={cn(
-                                "flex items-start gap-3 rounded-md p-2 hover:bg-muted/60 cursor-pointer",
-                                dimmed && "bg-muted text-muted-foreground",
-                              )}
-                            >
-                              <Checkbox
-                                id={`segment-${segment.id}`}
-                                checked={selectedSegments.includes(segment.id)}
-                                onCheckedChange={(checked) => handleSegmentCheckedChange(segment.id, checked)}
-                                className="mt-1"
-                                aria-label={`Select ${summaryLabel}`}
-                              />
-
-                              <div className="flex-1 min-w-0" aria-label={summaryLabel}>
-                                <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-sm">
-                                  <TitleTokens tokens={tokens} size="sm" />
-                                </div>
-                                {segmentCostLabel ? (
-                                  <div className="mt-0.5 text-xs text-muted-foreground">{segmentCostLabel}</div>
-                                ) : null}
-                                <div className="mt-1 text-xs text-muted-foreground leading-snug">
-                                  {formatSegmentDateWithWeekday(segment.startDateTimeUtc)}
-                                  <span className="mx-1 text-muted-foreground">→</span>
-                                  {formatSegmentDateWithWeekday(segment.endDateTimeUtc)}
-                                </div>
-                              </div>
-                              {dimmed && <EyeOffIcon className="mt-1 h-4 w-4" aria-hidden="true" />}
-                            </label>
+                              segmentId={segment.id}
+                              checked={selectedSegments.includes(segment.id)}
+                              onCheckedChange={(checked) => handleSegmentCheckedChange(segment.id, checked)}
+                              tokens={tokens}
+                              summaryLabel={summaryLabel}
+                              costLabel={segmentCostLabel}
+                              dateRangeLabel={dateRangeLabel}
+                              dimmed={dimmed}
+                            />
                           )
                         })
                       )}

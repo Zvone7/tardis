@@ -25,10 +25,9 @@ export const formatCurrencyAmount = (
   const formatted = formatter.format(Number(amount))
 
   if (!currency) return formatted
-  const symbol = currency.symbol ?? ""
   const code = currency.shortName ?? ""
   const includeCode = options.includeCode !== false
-  return includeCode ? `${symbol}${formatted} ${code}`.trim() : `${symbol}${formatted}`.trim()
+  return includeCode && code ? `${formatted} ${code}` : formatted
 }
 
 type ConversionGraph = Map<number, Array<{ to: number; rate: number }>>

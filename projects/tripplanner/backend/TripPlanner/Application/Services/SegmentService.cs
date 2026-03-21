@@ -274,9 +274,37 @@ public class SegmentService
         await UpdateOptionsRelatedBySegmentIdAsync(segmentId, cancellationToken);
     }
 
+    public async Task<int> BatchDeleteAsync(int tripId, List<int> ids, CancellationToken ct)
+    {
+        // Collect affected options before deleting segments
+        var affectedOptionIds = new HashSet<int>();
+        foreach (var segId in ids)
+        {
+            var opts = await _optionService_.GetAllBySegmentIdAsync(segId, ct);
+            foreach (var o in opts) affectedOptionIds.Add(o.Id);
+        }
+
+        await _segmentRepository_.BatchDeleteAsync(ids, tripId, ct);
+
+        // Recalculate affected options
+        foreach (var optionId in affectedOptionIds)
+        {
+            var recalc = await _optionService_.RecalculateOptionStateAsync(optionId, ct);
+            await _optionService_.UpdateAsync(recalc, ct);
+        }
+
+        return ids.Count;
+    }
+
+    public async Task<int> BatchSetVisibilityAsync(int tripId, List<int> ids, bool isVisible, CancellationToken ct)
+    {
+        await _segmentRepository_.BatchSetVisibilityAsync(ids, isVisible, tripId, ct);
+        return ids.Count;
+    }
+
     public async Task ConnectSegmentWithOptionsAsync(UpdateConnectedOptionsAm am, CancellationToken cancellationToken)
     {
-        await _segmentRepository_.ConnectSegmentsWithOptionAsync(am.SegmentId, am.OptionIds, cancellationToken);
+        await _segmentRepository_.ConnectSegmentsWithOptionAsync(am.SegmentId, am.OptionIds, am.TripId, cancellationToken);
         await UpdateOptionsRelatedBySegmentIdAsync(am.SegmentId, cancellationToken);
     }
 
@@ -389,4 +417,89 @@ public class SegmentService
     }
 
 #endregion
+
+    public async Task<int> BatchUpdateLocationsAsync(BatchUpdateLocationsAm am, CancellationToken cancellationToken)
+    {
+        if (am.SegmentIds.Count == 0) return 0;
+
+        int? startLocationId = null;
+        int? endLocationId = null;
+        var updateStart = am.StartLocation != null;
+        var updateEnd = am.EndLocation != null;
+
+        if (am.StartLocation != null)
+        {
+            if (am.StartLocation.Id == 0)
+            {
+                var created = await _locationRepository.CreateAsync(new LocationDbm
+                {
+                    name = am.StartLocation.Name,
+                    provider = am.StartLocation.Provider,
+                    provider_place_id = am.StartLocation.ProviderPlaceId,
+                    country_code = am.StartLocation.CountryCode,
+                    country = am.StartLocation.Country,
+                    lat = am.StartLocation.Latitude,
+                    lng = am.StartLocation.Longitude,
+                }, cancellationToken);
+                startLocationId = created.id;
+            }
+            else
+            {
+                await _locationRepository.UpdateAsync(new LocationDbm
+                {
+                    id = am.StartLocation.Id,
+                    name = am.StartLocation.Name,
+                    provider = am.StartLocation.Provider,
+                    provider_place_id = am.StartLocation.ProviderPlaceId,
+                    country_code = am.StartLocation.CountryCode,
+                    country = am.StartLocation.Country,
+                    lat = am.StartLocation.Latitude,
+                    lng = am.StartLocation.Longitude,
+                }, cancellationToken);
+                startLocationId = am.StartLocation.Id;
+            }
+        }
+
+        if (am.EndLocation != null)
+        {
+            if (am.EndLocation.Id == 0)
+            {
+                var created = await _locationRepository.CreateAsync(new LocationDbm
+                {
+                    name = am.EndLocation.Name,
+                    provider = am.EndLocation.Provider,
+                    provider_place_id = am.EndLocation.ProviderPlaceId,
+                    country_code = am.EndLocation.CountryCode,
+                    country = am.EndLocation.Country,
+                    lat = am.EndLocation.Latitude,
+                    lng = am.EndLocation.Longitude,
+                }, cancellationToken);
+                endLocationId = created.id;
+            }
+            else
+            {
+                await _locationRepository.UpdateAsync(new LocationDbm
+                {
+                    id = am.EndLocation.Id,
+                    name = am.EndLocation.Name,
+                    provider = am.EndLocation.Provider,
+                    provider_place_id = am.EndLocation.ProviderPlaceId,
+                    country_code = am.EndLocation.CountryCode,
+                    country = am.EndLocation.Country,
+                    lat = am.EndLocation.Latitude,
+                    lng = am.EndLocation.Longitude,
+                }, cancellationToken);
+                endLocationId = am.EndLocation.Id;
+            }
+        }
+
+        await _segmentRepository_.UpdateLocationsAsync(am.SegmentIds, startLocationId, endLocationId, updateStart, updateEnd, cancellationToken);
+
+        foreach (var segmentId in am.SegmentIds)
+        {
+            await UpdateOptionsRelatedBySegmentIdAsync(segmentId, cancellationToken);
+        }
+
+        return am.SegmentIds.Count;
+    }
 }

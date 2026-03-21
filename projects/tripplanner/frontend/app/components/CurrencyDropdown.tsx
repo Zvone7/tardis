@@ -67,7 +67,7 @@ export function CurrencyDropdown({
     return () => document.removeEventListener("pointerdown", handler)
   }, [open])
 
-  const selectedShortLabel = selectedCurrency ? `${selectedCurrency.symbol} - ${selectedCurrency.shortName}` : null
+  const selectedShortLabel = selectedCurrency ? selectedCurrency.shortName : null
 
   return (
     <div className={cn("relative flex flex-col gap-1", className)} ref={containerRef}>
@@ -131,7 +131,7 @@ export function CurrencyDropdown({
                   >
                     <div className="flex flex-col">
                       <span className="font-medium">
-                        {currency.symbol} {currency.shortName}
+                        {currency.shortName}
                       </span>
                       <span className="text-xs text-muted-foreground">{currency.name}</span>
                     </div>

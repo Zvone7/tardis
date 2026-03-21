@@ -36,7 +36,7 @@ function TripCard({
   currencies: Currency[]
 }) {
   const tripCurrency = currencies.find((currency) => currency.id === trip.currencyId)
-  const currencyLabel = tripCurrency ? `${tripCurrency.symbol} ${tripCurrency.shortName}` : "—"
+  const currencyLabel = tripCurrency ? tripCurrency.shortName : "—"
 
   return (
     <Card
@@ -166,8 +166,14 @@ export default function TripList() {
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null)
   const router = useRouter()
   const { currencies } = useCurrencies()
-  const { user } = useCurrentUser()
+  const { user, isLoading: isUserLoading, error: userError } = useCurrentUser()
   const preferredCurrencyId = user?.userPreference?.preferredCurrencyId ?? null
+
+  useEffect(() => {
+    if (!isUserLoading && !user && userError) {
+      router.replace("/")
+    }
+  }, [isUserLoading, user, userError, router])
 
   const fetchTrips = useCallback(async () => {
     setIsLoading(true)

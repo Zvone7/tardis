@@ -345,7 +345,7 @@ export default function AccomodationSearch({ isOpen, onClose, tripId, tripCurren
     const cityLocation = await resolveLocationDto()
     const payload = {
       tripId,
-      name: offer.hotel?.name ?? "Accommodation",
+      name: "",
       startDateTimeUtc: `${checkIn}T00:00:00`,
       endDateTimeUtc: `${checkOut}T00:00:00`,
       startDateTimeUtcOffset: 0,

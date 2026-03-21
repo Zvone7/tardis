@@ -1,0 +1,1 @@
+update the icon for apartmentpicker to have a black background, but a green (3 pixels thic) border around it. inside it it will still say AP with correct env badge
