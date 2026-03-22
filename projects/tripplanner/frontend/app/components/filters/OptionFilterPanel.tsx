@@ -103,13 +103,14 @@ export function OptionFilterPanel({
   return (
     <div className={cn("w-full", className)}>
       {totalCount != null && filteredCount != null && (() => {
-        const baseCount = value.showHidden ? totalCount : totalCount - (hiddenCount ?? 0)
+        const visibleCount = totalCount - (hiddenCount ?? 0)
+        const baseCount = value.showHidden ? totalCount : visibleCount
         const isFiltered = filteredCount < baseCount
-        const hiddenLabel = !value.showHidden && (hiddenCount ?? 0) > 0 ? ` (${hiddenCount} hidden)` : ""
+        const hiddenLabel = value.showHidden && (hiddenCount ?? 0) > 0 ? ` (+ ${hiddenCount} hidden)` : ""
         return (
           <div className="w-full text-center mb-2">
             <span className="text-sm text-muted-foreground">
-              {isFiltered ? `${filteredCount} of ` : ""}{baseCount} option{baseCount !== 1 ? "s" : ""}{hiddenLabel}
+              {isFiltered ? `${filteredCount} of ` : ""}{value.showHidden ? visibleCount : baseCount} option{(value.showHidden ? visibleCount : baseCount) !== 1 ? "s" : ""}{hiddenLabel}
             </span>
           </div>
         )
