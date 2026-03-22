@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { Send, Square, Trash2, ImagePlus, X, ArrowDown } from "lucide-react"
+import { Send, Square, ImagePlus, X, ArrowDown, MessageSquarePlus, History, Trash2 } from "lucide-react"
 import { Sheet, SheetContent, SheetTitle } from "../components/ui/sheet"
 import { Button } from "../components/ui/button"
 import { useChatContext } from "./ChatProvider"
@@ -16,13 +16,18 @@ export function ChatPanel() {
     error,
     sendMessage,
     stopStreaming,
-    clearMessages,
+    newConversation,
+    switchToSession,
+    deleteConversation,
+    sessions,
+    activeSessionId,
     isOpen,
     setIsOpen,
   } = useChatContext()
 
   const [input, setInput] = useState("")
   const [images, setImages] = useState<string[]>([])
+  const [showSessions, setShowSessions] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -140,21 +145,61 @@ export function ChatPanel() {
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen} modal={false}>
-      <SheetContent side="right" hideOverlay className="flex flex-col p-0 sm:max-w-md w-[400px]">
+      <SheetContent side="left" hideOverlay className="flex flex-col p-0 sm:max-w-md w-[400px]">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <div>
             <SheetTitle className="text-base">Trip Assistant</SheetTitle>
             {tripName && (
-              <p className="text-xs text-muted-foreground truncate max-w-[250px]">{tripName}</p>
+              <p className="text-xs text-muted-foreground truncate max-w-[200px]">{tripName}</p>
             )}
           </div>
-          {displayMessages.length > 0 && (
-            <Button variant="ghost" size="icon" onClick={clearMessages} className="h-8 w-8 mr-6">
-              <Trash2 className="h-4 w-4" />
+          <div className="flex items-center gap-1 mr-6">
+            {sessions.length > 1 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowSessions((s) => !s)}
+                className="h-8 w-8"
+                title="Conversation history"
+              >
+                <History className="h-4 w-4" />
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { newConversation(); setShowSessions(false) }}
+              className="gap-1.5 text-xs text-muted-foreground"
+            >
+              <MessageSquarePlus className="h-4 w-4" />
+              New
             </Button>
-          )}
+          </div>
         </div>
+
+        {/* Session list */}
+        {showSessions && (
+          <div className="border-b max-h-[200px] overflow-y-auto">
+            {sessions.map((session) => (
+              <div
+                key={session.id}
+                className={`flex items-center justify-between px-4 py-2 text-sm cursor-pointer hover:bg-accent/50 ${session.id === activeSessionId ? "bg-accent" : ""}`}
+                onClick={() => { switchToSession(session.id); setShowSessions(false) }}
+              >
+                <span className="truncate flex-1 mr-2">{session.name}</span>
+                {session.id !== activeSessionId && sessions.length > 1 && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteConversation(session.id) }}
+                    className="text-muted-foreground hover:text-destructive shrink-0"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Messages */}
         <div className="flex-1 overflow-hidden relative">

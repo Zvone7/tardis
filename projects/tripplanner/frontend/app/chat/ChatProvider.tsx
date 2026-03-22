@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from "react"
 import { useChatAssistant } from "./useChatAssistant"
 import type { ChatMessage } from "./types"
+import type { ChatSession } from "./chatSessions"
 
 interface ChatContextValue {
   tripId: number | null
@@ -13,7 +14,11 @@ interface ChatContextValue {
   error: string | null
   sendMessage: (text: string, imageDataUrls?: string[]) => Promise<void>
   stopStreaming: () => void
-  clearMessages: () => void
+  newConversation: () => void
+  switchToSession: (sessionId: string) => void
+  deleteConversation: (sessionId: string) => void
+  sessions: ChatSession[]
+  activeSessionId: string
   isOpen: boolean
   setIsOpen: (open: boolean) => void
   registerRefreshCallback: (cb: () => void) => () => void

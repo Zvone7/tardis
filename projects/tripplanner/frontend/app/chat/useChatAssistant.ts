@@ -8,22 +8,17 @@ import { chatTools } from "./toolDefinitions"
 import { executeToolCall, type ToolContext } from "./toolExecutor"
 import { segmentsApi, optionsApi, currencyApi } from "../utils/apiClient"
 import { normalizeLocation } from "../lib/mapping"
+import {
+  getActiveSession,
+  saveMessages,
+  createNewSession,
+  switchSession,
+  deleteSession,
+  listSessions,
+  type ChatSession,
+} from "./chatSessions"
 
 const MAX_TOOL_ROUNDS = 5
-
-function getStorageKey(tripId: number) {
-  return `chat-messages-${tripId}`
-}
-
-function stripImagesForStorage(messages: ChatMessage[]): ChatMessage[] {
-  return messages.map((msg) => {
-    if (Array.isArray(msg.content)) {
-      const textParts = msg.content.filter((p) => p.type === "text")
-      return { ...msg, content: textParts.length ? textParts : "[image]" }
-    }
-    return msg
-  })
-}
 
 interface UseChatAssistantOptions {
   tripId: number | null
@@ -35,33 +30,35 @@ interface UseChatAssistantOptions {
 export function useChatAssistant({ tripId, tripName, preferredUtcOffset, onDataChanged }: UseChatAssistantOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (typeof window === "undefined" || !tripId) return []
-    try {
-      const stored = sessionStorage.getItem(getStorageKey(tripId))
-      return stored ? JSON.parse(stored) : []
-    } catch { return [] }
+    return getActiveSession(tripId).session.messages
+  })
+  const [activeSessionId, setActiveSessionId] = useState<string>(() => {
+    if (typeof window === "undefined" || !tripId) return ""
+    return getActiveSession(tripId).session.id
+  })
+  const [sessions, setSessions] = useState<ChatSession[]>(() => {
+    if (typeof window === "undefined" || !tripId) return []
+    return listSessions(tripId)
   })
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
-  // Restore messages when tripId changes
+  // Restore session when tripId changes
   useEffect(() => {
     if (!tripId) return
-    try {
-      const stored = sessionStorage.getItem(getStorageKey(tripId))
-      if (stored) setMessages(JSON.parse(stored))
-      else setMessages([])
-    } catch { setMessages([]) }
+    const { session } = getActiveSession(tripId)
+    setMessages(session.messages)
+    setActiveSessionId(session.id)
+    setSessions(listSessions(tripId))
   }, [tripId])
 
   // Persist messages on change
   useEffect(() => {
-    if (!tripId) return
-    try {
-      const toStore = stripImagesForStorage(messages)
-      sessionStorage.setItem(getStorageKey(tripId), JSON.stringify(toStore))
-    } catch { /* storage full or unavailable */ }
-  }, [tripId, messages])
+    if (!tripId || !activeSessionId) return
+    saveMessages(tripId, activeSessionId, messages)
+    setSessions(listSessions(tripId))
+  }, [tripId, activeSessionId, messages])
 
   // Cache for reference data
   const cacheRef = useRef<{
@@ -301,12 +298,30 @@ IMPORTANT workflow rules:
     abortRef.current?.abort()
   }, [])
 
-  const clearMessages = useCallback(() => {
+  const newConversation = useCallback(() => {
+    if (!tripId) return
+    const { session } = createNewSession(tripId)
     setMessages([])
+    setActiveSessionId(session.id)
+    setSessions(listSessions(tripId))
     setError(null)
-    if (tripId) {
-      try { sessionStorage.removeItem(getStorageKey(tripId)) } catch {}
-    }
+  }, [tripId])
+
+  const switchToSession = useCallback((sessionId: string) => {
+    if (!tripId) return
+    const { session } = switchSession(tripId, sessionId)
+    setMessages(session.messages)
+    setActiveSessionId(session.id)
+    setError(null)
+  }, [tripId])
+
+  const deleteConversation = useCallback((sessionId: string) => {
+    if (!tripId) return
+    const { session } = deleteSession(tripId, sessionId)
+    setMessages(session.messages)
+    setActiveSessionId(session.id)
+    setSessions(listSessions(tripId))
+    setError(null)
   }, [tripId])
 
   return {
@@ -315,6 +330,10 @@ IMPORTANT workflow rules:
     error,
     sendMessage,
     stopStreaming,
-    clearMessages,
+    newConversation,
+    switchToSession,
+    deleteConversation,
+    sessions,
+    activeSessionId,
   }
 }
