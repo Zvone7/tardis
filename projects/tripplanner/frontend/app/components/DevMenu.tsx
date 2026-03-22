@@ -11,10 +11,14 @@ const isLocalOrDev = !envCode
   ? process.env.NODE_ENV !== "production"
   : envCode === "local" || envCode === "dev"
 
+const menuItems = [
+  ...(isLocalOrDev ? [{ href: "/status", label: "Status" }] : []),
+]
+
 export function DevMenu() {
   const [open, setOpen] = useState(false)
 
-  if (!isLocalOrDev) return null
+  if (menuItems.length === 0) return null
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -24,13 +28,16 @@ export function DevMenu() {
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-36 p-1">
-        <Link
-          href="/status"
-          onClick={() => setOpen(false)}
-          className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
-        >
-          Status
-        </Link>
+        {menuItems.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={() => setOpen(false)}
+            className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            {item.label}
+          </Link>
+        ))}
       </PopoverContent>
     </Popover>
   )
