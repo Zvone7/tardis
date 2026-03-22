@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { Send, Square, ImagePlus, X, ArrowDown, MessageSquarePlus, History, Trash2 } from "lucide-react"
+import { Send, Square, ImagePlus, X, ArrowDown, MessageSquarePlus, History, Trash2, Mic, MicOff } from "lucide-react"
 import { Sheet, SheetContent, SheetTitle } from "../components/ui/sheet"
 import { Button } from "../components/ui/button"
 import { useChatContext } from "./ChatProvider"
@@ -28,9 +28,58 @@ export function ChatPanel() {
   const [input, setInput] = useState("")
   const [images, setImages] = useState<string[]>([])
   const [showSessions, setShowSessions] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
+  const recognitionRef = useRef<any>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const toggleVoiceInput = useCallback(() => {
+    if (isRecording) {
+      recognitionRef.current?.stop()
+      setIsRecording(false)
+      return
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      alert("Voice input is not supported in this browser.")
+      return
+    }
+
+    const recognition = new SpeechRecognition()
+    recognition.lang = navigator.language || "en-US"
+    recognition.interimResults = true
+    recognition.continuous = true
+    recognitionRef.current = recognition
+
+    let finalTranscript = input
+
+    recognition.onresult = (event: any) => {
+      let interim = ""
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript
+        if (event.results[i].isFinal) {
+          finalTranscript += (finalTranscript ? " " : "") + transcript
+        } else {
+          interim = transcript
+        }
+      }
+      setInput(finalTranscript + (interim ? " " + interim : ""))
+    }
+
+    recognition.onerror = () => {
+      setIsRecording(false)
+    }
+
+    recognition.onend = () => {
+      setIsRecording(false)
+      inputRef.current?.focus()
+    }
+
+    recognition.start()
+    setIsRecording(true)
+  }, [isRecording, input])
   const userScrolledUp = useRef(false)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
 
@@ -296,13 +345,23 @@ export function ChatPanel() {
                 >
                   <ImagePlus className="h-4 w-4" />
                 </Button>
+                <Button
+                  variant={isRecording ? "destructive" : "ghost"}
+                  size="icon"
+                  onClick={toggleVoiceInput}
+                  disabled={isStreaming}
+                  className="shrink-0"
+                  title={isRecording ? "Stop recording" : "Voice input"}
+                >
+                  {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                </Button>
                 <textarea
                   ref={inputRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   onPaste={handlePaste}
-                  placeholder="Type a message..."
+                  placeholder={isRecording ? "Listening..." : "Type a message..."}
                   disabled={isStreaming}
                   rows={1}
                   className="flex-1 min-h-[36px] max-h-[100px] resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
