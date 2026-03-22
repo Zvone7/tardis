@@ -1,9 +1,8 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { Send, Square, Trash2, ImagePlus, X } from "lucide-react"
+import { Send, Square, Trash2, ImagePlus, X, ArrowDown } from "lucide-react"
 import { Sheet, SheetContent, SheetTitle } from "../components/ui/sheet"
-import { ScrollArea } from "../components/ui/scroll-area"
 import { Button } from "../components/ui/button"
 import { useChatContext } from "./ChatProvider"
 import { ChatMessageBubble } from "./ChatMessage"
@@ -27,19 +26,55 @@ export function ChatPanel() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const userScrolledUp = useRef(false)
+  const [showScrollBtn, setShowScrollBtn] = useState(false)
 
-  // Auto-scroll to bottom when messages change or panel opens
-  useEffect(() => {
+  const isAtBottom = () => {
+    const el = scrollRef.current
+    if (!el) return true
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 40
+  }
+
+  const scrollToBottom = useCallback(() => {
     const el = scrollRef.current
     if (el) {
-      el.scrollTop = el.scrollHeight
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" })
+      userScrolledUp.current = false
+      setShowScrollBtn(false)
     }
-  }, [messages, isOpen])
+  }, [])
 
-  // Focus input when panel opens
+  // Track user scroll
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onScroll = () => {
+      const atBottom = isAtBottom()
+      userScrolledUp.current = !atBottom
+      setShowScrollBtn(!atBottom)
+    }
+    el.addEventListener("scroll", onScroll, { passive: true })
+    return () => el.removeEventListener("scroll", onScroll)
+  }, [tripId])
+
+  // Auto-scroll on new messages (unless user scrolled up)
+  useEffect(() => {
+    if (!userScrolledUp.current) {
+      const el = scrollRef.current
+      if (el) el.scrollTop = el.scrollHeight
+    }
+  }, [messages])
+
+  // Scroll to bottom when panel opens
   useEffect(() => {
     if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 100)
+      setTimeout(() => {
+        const el = scrollRef.current
+        if (el) el.scrollTop = el.scrollHeight
+        userScrolledUp.current = false
+        setShowScrollBtn(false)
+        inputRef.current?.focus()
+      }, 100)
     }
   }, [isOpen])
 
@@ -122,14 +157,14 @@ export function ChatPanel() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden relative">
           {!tripId ? (
             <div className="flex items-center justify-center h-full text-sm text-muted-foreground px-4 text-center">
               Open a trip to use the assistant
             </div>
           ) : (
-            <ScrollArea className="h-full">
-              <div ref={scrollRef} className="p-4 space-y-1">
+            <>
+              <div ref={scrollRef} className="h-full overflow-y-auto p-4 space-y-1">
                 {displayMessages.length === 0 && (
                   <div className="text-sm text-muted-foreground text-center mt-8">
                     Ask me to create segments, options, or help plan your trip!
@@ -164,13 +199,21 @@ export function ChatPanel() {
                   <div className="text-sm text-destructive text-center mt-2">{error}</div>
                 )}
               </div>
-            </ScrollArea>
+              {showScrollBtn && (
+                <button
+                  onClick={scrollToBottom}
+                  className="absolute bottom-3 left-1/2 -translate-x-1/2 h-8 w-8 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:opacity-90 transition-opacity z-10"
+                >
+                  <ArrowDown className="h-4 w-4" />
+                </button>
+              )}
+            </>
           )}
         </div>
 
         {/* Input */}
         {tripId && (
-          <div className="border-t p-3">
+          <div className="border-t p-3 pb-6">
             <div className="space-y-2">
               {images.length > 0 && (
                 <div className="flex gap-2 flex-wrap">
