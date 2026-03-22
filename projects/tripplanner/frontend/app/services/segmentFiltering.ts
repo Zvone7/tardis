@@ -2,6 +2,7 @@ import type { Segment, SegmentType, Currency, CurrencyConversion } from "../type
 import type { SegmentFilterValue } from "../components/filters/SegmentFilterPanel"
 import type { SegmentSortValue } from "../components/sorting/segmentSortTypes"
 import { convertWithFallback } from "../utils/currency"
+import { computeCostChips } from "../components/filters/costChips"
 
 const getLocationLabel = (loc: any | null) => {
   if (!loc) return ""
@@ -38,6 +39,9 @@ export const buildSegmentMetadata = (segments: Segment[], segmentTypes: SegmentT
     }
   })
 
+  const costs = segments.map((s) => Number(s.cost) || 0)
+  const costChips = computeCostChips(costs)
+
   return {
     locations: Array.from(locationSet),
     types: segmentTypes.filter((type) => typeSet.has(type.id)),
@@ -47,6 +51,7 @@ export const buildSegmentMetadata = (segments: Segment[], segmentTypes: SegmentT
       min: minDate ? new Date(minDate).toISOString().split("T")[0] : "",
       max: maxDate ? new Date(maxDate).toISOString().split("T")[0] : "",
     },
+    costChips,
   }
 }
 
@@ -78,6 +83,10 @@ export const filterSegments = (segments: Segment[], filters: SegmentFilterValue)
       if (startDate && segmentStart < startDate) return false
       if (endDate && segmentEnd > endDate) return false
     }
+
+    const cost = Number(segment.cost) || 0
+    if (filters.costMin != null && cost < filters.costMin) return false
+    if (filters.costMax != null && cost > filters.costMax) return false
 
     return true
   })

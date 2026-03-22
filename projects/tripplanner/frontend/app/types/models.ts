@@ -219,6 +219,8 @@ export interface SegmentModalProps {
 export interface OptionFilterPreset {
   locations: string[];
   dateRange: { start: string; end: string };
+  costMin?: number | null;
+  costMax?: number | null;
   showHidden: boolean;
 }
 

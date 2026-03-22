@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
-import { PlusIcon, ListIcon, EditIcon, EyeOffIcon, Loader2Icon, MapPinIcon, MoreVerticalIcon, BedDoubleIcon, PlaneIcon, SlidersHorizontal } from "lucide-react";
+import { PlusIcon, ListIcon, EditIcon, EyeIcon, EyeOffIcon, Loader2Icon, MapPinIcon, MoreVerticalIcon, BedDoubleIcon, PlaneIcon, SlidersHorizontal } from "lucide-react";
 import SelectPopupMenu from "../components/SelectPopupMenu";
 import { Popover, PopoverTrigger, PopoverContent } from "../components/ui/popover";
 import { Checkbox } from "../components/ui/checkbox";
@@ -19,6 +19,7 @@ import { cn } from "../lib/utils";
 import { SegmentFilterPanel, useSegmentFilterHasFilters, type SegmentFilterValue } from "../components/filters/SegmentFilterPanel";
 import type { SegmentSortValue } from "../components/sorting/segmentSortTypes";
 import { applySegmentFilters, buildSegmentMetadata } from "../services/segmentFiltering";
+import { computeCostChips } from "../components/filters/costChips";
 import { CurrencyDropdown } from "../components/CurrencyDropdown";
 import { UtcOffsetDropdown } from "../components/UtcOffsetDropdown";
 import { useCurrencies } from "../hooks/useCurrencies";
@@ -59,6 +60,7 @@ function SegmentCard({
   segmentType,
   userPreferredOffset,
   onEdit,
+  onToggleVisibility,
   connectedOptions,
   isLoadingConnections,
   showVisibilityIndicator,
@@ -73,6 +75,7 @@ function SegmentCard({
   segmentType: SegmentType | undefined;
   userPreferredOffset: number;
   onEdit: (segment: Segment) => void;
+  onToggleVisibility: (segment: Segment) => void;
   connectedOptions: OptionRef[];
   isLoadingConnections: boolean;
   showVisibilityIndicator: boolean;
@@ -175,15 +178,19 @@ function SegmentCard({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 ml-4">
-            {showVisibilityIndicator && isHidden && (
-              <div
-                className="rounded-full border p-1 bg-muted-foreground/20 text-muted-foreground"
-                title="Hidden from UI"
-                aria-label="Hidden from UI"
+          <div className="flex items-center gap-1 ml-4">
+            {showVisibilityIndicator && (
+              <button
+                type="button"
+                className="rounded-full p-1 text-muted-foreground hover:text-foreground transition-colors"
+                title={isHidden ? "Show segment" : "Hide segment"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleVisibility(segment);
+                }}
               >
-                <EyeOffIcon className="h-5 w-5" />
-              </div>
+                {isHidden ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+              </button>
             )}
             <Button
               variant="ghost"
@@ -227,6 +234,8 @@ export default function SegmentsPage() {
     locations: [],
     types: [],
     dateRange: { start: "", end: "" },
+    costMin: null,
+    costMax: null,
     showHidden: false,
   });
   const [sortState, setSortState] = useState<SegmentSortValue | null>(null);
@@ -390,6 +399,18 @@ export default function SegmentsPage() {
     }
   }, [tripId, selectedSegmentIds, fetchSegments]);
 
+  const handleToggleVisibility = useCallback(async (segment: Segment) => {
+    if (!tripId) return;
+    const isHidden = segment.isUiVisible === false;
+    if (!isHidden && !window.confirm(`Hide "${segment.name}"?`)) return;
+    try {
+      await segmentsApi.batchSetVisibility(tripId, [segment.id], isHidden);
+      fetchSegments();
+    } catch (err) {
+      console.error("Toggle visibility failed:", err);
+    }
+  }, [tripId, fetchSegments]);
+
   const handleBatchSetVisibility = useCallback(async (isVisible: boolean) => {
     if (!tripId || selectedSegmentIds.size === 0) return;
     try {
@@ -471,6 +492,9 @@ export default function SegmentsPage() {
     }
   }, [segments])
 
+  const costChips = useMemo(() => computeCostChips(segments.map((s) => Number(s.cost) || 0)), [segments])
+  const tripCurrencyLabel = useMemo(() => currencies.find((c) => c.id === tripCurrencyId)?.shortName ?? "", [currencies, tripCurrencyId])
+
   const effectiveDisplayCurrencyId = displayCurrencyId ?? tripCurrencyId ?? userPreferredCurrencyId ?? null
   const selectedCurrencyMeta = useMemo(
     () => currencies.find((c) => c.id === effectiveDisplayCurrencyId) ?? null,
@@ -541,19 +565,6 @@ export default function SegmentsPage() {
             <ListIcon className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Options</span>
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-label="Toggle filters"
-            onClick={() => setFilterOpen((prev) => !prev)}
-            className="relative"
-          >
-            <SlidersHorizontal
-              className={cn("h-4 w-4 transition-transform", filterOpen ? "text-primary rotate-90" : "")}
-            />
-            {hasActiveFilters ? <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-primary" /> : null}
-          </Button>
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm">
@@ -620,8 +631,11 @@ export default function SegmentsPage() {
           uniqueEndDates={dateBounds.uniqueEndDates}
           totalCount={segments.length}
           filteredCount={filteredSegments.length}
-          open={filterOpen}
-          onOpenChange={setFilterOpen}
+          hiddenCount={segments.filter((s) => s.isUiVisible === false).length}
+          costMinChips={costChips.minChips}
+          costMaxChips={costChips.maxChips}
+          allSameCost={costChips.allSameCost}
+          currencyLabel={tripCurrencyLabel}
         />
 
 
@@ -644,9 +658,10 @@ export default function SegmentsPage() {
                     segmentType={segmentType}
                     userPreferredOffset={userPreferredOffset}
                     onEdit={handleEditSegment}
+                    onToggleVisibility={handleToggleVisibility}
                     connectedOptions={connected}
                     isLoadingConnections={Boolean(connectionsLoading[segment.id])}
-                    showVisibilityIndicator={filterState.showHidden}
+                    showVisibilityIndicator
                     displayCurrencyId={effectiveDisplayCurrencyId}
                     tripCurrencyId={tripCurrencyId}
                     currencies={currencies}

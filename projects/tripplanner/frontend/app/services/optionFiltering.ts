@@ -1,6 +1,7 @@
 import type { OptionApi, SegmentApi } from "../types/models"
 import type { OptionFilterValue } from "../components/filters/OptionFilterPanel"
 import type { OptionSortValue } from "../components/sorting/optionSortTypes"
+import { computeCostChips } from "../components/filters/costChips"
 
 const getLocationLabel = (loc: any | null) => {
   if (!loc) return ""
@@ -42,6 +43,9 @@ export const buildOptionMetadata = (options: OptionApi[], segments: SegmentApi[]
     }
   })
 
+  const costs = options.map((o) => o.totalCost ?? 0)
+  const costChips = computeCostChips(costs)
+
   return {
     locations: Array.from(locations),
     uniqueStartDates: Array.from(startDateSet).sort(),
@@ -50,6 +54,7 @@ export const buildOptionMetadata = (options: OptionApi[], segments: SegmentApi[]
       min: minDate ? new Date(minDate).toISOString().split("T")[0] : "",
       max: maxDate ? new Date(maxDate).toISOString().split("T")[0] : "",
     },
+    costChips,
   }
 }
 
@@ -95,6 +100,10 @@ export const filterOptions = (
       })
       if (!matchesDate) return false
     }
+
+    const cost = option.totalCost ?? 0
+    if (filters.costMin != null && cost < filters.costMin) return false
+    if (filters.costMax != null && cost > filters.costMax) return false
 
     return true
   })

@@ -44,7 +44,7 @@ import { toLocationDto, normalizeLocation } from "../lib/mapping"
 import { Collapsible } from "../components/Collapsible"
 import { cn } from "../lib/utils"
 import { TitleTokens } from "../components/TitleTokens"
-import { OptionFilterPanel, type OptionFilterValue } from "../components/filters/OptionFilterPanel"
+import { OptionFilterPanel, countOptionActiveFilters, type OptionFilterValue } from "../components/filters/OptionFilterPanel"
 import type { OptionSortValue } from "../components/sorting/optionSortTypes"
 
 // types
@@ -246,10 +246,12 @@ export default function SegmentModal({
   const [optionFilterState, setOptionFilterState] = useState<OptionFilterValue>({
     locations: [],
     dateRange: { start: "", end: "" },
+    costMin: null,
+    costMax: null,
     showHidden: false,
   })
   const [optionSortState, setOptionSortState] = useState<OptionSortValue | null>(null)
-  const [optionFilterOpen, setOptionFilterOpen] = useState(false)
+  const [optionFilterOpen, setOptionFilterOpen] = useState(true)
   const [optionConnections, setOptionConnections] = useState<Record<number, SegmentApi[]>>({})
   const [showDescriptionModal, setShowDescriptionModal] = useState(false)
   const [descriptionDraft, setDescriptionDraft] = useState("")
@@ -843,12 +845,16 @@ type SegmentBaseline = {
       setOptionFilterState({
         locations: [...presetFilters.locations],
         dateRange: { ...presetFilters.dateRange },
+        costMin: presetFilters.costMin ?? null,
+        costMax: presetFilters.costMax ?? null,
         showHidden: presetFilters.showHidden,
       })
     } else {
       setOptionFilterState({
         locations: [],
         dateRange: { start: "", end: "" },
+        costMin: null,
+        costMax: null,
         showHidden: false,
       })
     }
@@ -865,6 +871,8 @@ type SegmentBaseline = {
     setOptionFilterState({
       locations: [],
       dateRange: { start: "", end: "" },
+      costMin: null,
+      costMax: null,
       showHidden: false,
     })
     setOptionSortState(null)
@@ -1472,21 +1480,7 @@ type SegmentBaseline = {
                 open={connectedOptionsOpen}
                 onToggle={() => setConnectedOptionsOpen((o) => !o)}
               >
-                <div className="pt-4">
-                  <div className="flex justify-end mb-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      aria-label="Toggle filters"
-                      onClick={() => setOptionFilterOpen((prev) => !prev)}
-                      className="relative"
-                    >
-                      <SlidersHorizontal
-                        className={cn("h-4 w-4 transition-transform", optionFilterOpen ? "text-primary rotate-90" : "")}
-                      />
-                    </Button>
-                  </div>
+                <div className="pt-4 flex flex-col flex-1 min-h-0">
                   <OptionFilterPanel
                     value={optionFilterState}
                     onChange={setOptionFilterState}
@@ -1499,11 +1493,10 @@ type SegmentBaseline = {
                     uniqueEndDates={optionMetadata.uniqueEndDates}
                     totalCount={options.length}
                     filteredCount={filteredOptionsForDisplay.length}
-                    open={optionFilterOpen}
-                    onOpenChange={setOptionFilterOpen}
+                    hiddenCount={options.filter((o) => o.isUiVisible === false).length}
                     className="mb-3"
                   />
-                  <ScrollArea className="h-[150px] border rounded-md p-3">
+                  <ScrollArea className="flex-1 min-h-[150px] border rounded-md p-3">
                     {filteredOptionsForDisplay.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No options available.</p>
                     ) : (

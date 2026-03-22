@@ -34,7 +34,7 @@ import {
 } from "../utils/formatters";
 import { formatCurrencyAmount, formatConvertedAmount } from "../utils/currency";
 import { optionsApi, segmentsApi } from "../utils/apiClient";
-import { SegmentFilterPanel, type SegmentFilterValue } from "../components/filters/SegmentFilterPanel"
+import { SegmentFilterPanel, countSegmentActiveFilters, type SegmentFilterValue } from "../components/filters/SegmentFilterPanel"
 import type { SegmentSortValue } from "../components/sorting/segmentSortTypes"
 import { applySegmentFilters, buildSegmentMetadata } from "../services/segmentFiltering"
 
@@ -101,10 +101,12 @@ export default function OptionModal({
     locations: [],
     types: [],
     dateRange: { start: "", end: "" },
+    costMin: null,
+    costMax: null,
     showHidden: false,
   })
   const [segmentSortState, setSegmentSortState] = useState<SegmentSortValue | null>(null)
-  const [segmentFilterOpen, setSegmentFilterOpen] = useState(false)
+  const [segmentFilterOpen, setSegmentFilterOpen] = useState(true)
   const resolvedDisplayCurrencyId = displayCurrencyId ?? tripCurrencyId ?? null;
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false)
   const skipClosePromptRef = useRef(false)
@@ -221,6 +223,8 @@ export default function OptionModal({
         locations: [...initialFilters.locations],
         types: [...initialFilters.types],
         dateRange: { ...initialFilters.dateRange },
+        costMin: initialFilters.costMin ?? null,
+        costMax: initialFilters.costMax ?? null,
         showHidden: initialFilters.showHidden,
       })
     } else {
@@ -228,6 +232,8 @@ export default function OptionModal({
         locations: [],
         types: [],
         dateRange: { start: "", end: "" },
+        costMin: null,
+        costMax: null,
         showHidden: false,
       })
     }
@@ -595,20 +601,6 @@ export default function OptionModal({
                   onToggle={() => setConnectionsOpen((prev) => !prev)}
                 >
                   <div className="space-y-4 pt-4">
-                    <div className="flex justify-end">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        aria-label="Toggle filters"
-                        onClick={() => setSegmentFilterOpen((prev) => !prev)}
-                        className="relative"
-                      >
-                        <SlidersHorizontal
-                          className={cn("h-4 w-4 transition-transform", segmentFilterOpen ? "text-primary rotate-90" : "")}
-                        />
-                      </Button>
-                    </div>
                     <SegmentFilterPanel
                       value={segmentFilterState}
                       onChange={setSegmentFilterState}
@@ -622,8 +614,7 @@ export default function OptionModal({
                       uniqueEndDates={segmentFilterMetadata.uniqueEndDates}
                       totalCount={segments.length}
                       filteredCount={filteredSegmentsForDisplay.length}
-                      open={segmentFilterOpen}
-                      onOpenChange={setSegmentFilterOpen}
+                      hiddenCount={segments.filter((s) => s.isUiVisible === false).length}
                     />
                     <ScrollArea className="h-[320px] border rounded-md p-3">
                       {filteredSegmentsForDisplay.length === 0 ? (

@@ -52,6 +52,8 @@ export default function BatchConnectSegmentModal({
     locations: [],
     types: [],
     dateRange: { start: "", end: "" },
+    costMin: null,
+    costMax: null,
     showHidden: false,
   });
   const [sortState, setSortState] = useState<SegmentSortValue | null>(null);
@@ -137,7 +139,7 @@ export default function BatchConnectSegmentModal({
 
   const handleClose = () => {
     setSelectedSegmentIds([]);
-    setFilterState({ locations: [], types: [], dateRange: { start: "", end: "" }, showHidden: false });
+    setFilterState({ locations: [], types: [], dateRange: { start: "", end: "" }, costMin: null, costMax: null, showHidden: false });
     setSortState(null);
     setFilterOpen(false);
     setConnect(true);
@@ -223,8 +225,6 @@ export default function BatchConnectSegmentModal({
             availableTypes={filterMetadata.types}
             minDate={filterMetadata.dateBounds.min}
             maxDate={filterMetadata.dateBounds.max}
-            open={filterOpen}
-            onOpenChange={setFilterOpen}
           />
           <ScrollArea className="h-[calc(100%-80px)] border rounded-md p-3">
             {filteredSegments.length === 0 ? (

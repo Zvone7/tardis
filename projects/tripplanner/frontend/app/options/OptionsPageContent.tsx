@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
-import { PlusIcon, LayoutIcon, EditIcon, EyeOffIcon, CombineIcon, LinkIcon, MoreVerticalIcon, SlidersHorizontal } from "lucide-react";
+import { PlusIcon, LayoutIcon, EditIcon, EyeIcon, EyeOffIcon, CombineIcon, LinkIcon, MoreVerticalIcon, SlidersHorizontal } from "lucide-react";
 import SelectPopupMenu from "../components/SelectPopupMenu";
 import { Popover, PopoverTrigger, PopoverContent } from "../components/ui/popover";
 import { Checkbox } from "../components/ui/checkbox";
@@ -18,6 +18,7 @@ import { OptionFilterPanel, useOptionFilterHasFilters, type OptionFilterValue } 
 import type { SegmentFilterValue } from "../components/filters/SegmentFilterPanel";
 import type { OptionSortValue } from "../components/sorting/optionSortTypes";
 import { applyOptionFilters, buildOptionMetadata } from "../services/optionFiltering";
+import { computeCostChips } from "../components/filters/costChips";
 import { cn } from "../lib/utils";
 import { optionsApi, segmentsApi, tripsApi } from "../utils/apiClient";
 import { CurrencyDropdown } from "../components/CurrencyDropdown";
@@ -183,13 +184,10 @@ function CostSummary({
     <div className="space-y-4">
       <div className="space-y-1">
         <div className="flex items-baseline justify-between gap-2">
-          <div className="text-sm font-medium">Costs</div>
-          <div className="text-sm text-muted-foreground">
-            <span className="font-medium">{totalLabel}</span>
-            {originalTotalLabel ? (
-              <span className="font-medium text-xs text-muted-foreground ml-2">({originalTotalLabel})</span>
-            ) : null}
-          </div>
+          <div className="text-lg font-semibold">{totalLabel}</div>
+          {originalTotalLabel ? (
+            <span className="text-sm text-muted-foreground">({originalTotalLabel})</span>
+          ) : null}
         </div>
         <div className="text-xs text-muted-foreground">
           {option.totalDays} {option.totalDays === 1 ? "day" : "days"} ({perDayLabel} per day)
@@ -227,6 +225,7 @@ type ConnectedSegment = SegmentApi & { segmentType: SegmentType };
 function OptionCard({
   option,
   onEdit,
+  onToggleVisibility,
   showVisibilityIndicator,
   displayCurrencyId,
   tripCurrencyId,
@@ -239,6 +238,7 @@ function OptionCard({
 }: {
   option: OptionApi;
   onEdit: (option: OptionApi) => void;
+  onToggleVisibility: (option: OptionApi) => void;
   showVisibilityIndicator: boolean;
   displayCurrencyId: number | null;
   tripCurrencyId: number | null;
@@ -286,15 +286,6 @@ function OptionCard({
                 <CardTitle className="text-lg font-semibold tracking-tight">
                   {option.name}
                 </CardTitle>
-                {showVisibilityIndicator && isHidden && (
-                  <div
-                    className="rounded-full border p-1 bg-muted-foreground/20 text-muted-foreground"
-                    title="Hidden from UI"
-                    aria-label="Hidden from UI"
-                  >
-                    <EyeOffIcon className="h-4 w-4" />
-                  </div>
-                )}
               </div>
 
               <div className="mt-1 text-sm text-muted-foreground">
@@ -304,7 +295,7 @@ function OptionCard({
 
               {sortedSegments.length > 0 && (
                 <div className="mt-2 flex items-center gap-1">
-                  {sortedSegments.map((seg, i) =>
+                  {(sortedSegments.length <= 6 ? sortedSegments : sortedSegments.slice(0, 5)).map((seg, i) =>
                     seg.segmentType?.iconSvg ? (
                       <span
                         key={`${seg.id}-${i}`}
@@ -319,21 +310,43 @@ function OptionCard({
                       </span>
                     ) : null
                   )}
+                  {sortedSegments.length > 6 && (
+                    <span
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-muted-foreground shadow-sm ring-1 ring-black/5 text-xs font-medium"
+                      title={`${sortedSegments.length - 5} more segments`}
+                    >
+                      +{sortedSegments.length - 5}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="shrink-0 ml-2 md:hidden"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit(option);
-              }}
-              aria-label="Edit option"
-            >
-              <EditIcon className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1 shrink-0 ml-auto">
+              {showVisibilityIndicator && (
+                <button
+                  type="button"
+                  className="rounded-full p-1 text-muted-foreground hover:text-foreground transition-colors"
+                  title={isHidden ? "Show option" : "Hide option"}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleVisibility(option);
+                  }}
+                >
+                  {isHidden ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+                </button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(option);
+                }}
+                aria-label="Edit option"
+              >
+                <EditIcon className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -376,6 +389,8 @@ export default function OptionsPageContent() {
   const [filterState, setFilterState] = useState<OptionFilterValue>({
     locations: [],
     dateRange: { start: "", end: "" },
+    costMin: null,
+    costMax: null,
     showHidden: false,
   });
   const [sortState, setSortState] = useState<OptionSortValue | null>(null);
@@ -545,6 +560,9 @@ export default function OptionsPageContent() {
     return buildOptionMetadata(options, segSource)
   }, [options, connectedSegmentList, segments])
 
+  const costChips = useMemo(() => computeCostChips(options.map((o) => o.totalCost ?? 0)), [options])
+  const tripCurrencyLabel = useMemo(() => currencies.find((c) => c.id === tripCurrencyId)?.shortName ?? "", [currencies, tripCurrencyId])
+
   const locationOptions = useMemo(() => {
     const labels = new Set<string>()
     const addLocations = (segment: SegmentApi) => {
@@ -590,6 +608,18 @@ export default function OptionsPageContent() {
       setIsBatchDeleting(false);
     }
   }, [tripId, selectedOptionIds, fetchOptions]);
+
+  const handleToggleVisibility = useCallback(async (option: OptionApi) => {
+    if (!tripId) return;
+    const isHidden = option.isUiVisible === false;
+    if (!isHidden && !window.confirm(`Hide "${option.name}"?`)) return;
+    try {
+      await optionsApi.batchSetVisibility(tripId, [option.id], isHidden);
+      fetchOptions();
+    } catch (err) {
+      console.error("Toggle visibility failed:", err);
+    }
+  }, [tripId, fetchOptions]);
 
   const handleBatchSetVisibility = useCallback(async (isVisible: boolean) => {
     if (!tripId || selectedOptionIds.size === 0) return;
@@ -651,6 +681,8 @@ export default function OptionsPageContent() {
       locations: [...filterState.locations],
       types: [],
       dateRange: { ...filterState.dateRange },
+      costMin: null,
+      costMax: null,
       showHidden: filterState.showHidden,
     }),
     [filterState],
@@ -697,19 +729,6 @@ export default function OptionsPageContent() {
           <Button variant="outline" size="sm" onClick={() => router.push(`/segments?tripId=${tripId}`)}>
             <LayoutIcon className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Segments</span>
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-label="Toggle filters"
-            onClick={() => setFilterOpen((prev) => !prev)}
-            className="relative"
-          >
-            <SlidersHorizontal
-              className={cn("h-4 w-4 transition-transform", filterOpen ? "text-primary rotate-90" : "")}
-            />
-            {hasActiveFilters ? <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-primary" /> : null}
           </Button>
           <Popover>
             <PopoverTrigger asChild>
@@ -769,8 +788,11 @@ export default function OptionsPageContent() {
           uniqueEndDates={optionMetadata.uniqueEndDates}
           totalCount={options.length}
           filteredCount={sortedOptions.length}
-          open={filterOpen}
-          onOpenChange={setFilterOpen}
+          hiddenCount={options.filter((o) => o.isUiVisible === false).length}
+          costMinChips={costChips.minChips}
+          costMaxChips={costChips.maxChips}
+          allSameCost={costChips.allSameCost}
+          currencyLabel={tripCurrencyLabel}
         />
 
 
@@ -788,7 +810,8 @@ export default function OptionsPageContent() {
                   key={option.id}
                   option={option}
                   onEdit={handleEditOption}
-                  showVisibilityIndicator={filterState.showHidden}
+                  onToggleVisibility={handleToggleVisibility}
+                  showVisibilityIndicator
                   displayCurrencyId={effectiveDisplayCurrencyId}
                   tripCurrencyId={tripCurrencyId}
                   currencies={currencies}
