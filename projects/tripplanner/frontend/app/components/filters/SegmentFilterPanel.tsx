@@ -111,12 +111,13 @@ export function SegmentFilterPanel({
   return (
     <div className={cn("w-full", className)}>
       {totalCount != null && filteredCount != null && (() => {
-        const visibleTotal = value.showHidden ? totalCount : totalCount - (hiddenCount ?? 0)
-        const isFiltered = filteredCount !== visibleTotal
+        const baseCount = value.showHidden ? totalCount : totalCount - (hiddenCount ?? 0)
+        const isFiltered = filteredCount < baseCount
+        const hiddenLabel = !value.showHidden && (hiddenCount ?? 0) > 0 ? ` (${hiddenCount} hidden)` : ""
         return (
           <div className="w-full text-center mb-2">
             <span className="text-sm text-muted-foreground">
-              {isFiltered ? `${filteredCount} of ${visibleTotal}` : visibleTotal} segment{visibleTotal !== 1 ? "s" : ""}
+              {isFiltered ? `${filteredCount} of ` : ""}{baseCount} segment{baseCount !== 1 ? "s" : ""}{hiddenLabel}
             </span>
           </div>
         )
