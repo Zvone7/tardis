@@ -618,6 +618,10 @@ export default function OptionModal({
                       availableTypes={segmentFilterMetadata.types}
                       minDate={segmentFilterMetadata.dateBounds.min}
                       maxDate={segmentFilterMetadata.dateBounds.max}
+                      uniqueStartDates={segmentFilterMetadata.uniqueStartDates}
+                      uniqueEndDates={segmentFilterMetadata.uniqueEndDates}
+                      totalCount={segments.length}
+                      filteredCount={filteredSegmentsForDisplay.length}
                       open={segmentFilterOpen}
                       onOpenChange={setSegmentFilterOpen}
                     />

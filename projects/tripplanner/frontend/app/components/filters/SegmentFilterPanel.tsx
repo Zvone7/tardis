@@ -25,6 +25,10 @@ interface SegmentFilterPanelProps {
   availableTypes: SegmentType[]
   minDate?: string
   maxDate?: string
+  uniqueStartDates?: string[]
+  uniqueEndDates?: string[]
+  totalCount?: number
+  filteredCount?: number
   className?: string
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -46,6 +50,10 @@ export function SegmentFilterPanel({
   availableTypes,
   minDate,
   maxDate,
+  uniqueStartDates,
+  uniqueEndDates,
+  totalCount,
+  filteredCount,
   className,
   open,
   onOpenChange,
@@ -60,6 +68,11 @@ export function SegmentFilterPanel({
 
   return (
     <div className={cn("space-y-4 rounded-md border p-4", className)}>
+      {totalCount != null && filteredCount != null && (
+        <span className="text-sm text-muted-foreground">
+          Showing {filteredCount} of {totalCount}
+        </span>
+      )}
       <div className="space-y-3">
         <div>
           <Label className="text-sm font-medium mb-1.5 block">Locations</Label>
@@ -76,6 +89,8 @@ export function SegmentFilterPanel({
         onChange={(dateRange) => update({ dateRange })}
         minDate={minDate}
         maxDate={maxDate}
+        uniqueStartDates={uniqueStartDates}
+        uniqueEndDates={uniqueEndDates}
       />
 
       <div>
@@ -108,23 +123,25 @@ export function SegmentFilterPanel({
           <span>Show hidden segments</span>
           <Switch checked={value.showHidden} onCheckedChange={(checked) => update({ showHidden: Boolean(checked) })} />
         </div>
-        {hasFilters && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              onChange({
-                locations: [],
-                types: [],
-                dateRange: { start: minDate ?? "", end: maxDate ?? "" },
-                showHidden: value.showHidden,
-              })
-            }
-          >
-            Reset filters
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {hasFilters && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                onChange({
+                  locations: [],
+                  types: [],
+                  dateRange: { start: minDate ?? "", end: maxDate ?? "" },
+                  showHidden: value.showHidden,
+                })
+              }
+            >
+              Reset filters
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   )

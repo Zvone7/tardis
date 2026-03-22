@@ -13,6 +13,8 @@ const getLocationLabel = (loc: any | null) => {
 export const buildSegmentMetadata = (segments: Segment[], segmentTypes: SegmentType[]) => {
   const locationSet = new Set<string>()
   const typeSet = new Set<number>()
+  const startDateSet = new Set<string>()
+  const endDateSet = new Set<string>()
   let minDate: number | null = null
   let maxDate: number | null = null
 
@@ -26,13 +28,21 @@ export const buildSegmentMetadata = (segments: Segment[], segmentTypes: SegmentT
     typeSet.add(segment.segmentTypeId)
     const startTs = new Date(segment.startDateTimeUtc).getTime()
     const endTs = new Date(segment.endDateTimeUtc).getTime()
-    if (!Number.isNaN(startTs)) minDate = minDate === null ? startTs : Math.min(minDate, startTs)
-    if (!Number.isNaN(endTs)) maxDate = maxDate === null ? endTs : Math.max(maxDate, endTs)
+    if (!Number.isNaN(startTs)) {
+      minDate = minDate === null ? startTs : Math.min(minDate, startTs)
+      startDateSet.add(new Date(startTs).toISOString().split("T")[0])
+    }
+    if (!Number.isNaN(endTs)) {
+      maxDate = maxDate === null ? endTs : Math.max(maxDate, endTs)
+      endDateSet.add(new Date(endTs).toISOString().split("T")[0])
+    }
   })
 
   return {
     locations: Array.from(locationSet),
     types: segmentTypes.filter((type) => typeSet.has(type.id)),
+    uniqueStartDates: Array.from(startDateSet).sort(),
+    uniqueEndDates: Array.from(endDateSet).sort(),
     dateBounds: {
       min: minDate ? new Date(minDate).toISOString().split("T")[0] : "",
       max: maxDate ? new Date(maxDate).toISOString().split("T")[0] : "",
@@ -65,8 +75,8 @@ export const filterSegments = (segments: Segment[], filters: SegmentFilterValue)
     if (startDate || endDate) {
       const segmentStart = new Date(segment.startDateTimeUtc)
       const segmentEnd = new Date(segment.endDateTimeUtc)
-      if (startDate && segmentStart < startDate && segmentEnd < startDate) return false
-      if (endDate && segmentStart > endDate && segmentEnd > endDate) return false
+      if (startDate && segmentStart < startDate) return false
+      if (endDate && segmentEnd > endDate) return false
     }
 
     return true

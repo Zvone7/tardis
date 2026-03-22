@@ -541,9 +541,9 @@ export default function OptionsPageContent() {
   }, [connectedSegments])
 
   const optionMetadata = useMemo(() => {
-    const source = connectedSegmentList.length ? connectedSegmentList : segments
-    return buildOptionMetadata(source)
-  }, [connectedSegmentList, segments])
+    const segSource = connectedSegmentList.length ? connectedSegmentList : segments
+    return buildOptionMetadata(options, segSource)
+  }, [options, connectedSegmentList, segments])
 
   const locationOptions = useMemo(() => {
     const labels = new Set<string>()
@@ -765,6 +765,10 @@ export default function OptionsPageContent() {
           availableLocations={locationOptions}
           minDate={optionMetadata.dateBounds.min}
           maxDate={optionMetadata.dateBounds.max}
+          uniqueStartDates={optionMetadata.uniqueStartDates}
+          uniqueEndDates={optionMetadata.uniqueEndDates}
+          totalCount={options.length}
+          filteredCount={sortedOptions.length}
           open={filterOpen}
           onOpenChange={setFilterOpen}
         />

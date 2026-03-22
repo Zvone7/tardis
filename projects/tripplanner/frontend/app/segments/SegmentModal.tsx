@@ -342,9 +342,9 @@ export default function SegmentModal({
   ])
   const optionMetadata = useMemo(() => {
     const flattened = Object.values(optionConnections).flat()
-    const source = flattened.length ? flattened : tripSegments
-    return buildOptionMetadata(source)
-  }, [optionConnections, tripSegments])
+    const segSource = flattened.length ? flattened : tripSegments
+    return buildOptionMetadata(options, segSource)
+  }, [options, optionConnections, tripSegments])
   const generalCostLabel = useMemo(() => {
     if (formattedSegmentCost) return formattedSegmentCost
     if (hasCostValue) return parsedCost.toString()
@@ -1495,6 +1495,10 @@ type SegmentBaseline = {
                     availableLocations={optionMetadata.locations}
                     minDate={optionMetadata.dateBounds.min}
                     maxDate={optionMetadata.dateBounds.max}
+                    uniqueStartDates={optionMetadata.uniqueStartDates}
+                    uniqueEndDates={optionMetadata.uniqueEndDates}
+                    totalCount={options.length}
+                    filteredCount={filteredOptionsForDisplay.length}
                     open={optionFilterOpen}
                     onOpenChange={setOptionFilterOpen}
                     className="mb-3"

@@ -9,8 +9,10 @@ const getLocationLabel = (loc: any | null) => {
   return country ? `${name}, ${country}` : name ?? ""
 }
 
-export const buildOptionMetadata = (segments: SegmentApi[]) => {
+export const buildOptionMetadata = (options: OptionApi[], segments: SegmentApi[]) => {
   const locations = new Set<string>()
+  const startDateSet = new Set<string>()
+  const endDateSet = new Set<string>()
   let minDate: number | null = null
   let maxDate: number | null = null
 
@@ -21,14 +23,29 @@ export const buildOptionMetadata = (segments: SegmentApi[]) => {
     const endLabel = getLocationLabel(endLoc)
     if (startLabel) locations.add(startLabel)
     if (endLabel) locations.add(endLabel)
-    const start = new Date(segment.startDateTimeUtc).getTime()
-    const end = new Date(segment.endDateTimeUtc).getTime()
-    if (!Number.isNaN(start)) minDate = minDate === null ? start : Math.min(minDate, start)
-    if (!Number.isNaN(end)) maxDate = maxDate === null ? end : Math.max(maxDate, end)
+  })
+
+  options.forEach((option) => {
+    if (option.startDateTimeUtc) {
+      const start = new Date(option.startDateTimeUtc).getTime()
+      if (!Number.isNaN(start)) {
+        minDate = minDate === null ? start : Math.min(minDate, start)
+        startDateSet.add(new Date(start).toISOString().split("T")[0])
+      }
+    }
+    if (option.endDateTimeUtc) {
+      const end = new Date(option.endDateTimeUtc).getTime()
+      if (!Number.isNaN(end)) {
+        maxDate = maxDate === null ? end : Math.max(maxDate, end)
+        endDateSet.add(new Date(end).toISOString().split("T")[0])
+      }
+    }
   })
 
   return {
     locations: Array.from(locations),
+    uniqueStartDates: Array.from(startDateSet).sort(),
+    uniqueEndDates: Array.from(endDateSet).sort(),
     dateBounds: {
       min: minDate ? new Date(minDate).toISOString().split("T")[0] : "",
       max: maxDate ? new Date(maxDate).toISOString().split("T")[0] : "",
@@ -68,13 +85,12 @@ export const filterOptions = (
     }
 
     if (startDate || endDate) {
-      if (connected === undefined) return true
-      if (connectedList.length === 0) return false
+      if (connected === undefined || connectedList.length === 0) return true
       const matchesDate = connectedList.some((segment) => {
         const segmentStart = new Date(segment.startDateTimeUtc)
         const segmentEnd = new Date(segment.endDateTimeUtc)
-        if (startDate && segmentStart < startDate && segmentEnd < startDate) return false
-        if (endDate && segmentStart > endDate && segmentEnd > endDate) return false
+        if (startDate && segmentStart < startDate) return false
+        if (endDate && segmentEnd > endDate) return false
         return true
       })
       if (!matchesDate) return false

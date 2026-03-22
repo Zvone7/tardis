@@ -446,18 +446,28 @@ export default function SegmentsPage() {
   }, [segments, segmentTypes])
 
   const dateBounds = useMemo(() => {
-    if (!segments.length) return { min: "", max: "" }
+    if (!segments.length) return { min: "", max: "", uniqueStartDates: [] as string[], uniqueEndDates: [] as string[] }
     let min: number | null = null
     let max: number | null = null
+    const startDateSet = new Set<string>()
+    const endDateSet = new Set<string>()
     segments.forEach((segment) => {
       const start = new Date(segment.startDateTimeUtc).getTime()
       const end = new Date(segment.endDateTimeUtc).getTime()
-      if (!Number.isNaN(start)) min = min === null ? start : Math.min(min, start)
-      if (!Number.isNaN(end)) max = max === null ? end : Math.max(max, end)
+      if (!Number.isNaN(start)) {
+        min = min === null ? start : Math.min(min, start)
+        startDateSet.add(new Date(start).toISOString().split("T")[0])
+      }
+      if (!Number.isNaN(end)) {
+        max = max === null ? end : Math.max(max, end)
+        endDateSet.add(new Date(end).toISOString().split("T")[0])
+      }
     })
     return {
       min: min !== null ? new Date(min).toISOString().split("T")[0] : "",
       max: max !== null ? new Date(max).toISOString().split("T")[0] : "",
+      uniqueStartDates: Array.from(startDateSet).sort(),
+      uniqueEndDates: Array.from(endDateSet).sort(),
     }
   }, [segments])
 
@@ -606,6 +616,10 @@ export default function SegmentsPage() {
           availableTypes={availableSegmentTypes}
           minDate={dateBounds.min}
           maxDate={dateBounds.max}
+          uniqueStartDates={dateBounds.uniqueStartDates}
+          uniqueEndDates={dateBounds.uniqueEndDates}
+          totalCount={segments.length}
+          filteredCount={filteredSegments.length}
           open={filterOpen}
           onOpenChange={setFilterOpen}
         />
