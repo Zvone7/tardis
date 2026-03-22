@@ -2,7 +2,7 @@ import type { ReactNode } from "react"
 import { cn } from "../../lib/utils"
 import * as PopoverPrimitive from "@radix-ui/react-popover"
 
-interface FilterSectionProps {
+export interface FilterSectionProps {
   label: string
   icon: ReactNode
   expanded?: boolean

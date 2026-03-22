@@ -1,10 +1,11 @@
 import { useState } from "react"
 import { Button } from "../ui/button"
-import { Eye, EyeOff, MapPin, LayoutIcon, ArrowUpDown, RotateCcw, TrendingUp, TrendingDown } from "lucide-react"
+import { Eye, EyeOff, MapPin, LayoutIcon, ArrowUpDown, RotateCcw } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { LocationFilter } from "./LocationFilter"
 import { SegmentTypeFilter } from "./SegmentTypeFilter"
 import { DateRangeFilter, type DateRangeValue } from "./DateRangeFilter"
+import { CostDualFilter } from "./CostDualFilter"
 import { FilterSection } from "./FilterSection"
 import type { SegmentType } from "../../types/models"
 import type { SegmentSortValue } from "../sorting/segmentSortTypes"
@@ -19,7 +20,7 @@ export interface SegmentFilterValue {
   showHidden: boolean
 }
 
-type Section = "locations" | "types" | "start" | "end" | "costMin" | "costMax" | "sort" | null
+type Section = "locations" | "types" | "dates" | "cost" | "sort" | null
 
 interface SegmentFilterPanelProps {
   value: SegmentFilterValue
@@ -108,7 +109,7 @@ export function SegmentFilterPanel({
   }
 
   return (
-    <div className={cn("max-w-[1000px]", className)}>
+    <div className={cn("w-full", className)}>
       {totalCount != null && filteredCount != null && (() => {
         const visibleTotal = value.showHidden ? totalCount : totalCount - (hiddenCount ?? 0)
         const isFiltered = filteredCount !== visibleTotal
@@ -173,8 +174,19 @@ export function SegmentFilterPanel({
 
         <div className="flex-1" />
 
-        {/* Right: Filters + Reset */}
+        {/* Right: Reset + Filters */}
         <div className="flex items-center gap-2 flex-wrap justify-end">
+
+      {hasFilters && (
+        <button
+          type="button"
+          title="Reset all filters"
+          className="inline-flex items-center justify-center cursor-pointer p-1 rounded text-red-900 dark:text-red-300 hover:opacity-100 transition-colors opacity-50"
+          onClick={handleReset}
+        >
+          <RotateCcw className="h-4 w-4" />
+        </button>
+      )}
 
       <FilterSection
         label="Locations"
@@ -223,99 +235,25 @@ export function SegmentFilterPanel({
         maxDate={maxDate}
         uniqueStartDates={uniqueStartDates}
         uniqueEndDates={uniqueEndDates}
-        expandedRow={activeSection === "start" ? "start" : activeSection === "end" ? "end" : null}
-        onExpandRow={(row) => toggle(row)}
+        expanded={activeSection === "dates"}
+        onToggle={() => toggle("dates")}
         shakeKey={shakeKey}
       />
 
-            <FilterSection
-          label={`Min cost${currencyLabel ? ` (${currencyLabel})` : ""}`}
-          icon={<TrendingUp className="h-6 w-6" />}
-          shakeKey={shakeKey}
-          expanded={activeSection === "costMin"}
-          onToggle={() => toggle("costMin")}
-          selectedCount={value.costMin != null ? (costMinChips ?? []).filter((c) => c >= value.costMin!).length : undefined}
-          totalCount={value.costMin != null ? (costMinChips ?? []).length : undefined}
-          showCountWhenAll={false}
-          showCountWhenNone={false}
-          onReset={() => update({ costMin: null })}
-        >
-          {allSameCost ? (
-            <span className="text-xs text-muted-foreground">All same cost</span>
-          ) : (costMinChips ?? []).map((amount, idx, arr) => {
-            const isSelected = value.costMin == null || amount >= value.costMin
-            return (
-              <Button
-                key={amount}
-                variant={isSelected ? "default" : "outline"}
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (isSelected) {
-                    // Deselect: move boundary to next chip (or reset if last)
-                    const nextIdx = idx + 1
-                    update({ costMin: nextIdx < arr.length ? arr[nextIdx] : null })
-                  } else {
-                    // Select: move boundary down to this chip
-                    update({ costMin: amount })
-                  }
-                }}
-              >
-                ≥ {amount.toLocaleString()}
-              </Button>
-            )
-          })}
-        </FilterSection>
+      <CostDualFilter
+        costMin={value.costMin}
+        costMax={value.costMax}
+        onCostMinChange={(costMin) => update({ costMin })}
+        onCostMaxChange={(costMax) => update({ costMax })}
+        costMinChips={costMinChips}
+        costMaxChips={costMaxChips}
+        allSameCost={allSameCost}
+        currencyLabel={currencyLabel}
+        expanded={activeSection === "cost"}
+        onToggle={() => toggle("cost")}
+        shakeKey={shakeKey}
+      />
 
-      <FilterSection
-          label={`Max cost${currencyLabel ? ` (${currencyLabel})` : ""}`}
-          icon={<TrendingDown className="h-6 w-6" />}
-          shakeKey={shakeKey}
-          expanded={activeSection === "costMax"}
-          onToggle={() => toggle("costMax")}
-          selectedCount={value.costMax != null ? (costMaxChips ?? []).filter((c) => c <= value.costMax!).length : undefined}
-          totalCount={value.costMax != null ? (costMaxChips ?? []).length : undefined}
-          showCountWhenAll={false}
-          showCountWhenNone={false}
-          onReset={() => update({ costMax: null })}
-        >
-          {allSameCost ? (
-            <span className="text-xs text-muted-foreground">All same cost</span>
-          ) : (costMaxChips ?? []).map((amount, idx, arr) => {
-            const isSelected = value.costMax == null || amount <= value.costMax
-            return (
-              <Button
-                key={amount}
-                variant={isSelected ? "default" : "outline"}
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (isSelected) {
-                    // Deselect: move boundary to previous chip (or reset if first)
-                    const prevIdx = idx - 1
-                    update({ costMax: prevIdx >= 0 ? arr[prevIdx] : null })
-                  } else {
-                    // Select: move boundary up to this chip
-                    update({ costMax: amount })
-                  }
-                }}
-              >
-                ≤ {amount.toLocaleString()}
-              </Button>
-            )
-          })}
-        </FilterSection>
-
-      {hasFilters && (
-        <button
-          type="button"
-          title="Reset all filters"
-          className="inline-flex items-center justify-center cursor-pointer rounded-md border border-border/50 hover:border-border p-2 transition-colors"
-          onClick={handleReset}
-        >
-          <RotateCcw className="h-6 w-6" />
-        </button>
-      )}
         </div>
       </div>
     </div>

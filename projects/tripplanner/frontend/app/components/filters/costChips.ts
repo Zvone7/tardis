@@ -23,9 +23,16 @@ export function computeCostChips(costs: number[]): { minChips: number[]; maxChip
   if (chips.length === 0) chips.push(Math.round(min), Math.round(max))
 
   const deduped = Array.from(new Set(chips)).sort((a, b) => a - b)
+
+  // Filter out chips that would hide ALL items
+  // Min chip: at least one cost must be >= chip value
+  const minChips = deduped.filter((chip) => valid.some((c) => c >= chip))
+  // Max chip: at least one cost must be <= chip value
+  const maxChips = deduped.filter((chip) => valid.some((c) => c <= chip))
+
   return {
-    minChips: pickEvenly(deduped, 5),
-    maxChips: pickEvenly(deduped, 5),
+    minChips: pickEvenly(minChips, 5),
+    maxChips: pickEvenly(maxChips, 5),
     allSameCost: false,
   }
 }

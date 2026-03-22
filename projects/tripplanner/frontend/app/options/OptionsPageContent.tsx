@@ -806,8 +806,8 @@ export default function OptionsPageContent() {
               <p className="text-sm text-muted-foreground col-span-full text-center">No options to display.</p>
             ) : (
               sortedOptions.map((option) => (
+                <div key={option.id} className="animate-in fade-in slide-in-from-top-2 duration-500">
                 <OptionCard
-                  key={option.id}
                   option={option}
                   onEdit={handleEditOption}
                   onToggleVisibility={handleToggleVisibility}
@@ -821,6 +821,7 @@ export default function OptionsPageContent() {
                   isSelected={selectedOptionIds.has(option.id)}
                   onToggleSelect={toggleOptionSelection}
                 />
+                </div>
               ))
             )}
           </div>

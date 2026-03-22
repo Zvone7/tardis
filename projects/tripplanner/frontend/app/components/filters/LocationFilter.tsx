@@ -13,7 +13,14 @@ export function LocationFilter({
   value,
   onChange,
 }: LocationFilterProps) {
-  const sorted = useMemo(() => locations.slice().sort((a, b) => a.localeCompare(b)), [locations])
+  const sorted = useMemo(() => locations.slice().sort((a, b) => {
+    // Sort by country (after comma) first, then city
+    const [cityA, countryA = ""] = a.split(", ")
+    const [cityB, countryB = ""] = b.split(", ")
+    const countryCompare = countryA.localeCompare(countryB)
+    if (countryCompare !== 0) return countryCompare
+    return cityA.localeCompare(cityB)
+  }), [locations])
 
   // value empty = all visible. value non-empty = only those visible.
   const isVisible = (loc: string) => value.length === 0 || value.includes(loc)
@@ -34,7 +41,7 @@ export function LocationFilter({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-col gap-1.5">
       {sorted.map((loc) => {
         const on = isVisible(loc)
         return (
@@ -43,7 +50,7 @@ export function LocationFilter({
             type="button"
             variant={on ? "default" : "outline"}
             size="sm"
-            className={cn("h-8 px-2.5", !on && "opacity-50")}
+            className={cn("w-full justify-center", !on && "opacity-50")}
             onClick={() => toggle(loc)}
           >
             {loc}

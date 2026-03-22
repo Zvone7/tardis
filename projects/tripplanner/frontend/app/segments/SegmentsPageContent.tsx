@@ -652,8 +652,8 @@ export default function SegmentsPage() {
                 const segmentType = segmentTypes.find((st) => st.id === segment.segmentTypeId)
                 const connected = connectedBySegment[segment.id] || []
                 return (
+                  <div key={segment.id} className="animate-in fade-in slide-in-from-top-2 duration-500">
                   <SegmentCard
-                    key={segment.id}
                     segment={segment}
                     segmentType={segmentType}
                     userPreferredOffset={userPreferredOffset}
@@ -669,6 +669,7 @@ export default function SegmentsPage() {
                     isSelected={selectedSegmentIds.has(segment.id)}
                     onToggleSelect={toggleSegmentSelection}
                   />
+                  </div>
                 )
               })
             )}
