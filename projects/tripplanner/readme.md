@@ -19,19 +19,35 @@ Find it in azure portal: [tripplanner-dev](https://portal.azure.com/#view/Micros
 ## google credentials
 Find them in [google portal](https://console.cloud.google.com/auth/clients?highlightClient=34984745962-g9vkhpoi9schcfj5ot43jfcnmdnilaea.apps.googleusercontent.com&inv=1&invt=AbrgIw&project=tripplanner-444816).
 
-## Finally, add it to appsettings.Development.json
+## Finally, add secrets locally
+
+### Azure Key Vault secret (via .NET User Secrets)
+
+From `backend/TripPlanner/Web`, run:
+
+```bash
+dotnet user-secrets set "CLIENT_SECRET" "<your-azure-client-secret>"
+```
+
+### Google OAuth + other local overrides (via appsettings.local.json)
+
+User secrets are loaded before Key Vault, so Key Vault values overwrite them. To override Key Vault values locally (e.g. Google credentials), use `appsettings.local.json` — it is loaded last and wins over everything.
+
+Copy the example and fill in your secrets:
+
+```bash
+cp backend/TripPlanner/Web/appsettings.local.example.json backend/TripPlanner/Web/appsettings.local.json
+```
+
+Then edit `appsettings.local.json` (gitignored, not committed):
 
 ```json
 {
-  "GoogleAuthSettings": {
-        "ClientId": "",
-        "ClientSecret": ""
-    },
-  "AzureAd": {
-    "ClientId": "",
-    "ClientSecret": "",
-    "TenantId": ""
+  "AppSettings": {
+    "GoogleAuthSettings": {
+      "ClientSecret": "<your-google-client-secret> (you have it backed up in keyvault for [L] client)"
     }
+  }
 }
 ```
 

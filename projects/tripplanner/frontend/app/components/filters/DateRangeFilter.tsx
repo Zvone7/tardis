@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { Label } from "../ui/label"
 import { Input } from "../ui/input"
 
@@ -22,8 +22,11 @@ export function DateRangeFilter({
   minDate,
   maxDate,
 }: DateRangeFilterProps) {
+  const didAutoFill = useRef(false)
+
   useEffect(() => {
-    if ((!value.start || !value.end) && minDate && maxDate) {
+    if (!didAutoFill.current && !value.start && !value.end && minDate && maxDate) {
+      didAutoFill.current = true
       onChange({ start: minDate, end: maxDate })
     }
   }, [minDate, maxDate, value.start, value.end, onChange])

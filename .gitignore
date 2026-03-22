@@ -60,8 +60,7 @@ packages/
 *.nuspec
 
 # Local development settings
-appsettings.Development.json
-appsettings.*.json
+appsettings.local.json
 
 # Azure Functions
 local.settings.json
