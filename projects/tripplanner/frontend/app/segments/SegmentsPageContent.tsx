@@ -55,6 +55,8 @@ const formatSegmentDateWithWeekday = (iso: string, offset: number) => {
 
 /* ------------------------- Card Component ------------------------- */
 
+const sortHighlight = "sort-highlight"
+
 function SegmentCard({
   segment,
   segmentType,
@@ -70,6 +72,7 @@ function SegmentCard({
   conversions,
   isSelected = false,
   onToggleSelect,
+  activeSortField,
 }: {
   segment: Segment;
   segmentType: SegmentType | undefined;
@@ -85,6 +88,7 @@ function SegmentCard({
   conversions: CurrencyConversion[];
   isSelected?: boolean;
   onToggleSelect?: (segmentId: number) => void;
+  activeSortField?: string | null;
 }) {
   // location can arrive as startLocation/StartLocation or endLocation/EndLocation
   const startLoc = (segment as any).startLocation ?? null;
@@ -127,7 +131,7 @@ function SegmentCard({
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               {segmentType?.iconSvg ? (
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary/60 text-secondary-foreground shadow-sm ring-1 ring-black/5 dark:bg-white dark:text-black shrink-0" title={segmentType.name}>
+                <span className={cn("flex h-7 w-7 items-center justify-center rounded-full bg-secondary/60 text-secondary-foreground shadow-sm ring-1 ring-black/5 dark:bg-white dark:text-black shrink-0", activeSortField === "segmentType" && "sort-highlight")} title={segmentType.name}>
                   <span
                     dangerouslySetInnerHTML={{ __html: segmentType.iconSvg }}
                     className="w-4 h-4"
@@ -160,15 +164,15 @@ function SegmentCard({
 
             <div className="mt-2 text-sm text-muted-foreground space-y-1">
               <div className="space-y-1">
-                <div>
+                <div className={cn(activeSortField === "startDate" || activeSortField === "startLocation" ? sortHighlight : "")}>
                   {formatSegmentDateWithWeekday(segment.startDateTimeUtc, userPreferredOffset)}
                   {startLoc ? ` (${getLocationLabel(startLoc)})` : ""}
                 </div>
-                <div>
+                <div className={cn(activeSortField === "endDate" || activeSortField === "endLocation" ? sortHighlight : "")}>
                   {formatSegmentDateWithWeekday(segment.endDateTimeUtc, userPreferredOffset)}
                   {endLoc ? ` (${getLocationLabel(endLoc)})` : ""}
                 </div>
-                <div className="font-medium text-foreground">
+                <div className={cn("font-medium text-foreground", activeSortField === "cost" ? sortHighlight : "")}>
                   {primaryLabel}
                   {showOriginalCost ? (
                     <span className="ml-2 text-xs text-muted-foreground">({originalLabel})</span>
@@ -668,6 +672,7 @@ export default function SegmentsPage() {
                     conversions={conversions}
                     isSelected={selectedSegmentIds.has(segment.id)}
                     onToggleSelect={toggleSegmentSelection}
+                    activeSortField={sortState?.field}
                   />
                   </div>
                 )

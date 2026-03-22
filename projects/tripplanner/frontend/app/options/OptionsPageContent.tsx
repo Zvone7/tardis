@@ -130,8 +130,10 @@ function CostSummary({
   tripCurrencyId,
   currencies,
   conversions,
+  activeSortField,
 }: {
   option: OptionApi;
+  activeSortField?: string | null;
   displayCurrencyId: number | null;
   tripCurrencyId: number | null;
   currencies: Currency[];
@@ -184,12 +186,12 @@ function CostSummary({
     <div className="space-y-4">
       <div className="space-y-1">
         <div className="flex items-baseline justify-between gap-2">
-          <div className="text-lg font-semibold">{totalLabel}</div>
+          <div className={cn("text-lg font-semibold", activeSortField === "totalCost" ? "sort-highlight" : "")}>{totalLabel}</div>
           {originalTotalLabel ? (
             <span className="text-sm text-muted-foreground">({originalTotalLabel})</span>
           ) : null}
         </div>
-        <div className="text-xs text-muted-foreground">
+        <div className={cn("text-xs text-muted-foreground", activeSortField === "totalDays" ? "sort-highlight" : "")}>
           {option.totalDays} {option.totalDays === 1 ? "day" : "days"} ({perDayLabel} per day)
         </div>
       </div>
@@ -235,6 +237,7 @@ function OptionCard({
   userPreferredOffset,
   isSelected = false,
   onToggleSelect,
+  activeSortField,
 }: {
   option: OptionApi;
   onEdit: (option: OptionApi) => void;
@@ -248,6 +251,7 @@ function OptionCard({
   userPreferredOffset: number;
   isSelected?: boolean;
   onToggleSelect?: (optionId: number) => void;
+  activeSortField?: string | null;
 }) {
   const isHidden = option.isUiVisible === false;
 
@@ -289,8 +293,8 @@ function OptionCard({
               </div>
 
               <div className="mt-1 text-sm text-muted-foreground">
-                <div>{formatOptionDateWithWeekday(option.startDateTimeUtc, userPreferredOffset)}</div>
-                <div>{formatOptionDateWithWeekday(option.endDateTimeUtc, userPreferredOffset)}</div>
+                <div className={cn(activeSortField === "startDate" ? "sort-highlight" : "")}>{formatOptionDateWithWeekday(option.startDateTimeUtc, userPreferredOffset)}</div>
+                <div className={cn(activeSortField === "endDate" ? "sort-highlight" : "")}>{formatOptionDateWithWeekday(option.endDateTimeUtc, userPreferredOffset)}</div>
               </div>
 
               {sortedSegments.length > 0 && (
@@ -358,6 +362,7 @@ function OptionCard({
             tripCurrencyId={tripCurrencyId}
             currencies={currencies}
             conversions={conversions}
+            activeSortField={activeSortField}
           />
         </div>
       </div>
@@ -820,6 +825,7 @@ export default function OptionsPageContent() {
                   userPreferredOffset={userPreferredOffset}
                   isSelected={selectedOptionIds.has(option.id)}
                   onToggleSelect={toggleOptionSelection}
+                  activeSortField={sortState?.field}
                 />
                 </div>
               ))
