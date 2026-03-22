@@ -28,13 +28,13 @@ export function ChatPanel() {
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Auto-scroll to bottom when messages change
+  // Auto-scroll to bottom when messages change or panel opens
   useEffect(() => {
     const el = scrollRef.current
     if (el) {
       el.scrollTop = el.scrollHeight
     }
-  }, [messages])
+  }, [messages, isOpen])
 
   // Focus input when panel opens
   useEffect(() => {
@@ -104,8 +104,8 @@ export function ChatPanel() {
   const displayMessages = messages.filter((m) => m.role !== "system")
 
   return (
-    <Sheet open={isOpen} onOpenChange={setIsOpen}>
-      <SheetContent side="right" className="flex flex-col p-0 sm:max-w-md w-[400px]">
+    <Sheet open={isOpen} onOpenChange={setIsOpen} modal={false}>
+      <SheetContent side="right" hideOverlay className="flex flex-col p-0 sm:max-w-md w-[400px]">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <div>
@@ -140,8 +140,23 @@ export function ChatPanel() {
                 ))}
                 {isStreaming && displayMessages[displayMessages.length - 1]?.role !== "assistant" && (
                   <div className="flex justify-start mb-2">
-                    <div className="bg-muted rounded-lg px-3 py-2 text-sm">
-                      <span className="animate-pulse">...</span>
+                    <div className="bg-muted rounded-lg px-3 py-2 text-sm flex gap-1 items-center">
+                      {[0, 1, 2].map((i) => (
+                        <span
+                          key={i}
+                          className="inline-block w-1.5 h-1.5 rounded-full bg-foreground/60"
+                          style={{
+                            animation: "typing-bounce 1.2s ease-in-out infinite",
+                            animationDelay: `${i * 0.2}s`,
+                          }}
+                        />
+                      ))}
+                      <style jsx>{`
+                        @keyframes typing-bounce {
+                          0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+                          30% { opacity: 1; transform: translateY(-4px); }
+                        }
+                      `}</style>
                     </div>
                   </div>
                 )}

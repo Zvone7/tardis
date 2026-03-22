@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import type { ChatMessage, ToolCall, ContentPart } from "./types"
 import type { SegmentType, Currency, SegmentApi, OptionApi } from "../types/models"
 import { streamChatCompletion } from "./chatApiClient"
@@ -11,6 +11,20 @@ import { normalizeLocation } from "../lib/mapping"
 
 const MAX_TOOL_ROUNDS = 5
 
+function getStorageKey(tripId: number) {
+  return `chat-messages-${tripId}`
+}
+
+function stripImagesForStorage(messages: ChatMessage[]): ChatMessage[] {
+  return messages.map((msg) => {
+    if (Array.isArray(msg.content)) {
+      const textParts = msg.content.filter((p) => p.type === "text")
+      return { ...msg, content: textParts.length ? textParts : "[image]" }
+    }
+    return msg
+  })
+}
+
 interface UseChatAssistantOptions {
   tripId: number | null
   tripName: string | null
@@ -19,10 +33,35 @@ interface UseChatAssistantOptions {
 }
 
 export function useChatAssistant({ tripId, tripName, preferredUtcOffset, onDataChanged }: UseChatAssistantOptions) {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    if (typeof window === "undefined" || !tripId) return []
+    try {
+      const stored = sessionStorage.getItem(getStorageKey(tripId))
+      return stored ? JSON.parse(stored) : []
+    } catch { return [] }
+  })
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  // Restore messages when tripId changes
+  useEffect(() => {
+    if (!tripId) return
+    try {
+      const stored = sessionStorage.getItem(getStorageKey(tripId))
+      if (stored) setMessages(JSON.parse(stored))
+      else setMessages([])
+    } catch { setMessages([]) }
+  }, [tripId])
+
+  // Persist messages on change
+  useEffect(() => {
+    if (!tripId) return
+    try {
+      const toStore = stripImagesForStorage(messages)
+      sessionStorage.setItem(getStorageKey(tripId), JSON.stringify(toStore))
+    } catch { /* storage full or unavailable */ }
+  }, [tripId, messages])
 
   // Cache for reference data
   const cacheRef = useRef<{
@@ -265,7 +304,10 @@ IMPORTANT workflow rules:
   const clearMessages = useCallback(() => {
     setMessages([])
     setError(null)
-  }, [])
+    if (tripId) {
+      try { sessionStorage.removeItem(getStorageKey(tripId)) } catch {}
+    }
+  }, [tripId])
 
   return {
     messages,

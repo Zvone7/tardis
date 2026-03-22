@@ -15,7 +15,7 @@ export function ChatButton() {
     <Button
       onClick={() => setIsOpen(!isOpen)}
       size="icon"
-      className="fixed bottom-6 right-6 h-12 w-12 rounded-full shadow-lg z-40"
+      className="fixed bottom-20 right-6 h-12 w-12 rounded-full shadow-lg z-40"
     >
       <MessageCircle className="h-5 w-5" />
     </Button>

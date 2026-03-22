@@ -23,7 +23,22 @@ export async function streamChatCompletion(
 
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText)
-    callbacks.onError(text || `Request failed: ${res.status}`)
+    let errorMessage = `Request failed: ${res.status}`
+    try {
+      const parsed = JSON.parse(text)
+      if (parsed?.error?.message) {
+        const msg = parsed.error.message
+        const retryMatch = msg.match(/Please try again in ([\d.]+s)/)
+        if (parsed.error.code === "rate_limit_exceeded" && retryMatch) {
+          errorMessage = `Rate limit reached. Please try again in ${retryMatch[1]}.`
+        } else {
+          errorMessage = parsed.error.message
+        }
+      }
+    } catch {
+      if (text) errorMessage = text
+    }
+    callbacks.onError(errorMessage)
     return
   }
 
