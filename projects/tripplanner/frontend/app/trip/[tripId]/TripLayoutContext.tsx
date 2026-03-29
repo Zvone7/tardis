@@ -1,6 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, useCallback } from "react"
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { useMediaQuery } from "../../hooks/useMediaQuery"
 import { useChatContext } from "../../chat/ChatProvider"
 import type { OptionApi, Segment } from "../../types/models"
@@ -54,8 +55,19 @@ export function TripLayoutProvider({
   const isTablet = useMediaQuery("(min-width: 768px)")
   const panelMode: PanelMode = isDesktop ? "desktop" : isTablet ? "tablet" : "mobile"
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>(initialTab)
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const [activeTab, setActiveTabState] = useState<ActiveTab>(initialTab)
   const [detailPanel, setDetailPanel] = useState<DetailPanel | null>(null)
+
+  const setActiveTab = useCallback((tab: ActiveTab) => {
+    setActiveTabState(tab)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set("tab", tab)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }, [router, pathname, searchParams])
 
   // Bridge chat state from ChatProvider
   const isChatOpen = chatContext.isOpen && !chatContext.isMinimized

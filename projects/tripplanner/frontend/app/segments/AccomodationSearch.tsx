@@ -109,7 +109,12 @@ function LocationAutocomplete({
         if (!controller.signal.aborted) {
           const existing = matchTripLocations(q, existingLocations ?? [])
           const existingKeys = new Set(existing.map((l) => `${l.lat},${l.lng}`))
-          const merged = [...existing, ...list.filter((l) => !existingKeys.has(`${l.lat},${l.lng}`))]
+          const combined = [...existing, ...list.filter((l) => !existingKeys.has(`${l.lat},${l.lng}`))]
+          const seenLabels = new Set<string>()
+          const merged = combined.filter((l) => {
+            const label = (l.formatted || (l.country ? `${l.name}, ${l.country}` : l.name)).toLowerCase()
+            return seenLabels.size !== seenLabels.add(label).size
+          })
           setItems(merged)
           setOpen(true)
           setFocusedIdx(merged.length ? 0 : -1)

@@ -39,6 +39,7 @@ import {
   Pencil,
   Plane,
   LayoutIcon,
+  XIcon,
 } from "lucide-react"
 import { toLocationDto, normalizeLocation } from "../lib/mapping"
 import { Collapsible } from "../components/Collapsible"
@@ -1208,7 +1209,15 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
   return (
     <>
       <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
-        <div className="sticky top-0 bg-background border-b px-4 py-3 pr-10 z-10">
+        <div className="sticky top-0 bg-background border-b px-4 py-3 pr-10 z-10 relative">
+          <button
+            type="button"
+            onClick={requestClose}
+            className="absolute top-3 right-3 text-muted-foreground hover:text-foreground"
+            aria-label="Close"
+          >
+            <XIcon className="h-4 w-4" />
+          </button>
           <div className="mb-3 space-y-1">
             <div className="flex items-center gap-3 text-lg font-semibold leading-snug">
               {headerIcon}
