@@ -21,6 +21,26 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v3
 
+    - name: Compute content hash
+      id: content-hash
+      run: |
+        CONFIG=$(cat .github/config/project-config.json)
+
+        PATHS=$(echo "$CONFIG" | jq -r '.services[] | select(.name == "tripplanner/be") | .paths[]')
+
+        ALL_HASH=$(git ls-tree -r HEAD | while IFS= read -r line; do
+          FILE=$(echo "$line" | awk '{print $4}')
+          while IFS= read -r PATTERN; do
+            if echo "$FILE" | grep -qE "$PATTERN"; then
+              echo "$line"
+              break
+            fi
+          done <<< "$PATHS"
+        done | sha256sum | cut -d' ' -f1)
+
+        echo "hash=${ALL_HASH:0:12}" >> $GITHUB_OUTPUT
+        echo "Content hash: ${ALL_HASH:0:12}"
+
     - name: Login to Azure
       uses: azure/login@v1
       with:
@@ -42,13 +62,45 @@ jobs:
         DATE=$(date +%Y%m%d)
         echo "BUILD_NUMBER=${DATE}.${{ inputs.buildNumber }}" >> $GITHUB_ENV
 
-    - name: Build and Push Backend Docker Image
+    - name: Check if image already exists in ACR
+      id: check-image
       run: |
-        docker build -t ${{ vars.ACR_NAME }}.azurecr.io/tripplanner/be:latest \
-                      -t ${{ vars.ACR_NAME }}.azurecr.io/tripplanner/be:$BUILD_NUMBER \
+        IMAGE="${{ vars.ACR_NAME }}.azurecr.io/tripplanner/be"
+        CONTENT_TAG="content-${{ steps.content-hash.outputs.hash }}"
+
+        if docker manifest inspect "${IMAGE}:${CONTENT_TAG}" > /dev/null 2>&1; then
+          echo "Image already exists for content hash ${CONTENT_TAG}, skipping build"
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "No existing image found for content hash ${CONTENT_TAG}, will build"
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Re-tag existing image
+      if: ${{ steps.check-image.outputs.exists == 'true' }}
+      run: |
+        IMAGE="${{ vars.ACR_NAME }}.azurecr.io/tripplanner/be"
+        CONTENT_TAG="content-${{ steps.content-hash.outputs.hash }}"
+
+        docker pull "${IMAGE}:${CONTENT_TAG}"
+        docker tag "${IMAGE}:${CONTENT_TAG}" "${IMAGE}:$BUILD_NUMBER"
+        docker push "${IMAGE}:$BUILD_NUMBER"
+        docker tag "${IMAGE}:${CONTENT_TAG}" "${IMAGE}:latest"
+        docker push "${IMAGE}:latest"
+
+    - name: Build and Push Backend Docker Image
+      if: ${{ steps.check-image.outputs.exists != 'true' }}
+      run: |
+        IMAGE="${{ vars.ACR_NAME }}.azurecr.io/tripplanner/be"
+        CONTENT_TAG="content-${{ steps.content-hash.outputs.hash }}"
+
+        docker build -t ${IMAGE}:latest \
+                      -t ${IMAGE}:$BUILD_NUMBER \
                       --build-arg BUILD_NUMBER=$BUILD_NUMBER\
                       --build-arg ENV_CODE=${{ inputs.envCode }} \
                       -f projects/tripplanner/Dockerfile.be projects/tripplanner
 
-        docker push ${{ vars.ACR_NAME }}.azurecr.io/tripplanner/be:latest
-        docker push ${{ vars.ACR_NAME }}.azurecr.io/tripplanner/be:$BUILD_NUMBER
+        docker push ${IMAGE}:$BUILD_NUMBER
+        docker push ${IMAGE}:latest
+        docker tag ${IMAGE}:$BUILD_NUMBER ${IMAGE}:${CONTENT_TAG}
+        docker push ${IMAGE}:${CONTENT_TAG}
