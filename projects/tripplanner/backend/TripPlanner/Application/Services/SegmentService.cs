@@ -268,9 +268,9 @@ public class SegmentService
         }
     }
 
-    public async Task DeleteAsync(int segmentId, CancellationToken cancellationToken)
+    public async Task DeleteAsync(int segmentId, int tripId, CancellationToken cancellationToken)
     {
-        await _segmentRepository_.DeleteAsync(segmentId, cancellationToken);
+        await _segmentRepository_.DeleteAsync(segmentId, tripId, cancellationToken);
         await UpdateOptionsRelatedBySegmentIdAsync(segmentId, cancellationToken);
     }
 

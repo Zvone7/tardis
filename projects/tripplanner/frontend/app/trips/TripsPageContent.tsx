@@ -262,8 +262,8 @@ export default function TripList() {
     }
   }
 
-  const handleViewOptions = (tripId: number) => router.push(`/options?tripId=${tripId}`)
-  const handleViewSegments = (tripId: number) => router.push(`/segments?tripId=${tripId}`)
+  const handleViewOptions = (tripId: number) => router.push(`/trip/${tripId}?tab=options`)
+  const handleViewSegments = (tripId: number) => router.push(`/trip/${tripId}?tab=segments`)
 
   return (
     <div>

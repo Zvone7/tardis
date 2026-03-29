@@ -51,7 +51,7 @@ public class OptionRepository
         var sqlQuery = "UPDATE TripOption SET " +
                        "name = @name, " +
                        "is_ui_visible=@is_ui_visible " +
-                       "WHERE id = @id";
+                       "WHERE id = @id AND trip_id = @trip_id";
         await db.ExecuteAsync(sqlQuery, option);
     }
     
@@ -64,18 +64,18 @@ public class OptionRepository
                        "end_datetime_utc = @end_datetime_utc, " +
                        "total_cost = @total_cost, " +
                        "is_ui_visible = @is_ui_visible " +
-                       "WHERE id = @id";
+                       "WHERE id = @id AND trip_id = @trip_id";
         await db.ExecuteAsync(sqlQuery, option);
     }
 
-    public async Task DeleteAsync(int optionId, CancellationToken cancellationToken)
+    public async Task DeleteAsync(int optionId, int tripId, CancellationToken cancellationToken)
     {
         // todo - wrap in transaction
         using IDbConnection db = new SqlConnection(_connectionString_);
-        var sqlQuery2 = "DELETE FROM option_to_segment WHERE option_id = @id";
-        await db.ExecuteAsync(sqlQuery2, new { id = optionId });
-        var sqlQuery = "DELETE FROM TripOption WHERE id = @id";
-        await db.ExecuteAsync(sqlQuery, new { id = optionId });
+        var sqlQuery2 = "DELETE FROM option_to_segment WHERE option_id = @id AND option_id IN (SELECT id FROM TripOption WHERE trip_id = @trip_id)";
+        await db.ExecuteAsync(sqlQuery2, new { id = optionId, trip_id = tripId });
+        var sqlQuery = "DELETE FROM TripOption WHERE id = @id AND trip_id = @trip_id";
+        await db.ExecuteAsync(sqlQuery, new { id = optionId, trip_id = tripId });
     }
 
     public async Task<List<TripOptionDbm>> GetOptionsBySegmentIdAsync(int segmentId, CancellationToken cancellationToken)

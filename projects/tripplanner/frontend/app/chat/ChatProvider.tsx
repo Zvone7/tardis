@@ -21,6 +21,8 @@ interface ChatContextValue {
   activeSessionId: string
   isOpen: boolean
   setIsOpen: (open: boolean) => void
+  isMinimized: boolean
+  setIsMinimized: (minimized: boolean) => void
   registerRefreshCallback: (cb: () => void) => () => void
 }
 
@@ -36,6 +38,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [tripId, setTripId] = useState<number | null>(null)
   const [tripName, setTripName] = useState<string | null>(null)
   const [isOpen, setIsOpen] = useState(false)
+  const [isMinimized, setIsMinimized] = useState(false)
   const [preferredUtcOffset, setPreferredUtcOffset] = useState(0)
   const refreshCallbacks = useRef<Set<() => void>>(new Set())
 
@@ -71,6 +74,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         ...chat,
         isOpen,
         setIsOpen,
+        isMinimized,
+        setIsMinimized,
         registerRefreshCallback,
       }}
     >

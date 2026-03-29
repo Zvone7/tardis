@@ -1,9 +1,12 @@
+// SegmentDetailContent.tsx
+// Contains all state and UI for viewing/editing a segment.
+// Can be hosted inside a Dialog (SegmentModal) or an inline panel (SegmentDetailPanel).
 "use client"
 
 import type React from "react"
 import type { JSX } from "react"
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
@@ -11,7 +14,6 @@ import { Label } from "../components/ui/label"
 import { ScrollArea } from "../components/ui/scroll-area"
 import { Textarea } from "../components/ui/textarea"
 import { toast } from "../components/ui/use-toast"
-import { Checkbox } from "../components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select"
 import {
   AlertDialog,
@@ -29,7 +31,6 @@ import {
   Trash2Icon,
   EyeOffIcon,
   EyeIcon,
-  XIcon,
   AlertTriangle,
   Link2,
   Loader2,
@@ -37,7 +38,6 @@ import {
   Globe,
   Pencil,
   Plane,
-  SlidersHorizontal,
   LayoutIcon,
 } from "lucide-react"
 import { toLocationDto, normalizeLocation } from "../lib/mapping"
@@ -47,10 +47,8 @@ import { TitleTokens } from "../components/TitleTokens"
 import { OptionFilterPanel, countOptionActiveFilters, type OptionFilterValue } from "../components/filters/OptionFilterPanel"
 import type { OptionSortValue } from "../components/sorting/optionSortTypes"
 
-// types
 import type {
   SegmentModalProps,
-  OptionRef as Option,
   OptionApi,
   User,
   SegmentSave,
@@ -61,7 +59,6 @@ import type {
 } from "../types/models"
 
 import { RangeDateTimePicker, type RangeDateTimePickerValue } from "../components/RangeDateTimePicker"
-
 import { RangeLocationPicker, type RangeLocationPickerValue } from "../components/RangeLocationPicker"
 import { useCurrencyConversions } from "../hooks/useCurrencyConversions"
 
@@ -83,8 +80,6 @@ const toIsoFromLocalValue = (localValue: string | null, offset?: number | null) 
   if (!Number.isFinite(ms)) return null
   return utcMsToIso(ms)
 }
-
-/* ------------------------- comment preview helper ------------------------- */
 
 const CommentDisplay: React.FC<{ text: string }> = ({ text }) => {
   const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g
@@ -178,21 +173,25 @@ const isGoogleFlightsLink = (url: string) => {
   }
 }
 
-/* ------------------------------- main modal ------------------------------- */
+export interface SegmentDetailContentHandle {
+  /** Triggers the close flow (shows unsaved-changes prompt if needed). */
+  requestClose: () => void
+}
 
-export default function SegmentModal({
-  isOpen,
-  onClose,
-  onSave,
-  segment,
-  tripId,
-  tripName,
-  segmentTypes,
-  tripCurrencyId,
-  displayCurrencyId,
-  initialOptionFilters,
-  initialOptionSort,
-}: SegmentModalProps) {
+export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, SegmentModalProps>(
+  function SegmentDetailContent({
+    isOpen,
+    onClose,
+    onSave,
+    segment,
+    tripId,
+    tripName,
+    segmentTypes,
+    tripCurrencyId,
+    displayCurrencyId,
+    initialOptionFilters,
+    initialOptionSort,
+  }, ref) {
   const [name, setName] = useState("")
   const [range, setRange] = useState<RangeDateTimePickerValue>({
     startLocal: "",
@@ -201,7 +200,6 @@ export default function SegmentModal({
     endOffsetH: null,
   })
 
-  // Keep prefilled locations to re-attach ids later
   const [prefilledStart, setPrefilledStart] = useState<LocationOption | null>(null)
   const [prefilledEnd, setPrefilledEnd] = useState<LocationOption | null>(null)
 
@@ -235,10 +233,8 @@ export default function SegmentModal({
   const [isSaving, setIsSaving] = useState(false)
   const isCreateMode = !segment || isDuplicateMode
 
-  // State for delete confirmation dialog
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
-  // collapsible toggles
   const [generalOpen, setGeneralOpen] = useState(() => !segment)
   const [timesOpen, setTimesOpen] = useState(() => !segment)
   const [locationsOpen, setLocationsOpen] = useState(() => !segment)
@@ -260,10 +256,8 @@ export default function SegmentModal({
   const skipClosePromptRef = useRef(false)
   const tripSegmentsById = useMemo(() => {
     const map = new Map<number, SegmentApi>()
-    tripSegments.forEach((segment) => {
-      if (segment?.id) {
-        map.set(segment.id, segment)
-      }
+    tripSegments.forEach((s) => {
+      if (s?.id) map.set(s.id, s)
     })
     return map
   }, [tripSegments])
@@ -432,7 +426,6 @@ export default function SegmentModal({
     return `Connected with ${count} option${suffix}`
   }, [selectedOptions.length])
 
-  // Fetch user preferences (preferred offset)
   const fetchUserPreferences = useCallback(async () => {
     try {
       const userData: User = await userApi.getAccountInfo()
@@ -456,7 +449,7 @@ export default function SegmentModal({
       console.error("Error fetching options:", error)
       toast({ title: "Error", description: "Failed to fetch options. Please try again." })
     }
-  }, [tripId, toast])
+  }, [tripId])
 
   useEffect(() => {
     let active = true
@@ -479,7 +472,6 @@ export default function SegmentModal({
   }, [fetchOptions])
 
   const applyBookingSuggestion = (suggestion: SegmentSuggestion) => {
-
     setRange((prev) => ({
       ...prev,
       startLocal: suggestion.startDateLocal ?? prev.startLocal,
@@ -601,6 +593,9 @@ export default function SegmentModal({
     }
   }, [showDescriptionModal, comment])
 
+  const initialSelectedOptionsRef = useRef<number[] | null>(null)
+  const missingShakeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   useEffect(() => {
     return () => {
       if (missingShakeTimeoutRef.current) {
@@ -609,10 +604,7 @@ export default function SegmentModal({
     }
   }, [])
 
-  const initialSelectedOptionsRef = useRef<number[] | null>(null)
-  const missingShakeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-type SegmentBaseline = {
+  type SegmentBaseline = {
     name: string
     startLocal: string
     endLocal: string | null
@@ -689,12 +681,12 @@ type SegmentBaseline = {
       return
     }
     let cancelled = false
-    const hydrateSegment = (segment: SegmentApi) => {
-      const fallback = tripSegmentsById.get(segment.id)
+    const hydrateSegment = (s: SegmentApi) => {
+      const fallback = tripSegmentsById.get(s.id)
       return {
-        ...segment,
-        startLocation: segment.startLocation ?? fallback?.startLocation ?? null,
-        endLocation: segment.endLocation ?? fallback?.endLocation ?? null,
+        ...s,
+        startLocation: s.startLocation ?? fallback?.startLocation ?? null,
+        endLocation: s.endLocation ?? fallback?.endLocation ?? null,
       }
     }
     const loadConnections = async () => {
@@ -740,7 +732,7 @@ type SegmentBaseline = {
         setBaselineReady(true)
       }
     },
-    [tripId, toast],
+    [tripId],
   )
 
   const resetToBlank = useCallback(() => {
@@ -787,7 +779,7 @@ type SegmentBaseline = {
     })
     setBaselineReady(false)
     initialSelectedOptionsRef.current = null
-    setName(segment.name)
+    setName(segment.name ?? "")
 
     const startLocal = utcIsoToLocalInput(segment.startDateTimeUtc, displayStartOffset)
     const endLocalRaw = utcIsoToLocalInput(segment.endDateTimeUtc, displayEndOffset)
@@ -801,7 +793,7 @@ type SegmentBaseline = {
       endOffsetH: endIsSame ? null : displayEndOffset,
     })
 
-    setCost(String(segment.cost))
+    setCost(String(segment.cost ?? ""))
     setComment(segment.comment || "")
     setSegmentTypeId(segment.segmentTypeId)
     setIsUiVisible((segment as any)?.isUiVisible ?? true)
@@ -906,7 +898,6 @@ type SegmentBaseline = {
   const handleUpdateConnectedOptions = useCallback(
     async (optionIds: number[]) => {
       if (!segment) return
-
       try {
         await segmentsApi.updateConnectedOptions(tripId, { SegmentId: segment.id, OptionIds: optionIds })
         toast({ title: "Success", description: "Connected options updated successfully" })
@@ -915,7 +906,7 @@ type SegmentBaseline = {
         toast({ title: "Error", description: "Failed to update connected options. Please try again." })
       }
     },
-    [segment, tripId, toast],
+    [segment, tripId],
   )
 
   const handleDuplicateSegment = () => {
@@ -926,28 +917,18 @@ type SegmentBaseline = {
 
   const handleDelete = async () => {
     if (!segment) return
-
     try {
       await segmentsApi.remove(tripId, segment.id)
-
-      toast({
-        title: "Success",
-        description: "Segment deleted successfully",
-      })
-
+      toast({ title: "Success", description: "Segment deleted successfully" })
       setShowDeleteConfirm(false)
       closeModal()
-      // Trigger a refresh if needed - you may need to add a callback prop
       window.location.reload()
     } catch (error) {
       console.error("Error deleting segment:", error)
-      toast({
-        title: "Error",
-        description: "Failed to delete segment. Please try again.",
-      })
+      toast({ title: "Error", description: "Failed to delete segment. Please try again." })
     }
   }
-  
+
   const filteredOptionsForDisplay = useMemo(() => {
     if (!segment || isDuplicateMode) return []
     const filtered = applyOptionFilters(options, optionFilterState, optionSortState, optionConnections)
@@ -1047,8 +1028,8 @@ type SegmentBaseline = {
     const messages: string[] = []
     if (segmentTypeId === null) messages.push("Select a segment type")
     if (!rangeStartLocal) messages.push("Choose a start date and time")
-    const parsedCost = Number.parseFloat(cost)
-    if (!cost || Number.isNaN(parsedCost)) messages.push("Enter a valid cost amount")
+    const parsedCostCheck = Number.parseFloat(cost)
+    if (!cost || Number.isNaN(parsedCostCheck)) messages.push("Enter a valid cost amount")
     if (!currencyId && !isLoadingCurrencies) messages.push("Select a currency")
     return messages
   }, [segmentTypeId, rangeStartLocal, cost, currencyId, isLoadingCurrencies])
@@ -1064,6 +1045,7 @@ type SegmentBaseline = {
       missingShakeTimeoutRef.current = null
     }, 450)
   }, [])
+
   useEffect(() => {
     latestOptionFiltersRef.current = initialOptionFilters
   }, [initialOptionFilters])
@@ -1180,7 +1162,6 @@ type SegmentBaseline = {
       userPreferredCurrencyId,
       tripCurrencyId,
       defaultCurrencyId,
-      toast,
       triggerMissingFieldsHint,
       parsedCost,
     ],
@@ -1202,8 +1183,6 @@ type SegmentBaseline = {
     </span>
   )
 
-
-
   const shouldPromptOnClose = isCreateMode ? createFormTouched : hasChanges
 
   const closeModal = useCallback(() => {
@@ -1211,329 +1190,323 @@ type SegmentBaseline = {
     onClose()
   }, [onClose])
 
-  const handleDialogOpenChange = useCallback(
-    (open: boolean) => {
-      if (open) return
-      if (skipClosePromptRef.current) {
-        skipClosePromptRef.current = false
-        return
-      }
-      if (shouldPromptOnClose) {
-        setShowUnsavedConfirm(true)
-      } else {
-        closeModal()
-      }
-    },
-    [shouldPromptOnClose, closeModal],
-  )
+  const requestClose = useCallback(() => {
+    if (skipClosePromptRef.current) {
+      skipClosePromptRef.current = false
+      return
+    }
+    if (shouldPromptOnClose) {
+      setShowUnsavedConfirm(true)
+    } else {
+      closeModal()
+    }
+  }, [shouldPromptOnClose, closeModal])
+
+  useImperativeHandle(ref, () => ({ requestClose }), [requestClose])
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="max-w-4xl w-full h-[90vh] p-0 flex flex-col overflow-hidden" style={{ display: "flex" }}>
-          <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
-            <div className="sticky top-0 bg-background border-b px-4 py-3 pr-10 z-10">
-              <DialogTitle className="sr-only">{headerName}</DialogTitle>
-              <div className="mb-3 space-y-1">
-                <div className="flex items-center gap-3 text-lg font-semibold leading-snug">
-                  {headerIcon}
-                  <span>{headerName}</span>
-                </div>
-                <p className="text-xs text-muted-foreground">{headerSubtitle}</p>
-              </div>
-
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1">
-                  {segment && !isDuplicateMode ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="border-destructive/40 text-destructive hover:bg-destructive/10"
-                      onClick={() => setShowDeleteConfirm(true)}
-                    >
-                      <Trash2Icon className="h-4 w-4" />
-                    </Button>
-                  ) : (
-                    <span className="h-9 w-9" aria-hidden />
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {!isCreateMode && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="text-muted-foreground"
-                      onClick={() =>
-                        setIsUiVisible((prev) => {
-                          const next = !prev
-                          toast({
-                            title: next ? "Will be shown in list view" : "Won't be shown in list view",
-                          })
-                          return next
-                        })
-                      }
-                      aria-pressed={isUiVisible}
-                    >
-                      {isUiVisible ? <EyeIcon className="h-4 w-4" /> : <EyeOffIcon className="h-4 w-4" />}
-                    </Button>
-                  )}
-                  {segment && !isDuplicateMode && (
-                    <Button type="button" variant="outline" size="sm" onClick={handleDuplicateSegment}>
-                      <CopyIcon className="h-4 w-4" />
-                    </Button>
-                  )}
-                  <Button
-                    type="submit"
-                    size="sm"
-                    className="bg-primary hover:bg-primary/90"
-                    disabled={isSaveDisabled || isSaving}
-                  >
-                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <SaveIcon className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
+      <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+        <div className="sticky top-0 bg-background border-b px-4 py-3 pr-10 z-10">
+          <div className="mb-3 space-y-1">
+            <div className="flex items-center gap-3 text-lg font-semibold leading-snug">
+              {headerIcon}
+              <span>{headerName}</span>
             </div>
+            <p className="text-xs text-muted-foreground">{headerSubtitle}</p>
+          </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 relative min-h-0">
-            {hasMissingFields && (
-              <div
-                className={cn(
-                  "flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 sticky top-0 mt-0 z-10",
-                  showMissingShake && "shake-once",
-                )}
-              >
-                <AlertTriangle className="mt-0.5 h-4 w-4" aria-hidden="true" />
-                <div>
-                  <p className="font-medium">Missing required details</p>
-                  <ul className="mt-1 list-disc space-y-0.5 pl-5">
-                    {missingFieldMessages.map((message) => (
-                      <li key={message}>{message}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            )}
-            <div className="rounded-lg border px-2 py-2 bg-muted/30">
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 uppercase tracking-wide">
-                    <span className="leading-none">Booking.com</span>
-                  </div>
-                  <div className="flex items-center gap-1 rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 uppercase tracking-wide">
-                    <Plane className="h-3 w-3" aria-hidden="true" />
-                    <span className="leading-none">Google Flights</span>
-                  </div>
-                </div>
-                <Input
-                  id="booking-link"
-                  value={bookingUrl}
-                  onChange={(e) => setBookingUrl(e.target.value)}
-                  placeholder="booking or flights link…"
-                  autoComplete="off"
-                  className="w-64 text-xs"
-                />
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1">
+              {segment && !isDuplicateMode ? (
                 <Button
                   type="button"
-                  variant="secondary"
+                  variant="outline"
                   size="sm"
-                  onClick={handleImportBookingLink}
-                  disabled={isImportingBooking}
-                  className="h-8 px-2 text-xs"
+                  className="border-destructive/40 text-destructive hover:bg-destructive/10"
+                  onClick={() => setShowDeleteConfirm(true)}
                 >
-                  {isImportingBooking ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3 mr-1" />}
-                  Import
+                  <Trash2Icon className="h-4 w-4" />
                 </Button>
+              ) : (
+                <span className="h-9 w-9" aria-hidden />
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {!isCreateMode && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="text-muted-foreground"
+                  onClick={() =>
+                    setIsUiVisible((prev) => {
+                      const next = !prev
+                      toast({
+                        title: next ? "Will be shown in list view" : "Won't be shown in list view",
+                      })
+                      return next
+                    })
+                  }
+                  aria-pressed={isUiVisible}
+                >
+                  {isUiVisible ? <EyeIcon className="h-4 w-4" /> : <EyeOffIcon className="h-4 w-4" />}
+                </Button>
+              )}
+              {segment && !isDuplicateMode && (
+                <Button type="button" variant="outline" size="sm" onClick={handleDuplicateSegment}>
+                  <CopyIcon className="h-4 w-4" />
+                </Button>
+              )}
+              <Button
+                type="submit"
+                size="sm"
+                className="bg-primary hover:bg-primary/90"
+                disabled={isSaveDisabled || isSaving}
+              >
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <SaveIcon className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 relative min-h-0">
+          {hasMissingFields && (
+            <div
+              className={cn(
+                "flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 sticky top-0 mt-0 z-10",
+                showMissingShake && "shake-once",
+              )}
+            >
+              <AlertTriangle className="mt-0.5 h-4 w-4" aria-hidden="true" />
+              <div>
+                <p className="font-medium">Missing required details</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                  {missingFieldMessages.map((message) => (
+                    <li key={message}>{message}</li>
+                  ))}
+                </ul>
               </div>
             </div>
-            <Collapsible
-              title={generalSummaryTitle}
-              open={generalOpen}
-              onToggle={() => setGeneralOpen((open) => !open)}
-            >
-              <div className="space-y-4 pt-4">
-                <div className="grid grid-cols-4 items-center gap-3">
-                  <Label htmlFor="segmentType" className="text-right text-sm">
-                    Type
-                  </Label>
-                  <Select
-                    value={segmentTypeId?.toString() || ""}
-                    onValueChange={(value) => setSegmentTypeId(Number.parseInt(value))}
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {segmentTypes.map((type: SegmentType) => (
-                        <SelectItem key={type.id} value={type.id.toString()}>
-                          <div className="flex items-center gap-2">
-                            {type.iconSvg ? (
-                              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary/60 text-secondary-foreground shadow-sm ring-1 ring-black/5 dark:bg-white dark:text-black">
-                                <span
-                                  dangerouslySetInnerHTML={{ __html: type.iconSvg as string }}
-                                  className="w-4 h-4"
-                                  suppressHydrationWarning
-                                />
-                              </span>
-                            ) : null}
-                            <span>{type.name}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+          )}
+          <div className="rounded-lg border px-2 py-2 bg-muted/30">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 uppercase tracking-wide">
+                  <span className="leading-none">Booking.com</span>
                 </div>
+                <div className="flex items-center gap-1 rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 uppercase tracking-wide">
+                  <Plane className="h-3 w-3" aria-hidden="true" />
+                  <span className="leading-none">Google Flights</span>
+                </div>
+              </div>
+              <Input
+                id="booking-link"
+                value={bookingUrl}
+                onChange={(e) => setBookingUrl(e.target.value)}
+                placeholder="booking or flights link…"
+                autoComplete="off"
+                className="w-64 text-xs"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleImportBookingLink}
+                disabled={isImportingBooking}
+                className="h-8 px-2 text-xs"
+              >
+                {isImportingBooking ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3 mr-1" />}
+                Import
+              </Button>
+            </div>
+          </div>
+          <Collapsible
+            title={generalSummaryTitle}
+            open={generalOpen}
+            onToggle={() => setGeneralOpen((open) => !open)}
+          >
+            <div className="space-y-4 pt-4">
+              <div className="grid grid-cols-4 items-center gap-3">
+                <Label htmlFor="segmentType" className="text-right text-sm">
+                  Type
+                </Label>
+                <Select
+                  value={segmentTypeId?.toString() || ""}
+                  onValueChange={(value) => setSegmentTypeId(Number.parseInt(value))}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {segmentTypes.map((type: SegmentType) => (
+                      <SelectItem key={type.id} value={type.id.toString()}>
+                        <div className="flex items-center gap-2">
+                          {type.iconSvg ? (
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary/60 text-secondary-foreground shadow-sm ring-1 ring-black/5 dark:bg-white dark:text-black">
+                              <span
+                                dangerouslySetInnerHTML={{ __html: type.iconSvg as string }}
+                                className="w-4 h-4"
+                                suppressHydrationWarning
+                              />
+                            </span>
+                          ) : null}
+                          <span>{type.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                <div className="grid grid-cols-4 items-start gap-3">
-                  <Label htmlFor="cost" className="text-right text-sm pt-2 sm:pt-0">
-                    Cost
-                  </Label>
-                  <div className="col-span-3 flex flex-col gap-2 sm:flex-row">
-                    <Input
-                      id="cost"
-                      value={cost}
-                      onChange={(e) => setCost(e.target.value)}
-                      className="w-full sm:flex-1 font-mono"
-                      required
-                      placeholder="e.g. 2600/4 or 150+150"
-                      inputMode="decimal"
-                    />
-                    <CurrencyDropdown
-                      value={currencyId}
-                      onChange={setCurrencyId}
-                      currencies={currencies}
-                      placeholder={isLoadingCurrencies ? "Loading..." : "Currency"}
-                      disabled={isLoadingCurrencies}
-                      className="w-full sm:w-[220px]"
-                      triggerClassName="w-full"
-                    />
+              <div className="grid grid-cols-4 items-start gap-3">
+                <Label htmlFor="cost" className="text-right text-sm pt-2 sm:pt-0">
+                  Cost
+                </Label>
+                <div className="col-span-3 flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    id="cost"
+                    value={cost}
+                    onChange={(e) => setCost(e.target.value)}
+                    className="w-full sm:flex-1 font-mono"
+                    required
+                    placeholder="e.g. 2600/4 or 150+150"
+                    inputMode="decimal"
+                  />
+                  <CurrencyDropdown
+                    value={currencyId}
+                    onChange={setCurrencyId}
+                    currencies={currencies}
+                    placeholder={isLoadingCurrencies ? "Loading..." : "Currency"}
+                    disabled={isLoadingCurrencies}
+                    className="w-full sm:w-[220px]"
+                    triggerClassName="w-full"
+                  />
+                </div>
+                {(userConversionLabel || tripConversionLabel) && (
+                  <div className="col-span-3 col-start-2 text-xs text-muted-foreground">
+                    {userConversionLabel ? <>≈ {userConversionLabel}</> : null}
+                    {tripConversionLabel ? <span className="ml-1">({tripConversionLabel})</span> : null}
                   </div>
-                  {(userConversionLabel || tripConversionLabel) && (
-                    <div className="col-span-3 col-start-2 text-xs text-muted-foreground">
-                      {userConversionLabel ? <>≈ {userConversionLabel}</> : null}
-                      {tripConversionLabel ? <span className="ml-1">({tripConversionLabel})</span> : null}
+                )}
+              </div>
+
+              <div className="grid grid-cols-4 items-start gap-3">
+                <Label className="text-right text-sm pt-2">Description & Links</Label>
+                <div className="col-span-3 space-y-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowDescriptionModal(true)}
+                    className="inline-flex items-center gap-2"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    {comment ? "Edit description" : "Add description"}
+                  </Button>
+                  {comment ? (
+                    <div className="rounded-md border bg-muted/40 p-2 text-sm">
+                      <CommentDisplay text={comment} />
                     </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No description added yet.</p>
                   )}
                 </div>
-
-                <div className="grid grid-cols-4 items-start gap-3">
-                  <Label className="text-right text-sm pt-2">Description & Links</Label>
-                  <div className="col-span-3 space-y-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setShowDescriptionModal(true)}
-                      className="inline-flex items-center gap-2"
-                    >
-                      <Pencil className="h-4 w-4" />
-                      {comment ? "Edit description" : "Add description"}
-                    </Button>
-                    {comment ? (
-                      <div className="rounded-md border bg-muted/40 p-2 text-sm">
-                        <CommentDisplay text={comment} />
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">No description added yet.</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-4 items-center gap-3">
-                  <Label htmlFor="name" className="text-right text-sm">
-                    Nickname
-                  </Label>
-                  <Input
-                    id="name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="col-span-3"
-                    placeholder="Optional"
-                  />
-                </div>
               </div>
-            </Collapsible>
 
-            <Collapsible title={timeSummaryTitle} open={timesOpen} onToggle={() => setTimesOpen((o) => !o)}>
-              <div className="pt-4">
-                <RangeDateTimePicker
-                  id="segment-when"
-                  label=""
-                  value={range}
-                  onChange={setRange}
-                  allowDifferentOffsets
-                  compact
+              <div className="grid grid-cols-4 items-center gap-3">
+                <Label htmlFor="name" className="text-right text-sm">
+                  Nickname
+                </Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="col-span-3"
+                  placeholder="Optional"
                 />
               </div>
-            </Collapsible>
+            </div>
+          </Collapsible>
 
-            <Collapsible title={locationSummaryTitle} open={locationsOpen} onToggle={() => setLocationsOpen((o) => !o)}>
-              <div className="pt-4">
-                <RangeLocationPicker id="segment-where" label="" value={locRange} onChange={setLocRange} compact />
+          <Collapsible title={timeSummaryTitle} open={timesOpen} onToggle={() => setTimesOpen((o) => !o)}>
+            <div className="pt-4">
+              <RangeDateTimePicker
+                id="segment-when"
+                label=""
+                value={range}
+                onChange={setRange}
+                allowDifferentOffsets
+                compact
+              />
+            </div>
+          </Collapsible>
+
+          <Collapsible title={locationSummaryTitle} open={locationsOpen} onToggle={() => setLocationsOpen((o) => !o)}>
+            <div className="pt-4">
+              <RangeLocationPicker id="segment-where" label="" value={locRange} onChange={setLocRange} compact />
+            </div>
+          </Collapsible>
+
+          {segment && !isDuplicateMode && (
+            <Collapsible
+              title={connectedSummaryTitle}
+              open={connectedOptionsOpen}
+              onToggle={() => setConnectedOptionsOpen((o) => !o)}
+            >
+              <div className="pt-4 flex flex-col flex-1 min-h-0">
+                <OptionFilterPanel
+                  value={optionFilterState}
+                  onChange={setOptionFilterState}
+                  sort={optionSortState}
+                  onSortChange={setOptionSortState}
+                  availableLocations={optionMetadata.locations}
+                  minDate={optionMetadata.dateBounds.min}
+                  maxDate={optionMetadata.dateBounds.max}
+                  uniqueStartDates={optionMetadata.uniqueStartDates}
+                  uniqueEndDates={optionMetadata.uniqueEndDates}
+                  totalCount={options.length}
+                  filteredCount={filteredOptionsForDisplay.length}
+                  hiddenCount={options.filter((o) => o.isUiVisible === false).length}
+                  className="mb-3"
+                />
+                <ScrollArea className="flex-1 min-h-[150px] border rounded-md p-3">
+                  {filteredOptionsForDisplay.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No options available.</p>
+                  ) : (
+                    filteredOptionsForDisplay.map((option) => {
+                      const optionHidden = option.isUiVisible === false
+                      const dimmed = optionFilterState.showHidden && optionHidden
+                      const optionCostLabel = formatOptionCostForDisplay(option)
+                      const optionConfig = buildOptionConfigFromApi(option)
+                      const tokens = buildOptionTitleTokens({
+                        ...optionConfig,
+                        totalCost: optionCostLabel ?? optionConfig.totalCost,
+                      })
+                      const summaryLabel = tokensToLabel(tokens) || option.name
+
+                      return (
+                        <OptionSelectCard
+                          key={option.id}
+                          optionId={Number(option.id)}
+                          checked={selectedOptions.includes(Number(option.id))}
+                          onCheckedChange={(checked) => handleOptionChange(Number(option.id), checked)}
+                          tokens={tokens}
+                          summaryLabel={summaryLabel}
+                          costLabel={optionCostLabel}
+                          dimmed={dimmed}
+                        />
+                      )
+                    })
+                  )}
+                </ScrollArea>
               </div>
             </Collapsible>
+          )}
+        </div>
+      </form>
 
-            {segment && !isDuplicateMode && (
-              <Collapsible
-                title={connectedSummaryTitle}
-                open={connectedOptionsOpen}
-                onToggle={() => setConnectedOptionsOpen((o) => !o)}
-              >
-                <div className="pt-4 flex flex-col flex-1 min-h-0">
-                  <OptionFilterPanel
-                    value={optionFilterState}
-                    onChange={setOptionFilterState}
-                    sort={optionSortState}
-                    onSortChange={setOptionSortState}
-                    availableLocations={optionMetadata.locations}
-                    minDate={optionMetadata.dateBounds.min}
-                    maxDate={optionMetadata.dateBounds.max}
-                    uniqueStartDates={optionMetadata.uniqueStartDates}
-                    uniqueEndDates={optionMetadata.uniqueEndDates}
-                    totalCount={options.length}
-                    filteredCount={filteredOptionsForDisplay.length}
-                    hiddenCount={options.filter((o) => o.isUiVisible === false).length}
-                    className="mb-3"
-                  />
-                  <ScrollArea className="flex-1 min-h-[150px] border rounded-md p-3">
-                    {filteredOptionsForDisplay.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No options available.</p>
-                    ) : (
-                      filteredOptionsForDisplay.map((option) => {
-                        const optionHidden = option.isUiVisible === false
-                        const dimmed = optionFilterState.showHidden && optionHidden
-                        const optionCostLabel = formatOptionCostForDisplay(option)
-                        const optionConfig = buildOptionConfigFromApi(option)
-                        const tokens = buildOptionTitleTokens({
-                          ...optionConfig,
-                          totalCost: optionCostLabel ?? optionConfig.totalCost,
-                        })
-                        const summaryLabel = tokensToLabel(tokens) || option.name
-
-                        return (
-                          <OptionSelectCard
-                            key={option.id}
-                            optionId={Number(option.id)}
-                            checked={selectedOptions.includes(Number(option.id))}
-                            onCheckedChange={(checked) => handleOptionChange(Number(option.id), checked)}
-                            tokens={tokens}
-                            summaryLabel={summaryLabel}
-                            costLabel={optionCostLabel}
-                            dimmed={dimmed}
-                          />
-                        )
-                      })
-                    )}
-                  </ScrollArea>
-                </div>
-              </Collapsible>
-            )}
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
+      {/* Description sub-modal — portaled, works inside panel or dialog */}
       <Dialog open={showDescriptionModal} onOpenChange={setShowDescriptionModal}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -1606,7 +1579,7 @@ type SegmentBaseline = {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Segment</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{name}"? This action cannot be undone.
+              Are you sure you want to delete &quot;{name}&quot;? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1619,4 +1592,4 @@ type SegmentBaseline = {
       </AlertDialog>
     </>
   )
-}
+})

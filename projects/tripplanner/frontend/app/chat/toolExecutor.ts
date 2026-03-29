@@ -209,6 +209,8 @@ async function updateSegment(args: Record<string, unknown>, ctx: ToolContext): P
 
 async function deleteSegment(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
   const segmentId = args.segmentId as number
+  const existing = ctx.segments.find((s) => s.id === segmentId)
+  if (!existing) return { success: false, result: `Segment ${segmentId} not found in this trip`, mutated: false }
   await segmentsApi.remove(ctx.tripId, segmentId)
   return { success: true, result: `Deleted segment ${segmentId}`, mutated: true }
 }
@@ -260,6 +262,8 @@ async function updateOption(args: Record<string, unknown>, ctx: ToolContext): Pr
 
 async function deleteOption(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
   const optionId = args.optionId as number
+  const existing = ctx.options.find((o) => o.id === optionId)
+  if (!existing) return { success: false, result: `Option ${optionId} not found in this trip`, mutated: false }
   await optionsApi.remove(ctx.tripId, optionId)
   return { success: true, result: `Deleted option ${optionId}`, mutated: true }
 }
@@ -267,6 +271,13 @@ async function deleteOption(args: Record<string, unknown>, ctx: ToolContext): Pr
 async function connectSegmentsToOption(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
   const optionId = args.optionId as number
   const segmentIds = args.segmentIds as number[]
+
+  if (!ctx.options.find((o) => o.id === optionId))
+    return { success: false, result: `Option ${optionId} not found in this trip`, mutated: false }
+
+  const unknownSegment = segmentIds.find((id) => !ctx.segments.some((s) => s.id === id))
+  if (unknownSegment !== undefined)
+    return { success: false, result: `Segment ${unknownSegment} not found in this trip`, mutated: false }
 
   await optionsApi.updateConnectedSegments(ctx.tripId, optionId, segmentIds)
   return {

@@ -1,14 +1,14 @@
-// components/OptionModal.tsx
+// OptionDetailContent.tsx
+// Contains all state and UI for viewing/editing an option.
+// Can be hosted inside a Dialog (OptionModal) or an inline panel (OptionDetailPanel).
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Dialog, DialogContent, DialogTitle } from "../components/ui/dialog";
+import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from "react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { toast } from "../components/ui/use-toast";
-import { Checkbox } from "../components/ui/checkbox";
 import { Collapsible } from "../components/Collapsible";
 import {
   AlertDialog,
@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
-import { SaveIcon, Trash2Icon, EyeOffIcon, EyeIcon, LayersIcon, Loader2, SlidersHorizontal } from "lucide-react";
+import { SaveIcon, Trash2Icon, EyeOffIcon, EyeIcon, LayersIcon, Loader2 } from "lucide-react";
 import { SegmentSelectCard } from "../components/SegmentSelectCard";
 import type { SegmentType, SegmentApi, OptionApi, OptionSave, Currency, CurrencyConversion, Segment } from "../types/models";
 import { cn } from "../lib/utils";
@@ -34,7 +34,7 @@ import {
 } from "../utils/formatters";
 import { formatCurrencyAmount, formatConvertedAmount } from "../utils/currency";
 import { optionsApi, segmentsApi } from "../utils/apiClient";
-import { SegmentFilterPanel, countSegmentActiveFilters, type SegmentFilterValue } from "../components/filters/SegmentFilterPanel"
+import { SegmentFilterPanel, type SegmentFilterValue } from "../components/filters/SegmentFilterPanel"
 import type { SegmentSortValue } from "../components/sorting/segmentSortTypes"
 import { applySegmentFilters, buildSegmentMetadata } from "../services/segmentFiltering"
 
@@ -52,7 +52,7 @@ const SEGMENT_COLOR_PALETTE = [
   "#6366f1",
 ]
 
-interface OptionModalProps {
+export interface OptionDetailContentProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (option: OptionSave) => Promise<void> | void;
@@ -68,21 +68,27 @@ interface OptionModalProps {
   initialSegmentSort?: SegmentSortValue | null;
 }
 
-export default function OptionModal({
-  isOpen,
-  onClose,
-  onSave,
-  option,
-  tripId,
-  tripName,
-  refreshOptions,
-  tripCurrencyId,
-  displayCurrencyId,
-  currencies,
-  conversions,
-  initialSegmentFilters,
-  initialSegmentSort,
-}: OptionModalProps) {
+export interface OptionDetailContentHandle {
+  /** Triggers the close flow (shows unsaved-changes prompt if needed). */
+  requestClose: () => void;
+}
+
+export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionDetailContentProps>(
+  function OptionDetailContent({
+    isOpen,
+    onClose,
+    onSave,
+    option,
+    tripId,
+    tripName,
+    refreshOptions,
+    tripCurrencyId,
+    displayCurrencyId,
+    currencies,
+    conversions,
+    initialSegmentFilters,
+    initialSegmentSort,
+  }, ref) {
   const [name, setName] = useState("");
   const [segments, setSegments] = useState<SegmentApi[]>([]);
   const [segmentTypes, setSegmentTypes] = useState<SegmentType[]>([]);
@@ -127,8 +133,6 @@ export default function OptionModal({
     [tripCurrencyId, resolvedDisplayCurrencyId, currencies, conversions],
   )
 
-  // fetch user offset (for time formatting)
-
   const fetchSegments = useCallback(async () => {
     try {
       const data = await segmentsApi.getByTripId(tripId);
@@ -137,7 +141,7 @@ export default function OptionModal({
       console.error("Error fetching segments:", error);
       toast({ title: "Error", description: "Failed to fetch segments. Please try again." });
     }
-  }, [tripId, toast]);
+  }, [tripId]);
 
   const fetchSegmentTypes = useCallback(async () => {
     try {
@@ -147,7 +151,7 @@ export default function OptionModal({
       console.error("Error fetching segment types:", error);
       toast({ title: "Error", description: "Failed to fetch segment types. Please try again." });
     }
-  }, [toast]);
+  }, []);
 
   const fetchConnectedSegments = useCallback(
     async (optionId: number) => {
@@ -163,7 +167,7 @@ export default function OptionModal({
         setBaselineReady(true);
       }
     },
-    [tripId, toast],
+    [tripId],
   );
 
   useEffect(() => {
@@ -308,20 +312,6 @@ export default function OptionModal({
     closeModal()
   }
 
-  const handleDelete = async () => {
-    if (!option) return;
-    try {
-      await optionsApi.remove(tripId, option.id);
-      toast({ title: "Deleted", description: `"${option.name}" has been removed.` });
-      setShowDeleteConfirm(false);
-      refreshOptions();
-      handleClose();
-    } catch (error) {
-      console.error("Error deleting option:", error);
-      toast({ title: "Error", description: "Failed to delete option. Please try again." });
-    }
-  };
-
   const isEditing = Boolean(option);
 
   const hasChanges = useMemo(() => {
@@ -337,18 +327,6 @@ export default function OptionModal({
     return false;
   }, [isEditing, baselineReady, name, isUiVisible, selectedSegments]);
 
-  const isSaveDisabled = isEditing ? !hasChanges : false;
-
-  const formatSegmentDateWithWeekday = useCallback((iso?: string | null) => {
-    if (!iso) return "N/A"
-    const date = new Date(iso)
-    if (Number.isNaN(date.getTime())) return "N/A"
-    const weekday = date.toLocaleDateString(undefined, { weekday: "short" })
-    const dayMonth = date.toLocaleDateString(undefined, { month: "short", day: "numeric" })
-    const timeLabel = date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
-    return `${weekday}, ${dayMonth} · ${timeLabel}`
-  }, [])
-
   const createFormTouched = useMemo(() => {
     if (isEditing) return false
     return Boolean(
@@ -359,6 +337,46 @@ export default function OptionModal({
   }, [isEditing, name, selectedSegments.length, isUiVisible])
 
   const shouldPromptOnClose = isEditing ? hasChanges : createFormTouched
+
+  const isSaveDisabled = isEditing ? !hasChanges : false;
+
+  const requestClose = useCallback(() => {
+    if (skipClosePromptRef.current) {
+      skipClosePromptRef.current = false
+      return
+    }
+    if (shouldPromptOnClose) {
+      setShowUnsavedConfirm(true)
+    } else {
+      closeModal()
+    }
+  }, [shouldPromptOnClose, closeModal])
+
+  useImperativeHandle(ref, () => ({ requestClose }), [requestClose])
+
+  const handleDelete = async () => {
+    if (!option) return;
+    try {
+      await optionsApi.remove(tripId, option.id);
+      toast({ title: "Deleted", description: `"${option.name}" has been removed.` });
+      setShowDeleteConfirm(false);
+      refreshOptions();
+      handleClose();
+    } catch (error) {
+      console.error("Error deleting option:", error);
+      toast({ title: "Error", description: "Failed to delete option. Please try again." });
+    }
+  };
+
+  const formatSegmentDateWithWeekday = useCallback((iso?: string | null) => {
+    if (!iso) return "N/A"
+    const date = new Date(iso)
+    if (Number.isNaN(date.getTime())) return "N/A"
+    const weekday = date.toLocaleDateString(undefined, { weekday: "short" })
+    const dayMonth = date.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    const timeLabel = date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+    return `${weekday}, ${dayMonth} · ${timeLabel}`
+  }, [])
 
   const segmentFilterMetadata = useMemo(() => {
     return buildSegmentMetadata((segments as Segment[]) ?? [], segmentTypes)
@@ -493,174 +511,153 @@ export default function OptionModal({
     )
   }, [selectedSegmentsCount, selectedConnectedSegments])
 
-  const handleDialogOpenChange = useCallback(
-    (open: boolean) => {
-      if (open) return
-      if (skipClosePromptRef.current) {
-        skipClosePromptRef.current = false
-        return
-      }
-      if (shouldPromptOnClose) {
-        setShowUnsavedConfirm(true)
-      } else {
-        closeModal()
-      }
-    },
-    [shouldPromptOnClose, closeModal],
-  )
-
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="max-w-4xl w-full p-0 flex flex-col h-[90vh]">
-          <DialogTitle className="sr-only">{optionTitleText}</DialogTitle>
-          <form onSubmit={handleSubmit} className="flex flex-col h-full">
-            <div className="border-b bg-background px-4 py-3 pr-10">
-              <div className="mb-3 space-y-1">
-                <div className="flex items-center gap-2 text-lg font-semibold leading-snug">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-secondary/50 text-secondary-foreground shadow-sm">
-                    <LayersIcon className="h-4 w-4" aria-hidden="true" />
-                  </span>
-                  <span>{headerTitle}</span>
-                </div>
-                <p className="text-xs text-muted-foreground">{headerSubtitle}</p>
-              </div>
-
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1">
-                  {isEditing ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setShowDeleteConfirm(true)}
-                      title="Delete option"
-                      className="border-destructive/40 text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2Icon className="h-4 w-4" />
-                    </Button>
-                  ) : (
-                    <span className="h-9 w-9" aria-hidden />
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {isEditing && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="text-muted-foreground"
-                      onClick={() =>
-                        setIsUiVisible((prev) => {
-                          const next = !prev
-                          toast({
-                            title: next ? "Will be shown in list view" : "Won't be shown in list view",
-                          })
-                          return next
-                        })
-                      }
-                      aria-pressed={isUiVisible}
-                    >
-                      {isUiVisible ? <EyeIcon className="h-4 w-4" /> : <EyeOffIcon className="h-4 w-4" />}
-                    </Button>
-                  )}
-                  <Button
-                    type="submit"
-                    size="sm"
-                    className="bg-primary hover:bg-primary/90"
-                    disabled={isSaveDisabled || isSaving}
-                  >
-                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <SaveIcon className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
+      <form onSubmit={handleSubmit} className="flex flex-col h-full">
+        <div className="border-b bg-background px-4 py-3 pr-10">
+          <div className="mb-3 space-y-1">
+            <div className="flex items-center gap-2 text-lg font-semibold leading-snug">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-secondary/50 text-secondary-foreground shadow-sm">
+                <LayersIcon className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <span>{headerTitle}</span>
             </div>
+            <p className="text-xs text-muted-foreground">{headerSubtitle}</p>
+          </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-              <Collapsible title={generalSummaryTitle} open={generalOpen} onToggle={() => setGeneralOpen((prev) => !prev)}>
-                <div className="space-y-4 pt-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="name" className="text-right text-sm">
-                      Name
-                    </Label>
-                    <Input
-                      id="name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="col-span-3"
-                      required
-                    />
-                  </div>
-                </div>
-              </Collapsible>
-
-              {option && (
-                <Collapsible
-                  title={connectedSummaryTitle}
-                  open={connectionsOpen}
-                  onToggle={() => setConnectionsOpen((prev) => !prev)}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1">
+              {isEditing ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  title="Delete option"
+                  className="border-destructive/40 text-destructive hover:bg-destructive/10"
                 >
-                  <div className="space-y-4 pt-4">
-                    <SegmentFilterPanel
-                      value={segmentFilterState}
-                      onChange={setSegmentFilterState}
-                      sort={segmentSortState}
-                      onSortChange={setSegmentSortState}
-                      availableLocations={segmentFilterMetadata.locations}
-                      availableTypes={segmentFilterMetadata.types}
-                      minDate={segmentFilterMetadata.dateBounds.min}
-                      maxDate={segmentFilterMetadata.dateBounds.max}
-                      uniqueStartDates={segmentFilterMetadata.uniqueStartDates}
-                      uniqueEndDates={segmentFilterMetadata.uniqueEndDates}
-                      totalCount={segments.length}
-                      filteredCount={filteredSegmentsForDisplay.length}
-                      hiddenCount={segments.filter((s) => s.isUiVisible === false).length}
-                    />
-                    <ScrollArea className="h-[320px] border rounded-md p-3">
-                      {filteredSegmentsForDisplay.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No segments available.</p>
-                      ) : (
-                        filteredSegmentsForDisplay.map((segment) => {
-                          const segmentType = segmentTypes.find((st) => st.id === segment.segmentTypeId) ?? null
-                          const segmentCostLabel = formatSegmentCost(segment)
-                          const segmentConfig = buildSegmentConfigFromApi(segment, segmentType ?? undefined)
-                          const tokens = buildSegmentTitleTokens({
-                            ...segmentConfig,
-                            cost: segmentCostLabel ?? segmentConfig.cost,
-                          })
-                          const summaryLabel = tokensToLabel(tokens) || segment.name
-                          const isHiddenSegment = segment.isUiVisible === false
-                          const dimmed = !segmentFilterState.showHidden && isHiddenSegment
-                          const dateRangeLabel = `${formatSegmentDateWithWeekday(segment.startDateTimeUtc)} → ${formatSegmentDateWithWeekday(segment.endDateTimeUtc)}`
-
-                          return (
-                            <SegmentSelectCard
-                              key={segment.id}
-                              segmentId={segment.id}
-                              checked={selectedSegments.includes(segment.id)}
-                              onCheckedChange={(checked) => handleSegmentCheckedChange(segment.id, checked)}
-                              tokens={tokens}
-                              summaryLabel={summaryLabel}
-                              costLabel={segmentCostLabel}
-                              dateRangeLabel={dateRangeLabel}
-                              dimmed={dimmed}
-                            />
-                          )
-                        })
-                      )}
-                    </ScrollArea>
-                    {selectedConnectedSegments.length > 0 ? (
-                      <div className="pt-2">
-                        <SegmentDiagram segments={selectedConnectedSegments} />
-                      </div>
-                    ) : null}
-                  </div>
-                </Collapsible>
+                  <Trash2Icon className="h-4 w-4" />
+                </Button>
+              ) : (
+                <span className="h-9 w-9" aria-hidden />
               )}
             </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+            <div className="flex items-center gap-2">
+              {isEditing && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="text-muted-foreground"
+                  onClick={() =>
+                    setIsUiVisible((prev) => {
+                      const next = !prev
+                      toast({
+                        title: next ? "Will be shown in list view" : "Won't be shown in list view",
+                      })
+                      return next
+                    })
+                  }
+                  aria-pressed={isUiVisible}
+                >
+                  {isUiVisible ? <EyeIcon className="h-4 w-4" /> : <EyeOffIcon className="h-4 w-4" />}
+                </Button>
+              )}
+              <Button
+                type="submit"
+                size="sm"
+                className="bg-primary hover:bg-primary/90"
+                disabled={isSaveDisabled || isSaving}
+              >
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <SaveIcon className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+          <Collapsible title={generalSummaryTitle} open={generalOpen} onToggle={() => setGeneralOpen((prev) => !prev)}>
+            <div className="space-y-4 pt-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="name" className="text-right text-sm">
+                  Name
+                </Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="col-span-3"
+                  required
+                />
+              </div>
+            </div>
+          </Collapsible>
+
+          {option && (
+            <Collapsible
+              title={connectedSummaryTitle}
+              open={connectionsOpen}
+              onToggle={() => setConnectionsOpen((prev) => !prev)}
+            >
+              <div className="space-y-4 pt-4">
+                <SegmentFilterPanel
+                  value={segmentFilterState}
+                  onChange={setSegmentFilterState}
+                  sort={segmentSortState}
+                  onSortChange={setSegmentSortState}
+                  availableLocations={segmentFilterMetadata.locations}
+                  availableTypes={segmentFilterMetadata.types}
+                  minDate={segmentFilterMetadata.dateBounds.min}
+                  maxDate={segmentFilterMetadata.dateBounds.max}
+                  uniqueStartDates={segmentFilterMetadata.uniqueStartDates}
+                  uniqueEndDates={segmentFilterMetadata.uniqueEndDates}
+                  totalCount={segments.length}
+                  filteredCount={filteredSegmentsForDisplay.length}
+                  hiddenCount={segments.filter((s) => s.isUiVisible === false).length}
+                />
+                <ScrollArea className="h-[320px] border rounded-md p-3">
+                  {filteredSegmentsForDisplay.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No segments available.</p>
+                  ) : (
+                    filteredSegmentsForDisplay.map((segment) => {
+                      const segmentType = segmentTypes.find((st) => st.id === segment.segmentTypeId) ?? null
+                      const segmentCostLabel = formatSegmentCost(segment)
+                      const segmentConfig = buildSegmentConfigFromApi(segment, segmentType ?? undefined)
+                      const tokens = buildSegmentTitleTokens({
+                        ...segmentConfig,
+                        cost: segmentCostLabel ?? segmentConfig.cost,
+                      })
+                      const summaryLabel = tokensToLabel(tokens) || segment.name
+                      const isHiddenSegment = segment.isUiVisible === false
+                      const dimmed = !segmentFilterState.showHidden && isHiddenSegment
+                      const dateRangeLabel = `${formatSegmentDateWithWeekday(segment.startDateTimeUtc)} → ${formatSegmentDateWithWeekday(segment.endDateTimeUtc)}`
+
+                      return (
+                        <SegmentSelectCard
+                          key={segment.id}
+                          segmentId={segment.id}
+                          checked={selectedSegments.includes(segment.id)}
+                          onCheckedChange={(checked) => handleSegmentCheckedChange(segment.id, checked)}
+                          tokens={tokens}
+                          summaryLabel={summaryLabel}
+                          costLabel={segmentCostLabel}
+                          dateRangeLabel={dateRangeLabel}
+                          dimmed={dimmed}
+                        />
+                      )
+                    })
+                  )}
+                </ScrollArea>
+                {selectedConnectedSegments.length > 0 ? (
+                  <div className="pt-2">
+                    <SegmentDiagram segments={selectedConnectedSegments} />
+                  </div>
+                ) : null}
+              </div>
+            </Collapsible>
+          )}
+        </div>
+      </form>
 
       <AlertDialog open={showUnsavedConfirm} onOpenChange={setShowUnsavedConfirm}>
         <AlertDialogContent>
@@ -707,7 +704,7 @@ export default function OptionModal({
       )}
     </>
   );
-}
+})
 
 function SegmentDiagram({ segments }: { segments: DiagramSegment[] }) {
   const sorted = [...segments].sort((a, b) => {

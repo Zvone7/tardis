@@ -46,3 +46,9 @@ cp backend/TripPlanner/Web/appsettings.local.example.json backend/TripPlanner/We
 ```
 
 Then fill in secrets (e.g. Google OAuth ClientSecret). This file is gitignored and loaded last, so it overrides Key Vault values.
+
+## Documentation
+
+Layout and architecture documentation lives in `frontend/docs/`. Keep it updated when adding, renaming, or restructuring components. Key doc:
+
+- [`frontend/docs/trip-layout.md`](frontend/docs/trip-layout.md) — 3-panel trip view components, responsive behaviour, grid logic

@@ -59,7 +59,7 @@ public class SegmentController : ControllerBase
     [Route(nameof(DeleteSegment))]
     public async Task<ActionResult> DeleteSegment(int tripId, int segmentId, CancellationToken cancellationToken)
     {
-        await _segmentService_.DeleteAsync(segmentId, cancellationToken);
+        await _segmentService_.DeleteAsync(segmentId, tripId, cancellationToken);
         return Ok();
     }
 

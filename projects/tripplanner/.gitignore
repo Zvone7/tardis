@@ -1,2 +1,3 @@
 backend/.DS_Store
 appsettings.local.json
+.claude/settings.local.json
