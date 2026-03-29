@@ -471,14 +471,12 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
         onClose={() => setIsFlightSearchOpen(false)}
         tripId={tripId}
         onSegmentCreated={fetchSegments}
-        segmentTypes={segmentTypes}
       />
       <AccomodationSearch
         isOpen={isAccommodationOpen}
         onClose={() => setIsAccommodationOpen(false)}
         tripId={tripId}
         onSegmentCreated={fetchSegments}
-        segmentTypes={segmentTypes}
       />
     </>
   )
