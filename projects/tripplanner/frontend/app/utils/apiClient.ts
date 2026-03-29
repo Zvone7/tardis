@@ -207,8 +207,11 @@ export const userApi = {
 }
 
 export const geocodingApi = {
-  search: (endpoint: string, query: string, signal?: AbortSignal) =>
-    request<LocationOption[]>(`${endpoint}?q=${encodeURIComponent(query)}`, { signal }),
+  search: (endpoint: string, query: string, signal?: AbortSignal, viewbox?: string) => {
+    let url = `${endpoint}?q=${encodeURIComponent(query)}`
+    if (viewbox) url += `&viewbox=${encodeURIComponent(viewbox)}`
+    return request<LocationOption[]>(url, { signal })
+  },
   reverse: (lat: number, lon: number, signal?: AbortSignal) =>
     request<LocationOption | null>(`/api/geocode/reverse?lat=${lat}&lon=${lon}`, { signal }),
   airport: (code: string, signal?: AbortSignal) =>

@@ -9,6 +9,7 @@ import { ScrollArea } from "./ui/scroll-area"
 import { ArrowLeftRight } from "lucide-react"
 import type { LocationOption } from "../types/models"
 import { geocodingApi } from "../utils/apiClient"
+import { matchTripLocations, tripViewbox } from "../lib/tripLocations"
 
 export interface RangeLocationPickerValue {
   start: LocationOption | null
@@ -32,6 +33,7 @@ interface RangeLocationPickerProps {
   minChars?: number
   debounceMs?: number
   renderPicker?: (props: PickerRenderProps) => React.ReactNode
+  existingLocations?: LocationOption[]
 }
 
 /* -------------------- small utilities -------------------- */
@@ -59,6 +61,7 @@ export function Autocomplete({
   searchEndpoint = "/api/location/search",
   minChars = 2,
   debounceMs = 500,
+  existingLocations,
 }: {
   id: string
   placeholder?: string
@@ -67,6 +70,7 @@ export function Autocomplete({
   searchEndpoint?: string
   minChars?: number
   debounceMs?: number
+  existingLocations?: LocationOption[]
 }) {
   const [query, setQuery] = useState(selected?.formatted || selected?.name || "")
   const [open, setOpen] = useState(false)
@@ -118,11 +122,15 @@ export function Autocomplete({
     setLoading(true)
     ;(async () => {
       try {
-        const list = await geocodingApi.search(searchEndpoint, q, controller.signal)
+        const vb = tripViewbox(existingLocations ?? [])
+        const list = await geocodingApi.search(searchEndpoint, q, controller.signal, vb)
         if (!controller.signal.aborted) {
-          setItems(list)
+          const existing = matchTripLocations(q, existingLocations ?? [])
+          const existingKeys = new Set(existing.map((l) => `${l.lat},${l.lng}`))
+          const merged = [...existing, ...list.filter((l) => !existingKeys.has(`${l.lat},${l.lng}`))]
+          setItems(merged)
           setOpen(true)
-          setFocusedIdx(list.length ? 0 : -1)
+          setFocusedIdx(merged.length ? 0 : -1)
         }
       } catch {
         if (!controller.signal.aborted) {
@@ -137,7 +145,7 @@ export function Autocomplete({
     return () => {
       controller.abort()
     }
-  }, [debounced, minChars, searchEndpoint])
+  }, [debounced, minChars, searchEndpoint, existingLocations])
 
   const selectItem = (itm: LocationOption) => {
     onSelected(itm)
@@ -229,7 +237,7 @@ export function Autocomplete({
                   const label = itm.formatted || (itm.country ? `${itm.name}, ${itm.country}` : itm.name)
                   return (
                     <li
-                      key={`${itm.provider}-${itm.providerPlaceId}`}
+                      key={itm.providerPlaceId ? `${itm.provider}-${itm.providerPlaceId}` : `${itm.lat},${itm.lng}`}
                       role="option"
                       aria-selected={idx === focusedIdx}
                       onMouseDown={(e) => {
@@ -269,6 +277,7 @@ export const RangeLocationPicker: React.FC<RangeLocationPickerProps> = React.mem
     minChars = 2,
     debounceMs = 250,
     renderPicker,
+    existingLocations,
   }) => {
     const { start, end } = value
     const grid = compact ? "grid grid-cols-4 items-center gap-2" : "grid grid-cols-4 items-center gap-3"
@@ -297,6 +306,7 @@ export const RangeLocationPicker: React.FC<RangeLocationPickerProps> = React.mem
                   searchEndpoint={searchEndpoint}
                   minChars={minChars}
                   debounceMs={debounceMs}
+                  existingLocations={existingLocations}
                 />
             }
           </div>
@@ -352,6 +362,7 @@ export const RangeLocationPicker: React.FC<RangeLocationPickerProps> = React.mem
                       searchEndpoint={searchEndpoint}
                       minChars={minChars}
                       debounceMs={debounceMs}
+                      existingLocations={existingLocations}
                     />
                 }
               </div>

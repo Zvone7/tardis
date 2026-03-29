@@ -191,6 +191,7 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
     displayCurrencyId,
     initialOptionFilters,
     initialOptionSort,
+    existingLocations,
   }, ref) {
   const [name, setName] = useState("")
   const [range, setRange] = useState<RangeDateTimePickerValue>({
@@ -1444,7 +1445,7 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
 
           <Collapsible title={locationSummaryTitle} open={locationsOpen} onToggle={() => setLocationsOpen((o) => !o)}>
             <div className="pt-4">
-              <RangeLocationPicker id="segment-where" label="" value={locRange} onChange={setLocRange} compact />
+              <RangeLocationPicker id="segment-where" label="" value={locRange} onChange={setLocRange} compact existingLocations={existingLocations} />
             </div>
           </Collapsible>
 

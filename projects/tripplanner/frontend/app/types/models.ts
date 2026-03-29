@@ -214,6 +214,7 @@ export interface SegmentModalProps {
   displayCurrencyId?: number | null;
   initialOptionFilters?: OptionFilterPreset;
   initialOptionSort?: SimpleOptionSortValue | null;
+  existingLocations?: LocationOption[];
 }
 
 export interface OptionFilterPreset {

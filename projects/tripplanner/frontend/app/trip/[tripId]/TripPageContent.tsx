@@ -30,6 +30,7 @@ import { useCurrencyConversions } from "../../hooks/useCurrencyConversions"
 import { useCurrentUser } from "../../hooks/useCurrentUser"
 import { optionsApi, segmentsApi, tripsApi } from "../../utils/apiClient"
 import type { OptionApi, OptionSave, Segment, SegmentSave, SegmentType, Currency, CurrencyConversion, SegmentApi } from "../../types/models"
+import { extractTripLocations } from "../../lib/tripLocations"
 import type { SegmentFilterValue } from "../../components/filters/SegmentFilterPanel"
 
 // ---- inner component that can use useTripLayout ----
@@ -57,6 +58,7 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
   const [segmentTypes, setSegmentTypes] = useState<SegmentType[]>([])
   const [segmentsLoading, setSegmentsLoading] = useState(true)
   const [segmentsError, setSegmentsError] = useState<string | null>(null)
+  const tripLocations = useMemo(() => extractTripLocations(segments), [segments])
 
   // ---- detail state ----
   const [editingOption, setEditingOption] = useState<OptionApi | null>(null)
@@ -440,6 +442,7 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
           displayCurrencyId={effectiveDisplayCurrencyId}
           initialOptionFilters={undefined}
           initialOptionSort={undefined}
+          existingLocations={tripLocations}
         />
       ) : null}
     </div>
@@ -477,6 +480,7 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
         onClose={() => setIsAccommodationOpen(false)}
         tripId={tripId}
         onSegmentCreated={fetchSegments}
+        existingLocations={tripLocations}
       />
     </>
   )

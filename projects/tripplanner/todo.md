@@ -1,8 +1,11 @@
 -------------------------
 
-when recommending locations to user, existing locations used in other segments should be at the top - if there is any string matching overlap. wll improve caching and using same locations
-only allow one location per city - refine that search. do they need to be hardcoded?
-i also have this issue, idk if its specific for norway, but sometimes location is oslo, norway, sometimes oslo, norway, norway - is there an easy way to fix that? if not, perhaps we can come up with sql table to blacklist location that can be managed thr´ough admin page. i will need sql and full backed for it so i hope we can avoid it
+alright, time to overhauls option connecting to segments. Instead of planning out the entire trips by selecting segments, trip should get split into stages - let's go splitting them by location.
+so for example, a trip I'm looking at is leaving oslo, flying to budapes, then in budapes i rent a car and drive it around, and then eventually take a flight back from budapest to oslo.
+so when user is planning, they will get asked to choose their starting location. options for that dropdown  will be based off of all of the segment locations. so there, they will choose oslo. then they can choose between all avilable segments for that trip id that have a start location in oslo.
+once they choose it, selection location immediately becomes the destination of that flight from oslo, in this case budapest. however, it will be marked as stage 2, in the ui (maybe a new tab, inside the detailcontent) and there they can either go back to stage 1, to add the rental cars which are added with start or start/end location budapest) or they will stay in stage 2 and look at segments that have a start location now being budapest.
+if there are flights that are not timewise reachable (lets say for stage 1 they selected flight that arrives to budapest on 5. april 12:55, flights that takeoff before 5.april 12:55 shouldnt even be shown - same for all segments, not just flights).
+does this make sense?
 
 -------------------------
 

@@ -157,7 +157,7 @@ public class SegmentService
             end_datetime_utc_offset = segment.EndDateTimeUtcOffset,
             name = segment.Name,
             cost = segment.Cost,
-            segment_type_id = segment.SegmentTypeId,
+            segment_type_id = segment.SegmentTypeId ?? 0,
             comment = segment.Comment,
             start_location_id = startLocation?.id,
             end_location_id = endLocation?.id,
@@ -241,6 +241,8 @@ public class SegmentService
                 ? persistedSegment?.currency_id ?? 1
                 : segment.CurrencyId;
 
+            var segmentTypeId = segment.SegmentTypeId ?? persistedSegment?.segment_type_id ?? 0;
+
             await _segmentRepository_.UpdateAsync(new SegmentDbm
             {
                 id = segment.Id,
@@ -251,7 +253,7 @@ public class SegmentService
                 end_datetime_utc_offset = segment.EndDateTimeUtcOffset,
                 name = segment.Name,
                 cost = segment.Cost,
-                segment_type_id = segment.SegmentTypeId,
+                segment_type_id = segmentTypeId,
                 comment = segment.Comment,
                 start_location_id = segment.StartLocation?.Id,
                 end_location_id = segment.EndLocation?.Id,
