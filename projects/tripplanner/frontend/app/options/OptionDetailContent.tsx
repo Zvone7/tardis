@@ -20,10 +20,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
-import { SaveIcon, Trash2Icon, EyeOffIcon, EyeIcon, LayersIcon, Loader2 } from "lucide-react";
+import { SaveIcon, Trash2Icon, EyeOffIcon, EyeIcon, LayersIcon, Loader2, LayoutListIcon, CalendarRangeIcon, MapPinIcon } from "lucide-react";
 import { SegmentSelectCard } from "../components/SegmentSelectCard";
 import type { SegmentType, SegmentApi, OptionApi, OptionSave, Currency, CurrencyConversion, Segment } from "../types/models";
-import { cn } from "../lib/utils";
 import { TitleTokens } from "../components/TitleTokens";
 import {
   buildOptionTitleTokens,
@@ -37,20 +36,15 @@ import { optionsApi, segmentsApi } from "../utils/apiClient";
 import { SegmentFilterPanel, type SegmentFilterValue } from "../components/filters/SegmentFilterPanel"
 import type { SegmentSortValue } from "../components/sorting/segmentSortTypes"
 import { applySegmentFilters, buildSegmentMetadata } from "../services/segmentFiltering"
+import { useStageBuilder } from "../hooks/useStageBuilder"
+import { SegmentTimeline } from "../components/timeline/SegmentTimeline"
+import { TimelineSegmentCard } from "../components/timeline/TimelineSegmentCard"
+import { useTripLayout } from "../trip/[tripId]/TripLayoutContext"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select"
+import { locationKeyOf } from "../lib/tripLocations"
 
 const arraysEqual = (a: number[], b: number[]) => a.length === b.length && a.every((val, idx) => val === b[idx])
 type DiagramSegment = SegmentApi & { segmentType: SegmentType }
-
-const SEGMENT_COLOR_PALETTE = [
-  "#0ea5e9",
-  "#22c55e",
-  "#f97316",
-  "#a855f7",
-  "#ec4899",
-  "#14b8a6",
-  "#f59e0b",
-  "#6366f1",
-]
 
 export interface OptionDetailContentProps {
   isOpen: boolean;
@@ -112,8 +106,14 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
     showHidden: false,
   })
   const [segmentSortState, setSegmentSortState] = useState<SegmentSortValue | null>(null)
-  const [segmentFilterOpen, setSegmentFilterOpen] = useState(true)
+  const [segmentViewMode, setSegmentViewMode] = useState<"timeline" | "list">("timeline")
+  const [listCardSegmentId, setListCardSegmentId] = useState<number | null>(null)
+  const [listCardAnchorEl, setListCardAnchorEl] = useState<HTMLDivElement | null>(null)
+  const listCardHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const resolvedDisplayCurrencyId = displayCurrencyId ?? tripCurrencyId ?? null;
+
+  const stageBuilder = useStageBuilder(segments, selectedSegments)
+  const { panelMode, openSegmentDetail } = useTripLayout()
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false)
   const skipClosePromptRef = useRef(false)
 
@@ -133,13 +133,18 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
     [tripCurrencyId, resolvedDisplayCurrencyId, currencies, conversions],
   )
 
+  const [segmentsLoading, setSegmentsLoading] = useState(false)
+
   const fetchSegments = useCallback(async () => {
+    setSegmentsLoading(true)
     try {
       const data = await segmentsApi.getByTripId(tripId);
       setSegments(data);
     } catch (error) {
       console.error("Error fetching segments:", error);
       toast({ title: "Error", description: "Failed to fetch segments. Please try again." });
+    } finally {
+      setSegmentsLoading(false)
     }
   }, [tripId]);
 
@@ -303,6 +308,28 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
     });
   };
 
+  // Used by list-view card toggle
+  const handleAutoSaveSegment = useCallback(
+    (segmentId: number, checked: boolean) => {
+      handleSegmentCheckedChange(segmentId, checked)
+    },
+    [handleSegmentCheckedChange],
+  )
+
+  // Used by timeline card toggle — also updates stageBuilder
+  const handleTimelineToggleSegment = useCallback(
+    (segmentId: number, checked: boolean) => {
+      const seg = segments.find((x) => x.id === segmentId)
+      const key = seg ? locationKeyOf(seg.startLocation) : null
+      const stageIndex = key
+        ? Math.max(0, stageBuilder.stages.findIndex((s) => s.location.key === key))
+        : 0
+      const newIds = stageBuilder.toggleSegment(segmentId, checked, stageIndex)
+      setSelectedSegments(newIds)
+    },
+    [segments, stageBuilder],
+  )
+
   const closeModal = useCallback(() => {
     skipClosePromptRef.current = true
     onClose()
@@ -450,6 +477,10 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
     const segmentLabel = typeCounts.size > 0
       ? Array.from(typeCounts.entries()).map(([typeName, count]) => `${count} ${typeName}`).join(", ")
       : null
+    const resolvedCurrencyId = displayCurrencyId ?? tripCurrencyId ?? null
+    const currencyLabel = resolvedCurrencyId
+      ? (currencies.find((c) => c.id === resolvedCurrencyId)?.shortName ?? null)
+      : null
     return buildOptionTitleTokens({
       name,
       fallbackName: option?.name || "New option",
@@ -462,11 +493,10 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
       startOffset: derived.startOffset ?? (option ? 0 : null),
       endOffset: derived.endOffset ?? (option ? 0 : null),
       totalCost: derived.totalCost ?? option?.totalCost ?? null,
+      currencyLabel,
     });
-  }, [name, option, selectedSegmentEntities, selectedConnectedSegments, displayCurrencyId, tripCurrencyId, conversions]);
+  }, [name, option, selectedSegmentEntities, selectedConnectedSegments, displayCurrencyId, tripCurrencyId, conversions, currencies]);
 
-  const defaultOptionTitle = option ? `Edit Option: ${option.name ?? "Option"}` : "Create Option";
-  const optionTitleText = tokensToLabel(optionTitleTokens) || defaultOptionTitle;
   const headerTitle = option?.name?.trim() ? option.name.trim() : (tripName || "New option")
   const headerSubtitle = option ? "Editing existing option" : "Creating new option"
 
@@ -600,59 +630,152 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
               onToggle={() => setConnectionsOpen((prev) => !prev)}
             >
               <div className="space-y-4 pt-4">
-                <SegmentFilterPanel
-                  value={segmentFilterState}
-                  onChange={setSegmentFilterState}
-                  sort={segmentSortState}
-                  onSortChange={setSegmentSortState}
-                  availableLocations={segmentFilterMetadata.locations}
-                  availableTypes={segmentFilterMetadata.types}
-                  minDate={segmentFilterMetadata.dateBounds.min}
-                  maxDate={segmentFilterMetadata.dateBounds.max}
-                  uniqueStartDates={segmentFilterMetadata.uniqueStartDates}
-                  uniqueEndDates={segmentFilterMetadata.uniqueEndDates}
-                  totalCount={segments.length}
-                  filteredCount={filteredSegmentsForDisplay.length}
-                  hiddenCount={segments.filter((s) => s.isUiVisible === false).length}
-                />
-                <ScrollArea className="h-[320px] border rounded-md p-3">
-                  {filteredSegmentsForDisplay.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No segments available.</p>
-                  ) : (
-                    filteredSegmentsForDisplay.map((segment) => {
-                      const segmentType = segmentTypes.find((st) => st.id === segment.segmentTypeId) ?? null
-                      const segmentCostLabel = formatSegmentCost(segment)
-                      const segmentConfig = buildSegmentConfigFromApi(segment, segmentType ?? undefined)
-                      const tokens = buildSegmentTitleTokens({
-                        ...segmentConfig,
-                        cost: segmentCostLabel ?? segmentConfig.cost,
-                      })
-                      const summaryLabel = tokensToLabel(tokens) || segment.name
-                      const isHiddenSegment = segment.isUiVisible === false
-                      const dimmed = !segmentFilterState.showHidden && isHiddenSegment
-                      const dateRangeLabel = `${formatSegmentDateWithWeekday(segment.startDateTimeUtc)} → ${formatSegmentDateWithWeekday(segment.endDateTimeUtc)}`
+                {/* Starting location — shared by both views */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                    <MapPinIcon className="h-3.5 w-3.5" />
+                    Starting location
+                  </label>
+                  <Select
+                    value={stageBuilder.startingLocationKey ?? ""}
+                    onValueChange={(v) => stageBuilder.setStartingLocationKey(v || null)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choose starting location…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stageBuilder.availableStartLocations.map((loc) => (
+                        <SelectItem key={loc.key} value={loc.key}>
+                          {loc.country ? `${loc.name}, ${loc.country}` : loc.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                      return (
-                        <SegmentSelectCard
-                          key={segment.id}
-                          segmentId={segment.id}
-                          checked={selectedSegments.includes(segment.id)}
-                          onCheckedChange={(checked) => handleSegmentCheckedChange(segment.id, checked)}
-                          tokens={tokens}
-                          summaryLabel={summaryLabel}
-                          costLabel={segmentCostLabel}
-                          dateRangeLabel={dateRangeLabel}
-                          dimmed={dimmed}
-                        />
-                      )
-                    })
-                  )}
-                </ScrollArea>
-                {selectedConnectedSegments.length > 0 ? (
-                  <div className="pt-2">
-                    <SegmentDiagram segments={selectedConnectedSegments} />
-                  </div>
-                ) : null}
+                {/* View mode toggle */}
+                <div className="flex items-center justify-end gap-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={segmentViewMode === "timeline" ? "secondary" : "ghost"}
+                    className="h-7 px-2 text-xs gap-1"
+                    onClick={() => setSegmentViewMode("timeline")}
+                    title="Timeline view"
+                  >
+                    <CalendarRangeIcon className="h-3.5 w-3.5" />
+                    Timeline
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={segmentViewMode === "list" ? "secondary" : "ghost"}
+                    className="h-7 px-2 text-xs gap-1"
+                    onClick={() => setSegmentViewMode("list")}
+                    title="List view"
+                  >
+                    <LayoutListIcon className="h-3.5 w-3.5" />
+                    List
+                  </Button>
+                </div>
+
+                {segmentViewMode === "timeline" ? (
+                  <SegmentTimeline
+                    segments={segments}
+                    segmentTypes={segmentTypes}
+                    selectedSegmentIds={selectedSegments}
+                    onToggleSegment={handleTimelineToggleSegment}
+                    stages={stageBuilder.stages}
+                    stageBuilder={stageBuilder}
+                    formatSegmentCost={formatSegmentCost}
+                    panelMode={panelMode}
+                    startingLocationKey={stageBuilder.startingLocationKey}
+                    optionName={name}
+                    loading={segmentsLoading}
+                  />
+                ) : (
+                  <>
+                    <SegmentFilterPanel
+                      value={segmentFilterState}
+                      onChange={setSegmentFilterState}
+                      sort={segmentSortState}
+                      onSortChange={setSegmentSortState}
+                      availableLocations={segmentFilterMetadata.locations}
+                      availableTypes={segmentFilterMetadata.types}
+                      minDate={segmentFilterMetadata.dateBounds.min}
+                      maxDate={segmentFilterMetadata.dateBounds.max}
+                      uniqueStartDates={segmentFilterMetadata.uniqueStartDates}
+                      uniqueEndDates={segmentFilterMetadata.uniqueEndDates}
+                      totalCount={segments.length}
+                      filteredCount={filteredSegmentsForDisplay.length}
+                      hiddenCount={segments.filter((s) => s.isUiVisible === false).length}
+                    />
+                    <ScrollArea className="h-[320px] border rounded-md p-3">
+                      {filteredSegmentsForDisplay.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No segments available.</p>
+                      ) : (
+                        filteredSegmentsForDisplay.map((segment) => {
+                          const segmentType = segmentTypes.find((st) => st.id === segment.segmentTypeId) ?? null
+                          const segmentCostLabel = formatSegmentCost(segment)
+                          const segmentConfig = buildSegmentConfigFromApi(segment, segmentType ?? undefined)
+                          const tokens = buildSegmentTitleTokens({
+                            ...segmentConfig,
+                            cost: segmentCostLabel ?? segmentConfig.cost,
+                          })
+                          const summaryLabel = tokensToLabel(tokens) || segment.name
+                          const isHiddenSegment = segment.isUiVisible === false
+                          const dimmed = !segmentFilterState.showHidden && isHiddenSegment
+                          const dateRangeLabel = `${formatSegmentDateWithWeekday(segment.startDateTimeUtc)} → ${formatSegmentDateWithWeekday(segment.endDateTimeUtc)}`
+
+                          return (
+                            <SegmentSelectCard
+                              key={segment.id}
+                              segmentId={segment.id}
+                              checked={selectedSegments.includes(segment.id)}
+                              onCheckedChange={(checked) => handleSegmentCheckedChange(segment.id, checked)}
+                              tokens={tokens}
+                              summaryLabel={summaryLabel}
+                              costLabel={segmentCostLabel}
+                              dateRangeLabel={dateRangeLabel}
+                              dimmed={dimmed}
+                              savedSelection={initialSelectedSegmentsRef.current?.includes(segment.id) ?? true}
+                              segmentType={segmentType}
+                              onSegmentIconMouseEnter={(el) => {
+                                if (listCardHideTimer.current) clearTimeout(listCardHideTimer.current)
+                                setListCardSegmentId(segment.id)
+                                setListCardAnchorEl(el)
+                              }}
+                              onSegmentIconMouseLeave={() => {
+                                listCardHideTimer.current = setTimeout(() => {
+                                  setListCardSegmentId(null)
+                                  setListCardAnchorEl(null)
+                                }, 150)
+                              }}
+                              onSegmentIconClick={(el) => {
+                                setListCardSegmentId((prev) => prev === segment.id ? null : segment.id)
+                                setListCardAnchorEl((prev) => prev === el ? null : el)
+                              }}
+                            />
+                          )
+                        })
+                      )}
+                    </ScrollArea>
+                    <TimelineSegmentCard
+                      segment={listCardSegmentId !== null ? (segments.find((s) => s.id === listCardSegmentId) ?? null) : null}
+                      segmentType={listCardSegmentId !== null ? (segmentTypes.find((st) => st.id === segments.find((s) => s.id === listCardSegmentId)?.segmentTypeId) ?? null) : null}
+                      anchorEl={listCardAnchorEl}
+                      formatSegmentCost={formatSegmentCost}
+                      selected={listCardSegmentId !== null && selectedSegments.includes(listCardSegmentId)}
+                      optionName={name}
+                      onToggle={(segmentId) => handleAutoSaveSegment(segmentId, !selectedSegments.includes(segmentId))}
+                      onClose={() => { setListCardSegmentId(null); setListCardAnchorEl(null) }}
+                      onNavigateToSegment={openSegmentDetail}
+                      onMouseEnter={() => { if (listCardHideTimer.current) clearTimeout(listCardHideTimer.current) }}
+                      onMouseLeave={() => { setListCardSegmentId(null); setListCardAnchorEl(null) }}
+                    />
+                  </>
+                )}
+
               </div>
             </Collapsible>
           )}
@@ -706,45 +829,3 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
   );
 })
 
-function SegmentDiagram({ segments }: { segments: DiagramSegment[] }) {
-  const sorted = [...segments].sort((a, b) => {
-    if (a.startDateTimeUtc && b.startDateTimeUtc) {
-      return new Date(a.startDateTimeUtc).getTime() - new Date(b.startDateTimeUtc).getTime()
-    }
-    return 0
-  })
-
-  const segmentWidth = sorted.length ? 100 / sorted.length : 100
-
-  return (
-    <div className="mt-2 flex w-full space-x-1 overflow-x-auto py-2">
-      {sorted.map((segment, index) => {
-        const paletteColor = SEGMENT_COLOR_PALETTE[index % SEGMENT_COLOR_PALETTE.length]
-        const bgColor = segment.segmentType.color?.trim() ? segment.segmentType.color : paletteColor
-        return (
-          <div key={segment.id} className="flex-grow" style={{ width: `${segmentWidth}%`, minWidth: "80px" }}>
-            <div
-              className="relative flex h-12 items-center justify-center overflow-hidden rounded-md shadow-lg ring-1 ring-black/10 dark:ring-white/20"
-              style={{
-                backgroundColor: bgColor,
-                clipPath: "polygon(0 0, 90% 0, 100% 50%, 90% 100%, 0 100%, 10% 50%)",
-              }}
-              title={`${segment.segmentType.name} - ${segment.name}`}
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-white/25 to-transparent mix-blend-overlay pointer-events-none" />
-              <div className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white text-black shadow-md">
-                {segment.segmentType.iconSvg ? (
-                  <div
-                    className="h-5 w-5"
-                    dangerouslySetInnerHTML={{ __html: segment.segmentType.iconSvg as string }}
-                    suppressHydrationWarning
-                  />
-                ) : null}
-              </div>
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}

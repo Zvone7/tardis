@@ -1,5 +1,23 @@
-import type { Segment, LocationOption } from "../types/models"
+import type { Segment, LocationOption, LocationDto, SegmentApi } from "../types/models"
 import { normalizeLocation } from "./mapping"
+
+export function locationKeyOf(loc: LocationOption | LocationDto | null | undefined): string | null {
+  const normalized = normalizeLocation(loc)
+  if (!normalized || (normalized.lat === 0 && normalized.lng === 0)) return null
+  return `${normalized.lat},${normalized.lng}`
+}
+
+export function locationLabelOf(loc: LocationOption | LocationDto | null | undefined): string | null {
+  const normalized = normalizeLocation(loc)
+  if (!normalized || !normalized.name) return null
+  return normalized.country ? `${normalized.name}, ${normalized.country}` : normalized.name
+}
+
+export function isTransitSegment(segment: SegmentApi, stageLocationKey: string): boolean {
+  const startKey = locationKeyOf(segment.startLocation)
+  const endKey = locationKeyOf(segment.endLocation)
+  return startKey === stageLocationKey && endKey !== null && endKey !== stageLocationKey
+}
 
 export function extractTripLocations(segments: Segment[]): LocationOption[] {
   const seen = new Map<string, LocationOption>()

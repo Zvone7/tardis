@@ -1,12 +1,13 @@
 // TripPageContent.tsx
-// Orchestrates the 3-panel trip view.
+// Orchestrates the multi-panel trip view.
 // Fetches shared trip data once. Renders TripPanelLayout with:
 //   - Chat panel (inline ChatPanel in grid mode)
 //   - Tabbed list (OptionsList / SegmentsList)
-//   - Detail panel (OptionDetailPanel / SegmentDetailPanel)
+//   - Option detail panel (left detail)
+//   - Segment detail panel (right detail — can coexist with option panel)
 "use client"
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "../../components/ui/button"
 import { PlusIcon, MessageCircle, MessageCircleOff, CombineIcon, PlaneIcon, BedDoubleIcon, MoreVerticalIcon } from "lucide-react"
@@ -36,7 +37,20 @@ import type { SegmentFilterValue } from "../../components/filters/SegmentFilterP
 // ---- inner component that can use useTripLayout ----
 
 function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: ActiveTab }) {
-  const { isChatOpen, toggleChat, detailPanel, openOptionDetail, openSegmentDetail, closeDetail, activeTab, setActiveTab, panelMode } = useTripLayout()
+  const {
+    isChatOpen,
+    toggleChat,
+    optionPanelId,
+    segmentPanelId,
+    openOptionDetail,
+    openSegmentDetail,
+    closeOptionDetail,
+    closeSegmentDetail,
+    closeDetail,
+    activeTab,
+    setActiveTab,
+    panelMode,
+  } = useTripLayout()
   const chatContext = useChatContext()
   const router = useRouter()
 
@@ -61,9 +75,13 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
   const tripLocations = useMemo(() => extractTripLocations(segments), [segments])
 
   // ---- detail state ----
+  // Option panel: open when optionPanelId != null OR when creating new (isOptionPanelOpen = true, optionPanelId = null)
   const [editingOption, setEditingOption] = useState<OptionApi | null>(null)
+  const [isOptionPanelOpen, setIsOptionPanelOpen] = useState(false)
+
+  // Segment panel: open when segmentPanelId != null OR when creating new
   const [editingSegment, setEditingSegment] = useState<Segment | null>(null)
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+  const [isSegmentPanelOpen, setIsSegmentPanelOpen] = useState(false)
 
   // ---- other modals ----
   const [isCombineAllOpen, setIsCombineAllOpen] = useState(false)
@@ -184,24 +202,30 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
     })
   }, [chatContext.registerRefreshCallback, fetchOptions, fetchSegments])
 
-  // Sync detail panel with editing state
+  // Sync option panel state with optionPanelId from context
   useEffect(() => {
-    if (!detailPanel) {
+    if (optionPanelId === null) {
+      // Only close if not in "create new" mode (handled separately)
       setEditingOption(null)
-      setEditingSegment(null)
-      setIsDetailModalOpen(false)
+      setIsOptionPanelOpen(false)
       return
     }
-    if (detailPanel.type === "option") {
-      const found = options.find((o) => o.id === detailPanel.id) ?? null
-      setEditingOption(found)
-      setIsDetailModalOpen(true)
-    } else {
-      const found = segments.find((s) => s.id === detailPanel.id) ?? null
-      setEditingSegment(found)
-      setIsDetailModalOpen(true)
+    const found = options.find((o) => o.id === optionPanelId) ?? null
+    setEditingOption(found)
+    setIsOptionPanelOpen(true)
+  }, [optionPanelId, options])
+
+  // Sync segment panel state with segmentPanelId from context
+  useEffect(() => {
+    if (segmentPanelId === null) {
+      setEditingSegment(null)
+      setIsSegmentPanelOpen(false)
+      return
     }
-  }, [detailPanel, options, segments])
+    const found = segments.find((s) => s.id === segmentPanelId) ?? null
+    setEditingSegment(found)
+    setIsSegmentPanelOpen(true)
+  }, [segmentPanelId, segments])
 
   // ---- handlers ----
 
@@ -209,9 +233,9 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
     if (option) {
       openOptionDetail(option.id)
     } else {
-      // Create new — open with null (no detailPanel id yet, open modal directly)
+      // Create new — open panel without an ID
       setEditingOption(null)
-      setIsDetailModalOpen(true)
+      setIsOptionPanelOpen(true)
       closeDetail()
     }
   }, [openOptionDetail, closeDetail])
@@ -221,17 +245,26 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
       openSegmentDetail(segment.id)
     } else {
       setEditingSegment(null)
-      setIsDetailModalOpen(true)
-      closeDetail()
+      setIsSegmentPanelOpen(true)
+      closeSegmentDetail()
     }
-  }, [openSegmentDetail, closeDetail])
+  }, [openSegmentDetail, closeSegmentDetail])
 
-  const handleCloseDetail = useCallback(() => {
-    closeDetail()
-    setIsDetailModalOpen(false)
+  /** Close the option panel (and segment panel). */
+  const handleCloseOptionPanel = useCallback(() => {
+    closeOptionDetail()
+    setIsOptionPanelOpen(false)
     setEditingOption(null)
     setEditingSegment(null)
-  }, [closeDetail])
+    setIsSegmentPanelOpen(false)
+  }, [closeOptionDetail])
+
+  /** Close only the segment panel; option panel stays open. */
+  const handleCloseSegmentPanel = useCallback(() => {
+    closeSegmentDetail()
+    setIsSegmentPanelOpen(false)
+    setEditingSegment(null)
+  }, [closeSegmentDetail])
 
   const handleSaveOption = useCallback(async (optionData: OptionSave) => {
     try {
@@ -253,12 +286,13 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
       } else {
         await segmentsApi.create(String(tripId), segmentData)
       }
-      handleCloseDetail()
+      // Only close the segment panel; option panel stays open
+      handleCloseSegmentPanel()
       await fetchSegments()
     } catch (err) {
       console.error("Error saving segment:", err)
     }
-  }, [tripId, fetchSegments, handleCloseDetail])
+  }, [tripId, fetchSegments, handleCloseSegmentPanel])
 
   const effectiveDisplayCurrencyId = displayCurrencyId ?? tripCurrencyId ?? userPreferredCurrencyId ?? null
 
@@ -272,10 +306,6 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
   }), [])
 
   // ---- render ----
-
-  const isDetailOpen = isDetailModalOpen
-  const isOptionDetail = detailPanel?.type === "option" || (!detailPanel && editingOption === null && isDetailModalOpen && activeTab === "options")
-  const isSegmentDetail = detailPanel?.type === "segment" || (!detailPanel && editingSegment === null && isDetailModalOpen && activeTab === "segments")
 
   const chatPanelContent = <ChatPanel mode="inline" />
 
@@ -411,40 +441,42 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
     </div>
   )
 
-  const detailPanelContent = (
+  const optionDetailContent = (
     <div className="h-full flex flex-col">
-      {detailPanel?.type === "option" || (!detailPanel && isDetailModalOpen && activeTab === "options") ? (
-        <OptionDetailPanel
-          isOpen={isDetailModalOpen}
-          onClose={handleCloseDetail}
-          onSave={handleSaveOption}
-          option={editingOption ?? undefined}
-          tripId={tripId}
-          tripName={tripName}
-          refreshOptions={fetchOptions}
-          tripCurrencyId={tripCurrencyId}
-          displayCurrencyId={effectiveDisplayCurrencyId}
-          currencies={currencies}
-          conversions={conversions}
-          initialSegmentFilters={initialSegmentFilters}
-          initialSegmentSort={null}
-        />
-      ) : detailPanel?.type === "segment" || (!detailPanel && isDetailModalOpen && activeTab === "segments") ? (
-        <SegmentDetailPanel
-          isOpen={isDetailModalOpen}
-          onClose={handleCloseDetail}
-          onSave={handleSaveSegment}
-          segment={editingSegment ?? undefined}
-          tripId={tripId}
-          tripName={tripName}
-          segmentTypes={segmentTypes}
-          tripCurrencyId={tripCurrencyId}
-          displayCurrencyId={effectiveDisplayCurrencyId}
-          initialOptionFilters={undefined}
-          initialOptionSort={undefined}
-          existingLocations={tripLocations}
-        />
-      ) : null}
+      <OptionDetailPanel
+        isOpen={isOptionPanelOpen}
+        onClose={handleCloseOptionPanel}
+        onSave={handleSaveOption}
+        option={editingOption ?? undefined}
+        tripId={tripId}
+        tripName={tripName}
+        refreshOptions={fetchOptions}
+        tripCurrencyId={tripCurrencyId}
+        displayCurrencyId={effectiveDisplayCurrencyId}
+        currencies={currencies}
+        conversions={conversions}
+        initialSegmentFilters={initialSegmentFilters}
+        initialSegmentSort={null}
+      />
+    </div>
+  )
+
+  const segmentDetailContent = (
+    <div className="h-full flex flex-col">
+      <SegmentDetailPanel
+        isOpen={isSegmentPanelOpen}
+        onClose={handleCloseSegmentPanel}
+        onSave={handleSaveSegment}
+        segment={editingSegment ?? undefined}
+        tripId={tripId}
+        tripName={tripName}
+        segmentTypes={segmentTypes}
+        tripCurrencyId={tripCurrencyId}
+        displayCurrencyId={effectiveDisplayCurrencyId}
+        initialOptionFilters={undefined}
+        initialOptionSort={undefined}
+        existingLocations={tripLocations}
+      />
     </div>
   )
 
@@ -453,7 +485,10 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
       <TripPanelLayout
         chatPanel={chatPanelContent}
         listPanel={listPanelContent}
-        detailPanel={detailPanelContent}
+        detailPanel={optionDetailContent}
+        secondaryDetailPanel={segmentDetailContent}
+        isOptionPanelOpen={isOptionPanelOpen}
+        isSegmentPanelOpen={isSegmentPanelOpen}
       />
 
       {/* Mobile: chat renders as a Sheet (column is hidden on mobile) */}

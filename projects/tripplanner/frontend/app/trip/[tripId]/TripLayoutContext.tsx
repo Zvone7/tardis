@@ -4,15 +4,9 @@ import React, { createContext, useContext, useState, useCallback } from "react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { useMediaQuery } from "../../hooks/useMediaQuery"
 import { useChatContext } from "../../chat/ChatProvider"
-import type { OptionApi, Segment } from "../../types/models"
 
 export type PanelMode = "desktop" | "tablet" | "mobile"
 export type ActiveTab = "options" | "segments"
-
-export interface DetailPanel {
-  type: "option" | "segment"
-  id: number
-}
 
 interface TripLayoutContextValue {
   // Panel visibility
@@ -21,10 +15,17 @@ interface TripLayoutContextValue {
   openChat: () => void
   closeChat: () => void
 
-  // Detail panel
-  detailPanel: DetailPanel | null
+  // Option detail panel (left detail)
+  optionPanelId: number | null
   openOptionDetail: (id: number) => void
+  closeOptionDetail: () => void  // closes option AND segment
+
+  // Segment detail panel (right detail — can coexist with option panel)
+  segmentPanelId: number | null
   openSegmentDetail: (id: number) => void
+  closeSegmentDetail: () => void  // closes segment only
+
+  /** Closes both detail panels. */
   closeDetail: () => void
 
   // Active tab
@@ -60,7 +61,8 @@ export function TripLayoutProvider({
   const searchParams = useSearchParams()
 
   const [activeTab, setActiveTabState] = useState<ActiveTab>(initialTab)
-  const [detailPanel, setDetailPanel] = useState<DetailPanel | null>(null)
+  const [optionPanelId, setOptionPanelId] = useState<number | null>(null)
+  const [segmentPanelId, setSegmentPanelId] = useState<number | null>(null)
 
   const setActiveTab = useCallback((tab: ActiveTab) => {
     setActiveTabState(tab)
@@ -69,7 +71,6 @@ export function TripLayoutProvider({
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }, [router, pathname, searchParams])
 
-  // Bridge chat state from ChatProvider
   const isChatOpen = chatContext.isOpen && !chatContext.isMinimized
 
   const toggleChat = useCallback(() => {
@@ -93,8 +94,8 @@ export function TripLayoutProvider({
   }, [chatContext])
 
   const openOptionDetail = useCallback((id: number) => {
-    setDetailPanel({ type: "option", id })
-    // On tablet, opening detail auto-closes chat
+    setOptionPanelId(id)
+    setSegmentPanelId(null) // opening a new option resets any open segment
     if (panelMode === "tablet" && chatContext.isOpen) {
       chatContext.setIsOpen(false)
       chatContext.setIsMinimized(false)
@@ -102,16 +103,26 @@ export function TripLayoutProvider({
   }, [panelMode, chatContext])
 
   const openSegmentDetail = useCallback((id: number) => {
-    setDetailPanel({ type: "segment", id })
-    // On tablet, opening detail auto-closes chat
+    setSegmentPanelId(id)
+    // Keep optionPanelId as-is so both panels can coexist
     if (panelMode === "tablet" && chatContext.isOpen) {
       chatContext.setIsOpen(false)
       chatContext.setIsMinimized(false)
     }
   }, [panelMode, chatContext])
 
+  const closeOptionDetail = useCallback(() => {
+    setOptionPanelId(null)
+    setSegmentPanelId(null) // closing option also closes segment
+  }, [])
+
+  const closeSegmentDetail = useCallback(() => {
+    setSegmentPanelId(null)
+  }, [])
+
   const closeDetail = useCallback(() => {
-    setDetailPanel(null)
+    setOptionPanelId(null)
+    setSegmentPanelId(null)
   }, [])
 
   return (
@@ -121,9 +132,12 @@ export function TripLayoutProvider({
         toggleChat,
         openChat,
         closeChat,
-        detailPanel,
+        optionPanelId,
         openOptionDetail,
+        closeOptionDetail,
+        segmentPanelId,
         openSegmentDetail,
+        closeSegmentDetail,
         closeDetail,
         activeTab,
         setActiveTab,

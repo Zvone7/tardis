@@ -10,7 +10,7 @@ import { ChatPanel } from "./ChatPanel"
  */
 export function ConditionalChatOverlay() {
   const pathname = usePathname()
-  if (pathname?.startsWith("/trip/")) return null
+  if (pathname?.startsWith("/trip") || pathname === "/trips") return null
   return (
     <>
       <ChatButton />

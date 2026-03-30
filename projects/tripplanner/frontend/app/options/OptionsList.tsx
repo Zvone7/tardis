@@ -4,7 +4,6 @@
 "use client"
 
 import { useState, useMemo, useCallback } from "react"
-import { CardContent } from "../components/ui/card"
 import { Skeleton } from "../components/ui/skeleton"
 import { Card, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button"
@@ -12,15 +11,17 @@ import { EditIcon, EyeIcon, EyeOffIcon, LinkIcon } from "lucide-react"
 import { Checkbox } from "../components/ui/checkbox"
 import SelectPopupMenu from "../components/SelectPopupMenu"
 import BatchConnectSegmentModal from "./BatchConnectSegmentModal"
-import { OptionFilterPanel, useOptionFilterHasFilters, type OptionFilterValue } from "../components/filters/OptionFilterPanel"
+import { OptionFilterPanel, type OptionFilterValue } from "../components/filters/OptionFilterPanel"
 import type { OptionSortValue } from "../components/sorting/optionSortTypes"
 import { applyOptionFilters, buildOptionMetadata } from "../services/optionFiltering"
 import { computeCostChips } from "../components/filters/costChips"
 import { cn } from "../lib/utils"
 import { optionsApi } from "../utils/apiClient"
-import { formatCurrencyAmount, convertWithFallback } from "../utils/currency"
+import { formatCurrencyAmount, formatConvertedAmount, convertWithFallback } from "../utils/currency"
 import { formatDateWithUserOffset, formatWeekday } from "../utils/dateformatters"
 import type { OptionApi, SegmentApi, SegmentType, Currency, CurrencyConversion } from "../types/models"
+import { useTripLayout } from "../trip/[tripId]/TripLayoutContext"
+import { TimelineSegmentCard } from "../components/timeline/TimelineSegmentCard"
 
 // ---- local types ----
 
@@ -164,6 +165,7 @@ function OptionCard({
   currencies,
   conversions,
   connectedSegments,
+  allSegments,
   userPreferredOffset,
   isSelected = false,
   onToggleSelect,
@@ -177,91 +179,143 @@ function OptionCard({
   currencies: Currency[]
   conversions: CurrencyConversion[]
   connectedSegments: ConnectedSegment[]
+  allSegments: SegmentApi[]
   userPreferredOffset: number
   isSelected?: boolean
   onToggleSelect?: (optionId: number) => void
   activeSortField?: string | null
 }) {
+  const { openSegmentDetail } = useTripLayout()
+  const [cardSegmentId, setCardSegmentId] = useState<number | null>(null)
+  const [cardAnchorEl, setCardAnchorEl] = useState<HTMLDivElement | null>(null)
+
+  // Look up the full segment data from allSegments (has complete fields: locations, cost, etc.)
+  const cardSegment = useMemo(
+    () => (cardSegmentId !== null ? (allSegments.find((s) => s.id === cardSegmentId) ?? null) : null),
+    [cardSegmentId, allSegments],
+  )
+  // Get the segment type from connectedSegments (already has the type joined)
+  const cardSegmentType = useMemo(
+    () => (cardSegmentId !== null ? (connectedSegments.find((s) => s.id === cardSegmentId)?.segmentType ?? null) : null),
+    [cardSegmentId, connectedSegments],
+  )
+
   const isHidden = option.isUiVisible === false
   const sortedSegments = useMemo(
     () => [...connectedSegments].sort((a, b) => (a.startDateTimeUtc ?? "").localeCompare(b.startDateTimeUtc ?? "")),
     [connectedSegments]
   )
+
+  const formatSegmentCost = useCallback((seg: SegmentApi) => {
+    if (seg.cost === null || seg.cost === undefined) return null
+    return (
+      formatConvertedAmount({
+        amount: seg.cost,
+        fromCurrencyId: seg.currencyId ?? tripCurrencyId ?? null,
+        toCurrencyId: displayCurrencyId ?? tripCurrencyId ?? null,
+        currencies,
+        conversions,
+      }) ?? formatCurrencyAmount(seg.cost, seg.currencyId ?? tripCurrencyId ?? null, currencies)
+    )
+  }, [tripCurrencyId, displayCurrencyId, currencies, conversions])
+
   return (
-    <Card
-      className={cn(
-        "hover:shadow-sm transition-all duration-200 ease-in-out border cursor-pointer hover:-translate-y-0.5",
-        isHidden && "bg-muted text-muted-foreground border-muted-foreground/40",
-        isSelected && "ring-2 ring-primary"
-      )}
-      onClick={() => onEdit(option)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onEdit(option) }}
-      aria-label={`Edit option ${option.name}`}
-    >
-      <div className="flex flex-col md:flex-row">
-        <div className="flex-1 min-w-0 p-4 pb-3 md:pb-4">
-          <div className="flex items-start">
-            <div className="mr-2 mt-1" onClick={(e) => e.stopPropagation()}>
-              <Checkbox checked={isSelected} onCheckedChange={() => onToggleSelect?.(option.id)} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <CardTitle className="text-lg font-semibold tracking-tight">{option.name}</CardTitle>
+    <>
+      <Card
+        className={cn(
+          "hover:shadow-sm transition-all duration-200 ease-in-out border cursor-pointer hover:-translate-y-0.5",
+          isHidden && "bg-muted text-muted-foreground border-muted-foreground/40",
+          isSelected && "ring-2 ring-primary"
+        )}
+        onClick={() => onEdit(option)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onEdit(option) }}
+        aria-label={`Edit option ${option.name}`}
+      >
+        <div className="flex flex-col">
+          <div className="flex-1 min-w-0 p-4 pb-2">
+            <div className="flex items-start">
+              <div className="mr-2 mt-1" onClick={(e) => e.stopPropagation()}>
+                <Checkbox checked={isSelected} onCheckedChange={() => onToggleSelect?.(option.id)} />
               </div>
-              <div className="mt-1 text-sm text-muted-foreground">
-                <div className={cn(activeSortField === "startDate" ? "sort-highlight" : "")}>{formatOptionDateWithWeekday(option.startDateTimeUtc, userPreferredOffset)}</div>
-                <div className={cn(activeSortField === "endDate" ? "sort-highlight" : "")}>{formatOptionDateWithWeekday(option.endDateTimeUtc, userPreferredOffset)}</div>
-              </div>
-              {sortedSegments.length > 0 && (
-                <div className="mt-2 flex items-center gap-1">
-                  {(sortedSegments.length <= 6 ? sortedSegments : sortedSegments.slice(0, 5)).map((seg, i) =>
-                    seg.segmentType?.iconSvg ? (
-                      <span
-                        key={`${seg.id}-${i}`}
-                        className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary/60 text-secondary-foreground shadow-sm ring-1 ring-black/5 dark:bg-white dark:text-black"
-                        title={seg.segmentType.name}
-                      >
-                        <span className="w-4 h-4" dangerouslySetInnerHTML={{ __html: seg.segmentType.iconSvg }} suppressHydrationWarning />
-                      </span>
-                    ) : null
-                  )}
-                  {sortedSegments.length > 6 && (
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-muted-foreground shadow-sm ring-1 ring-black/5 text-xs font-medium" title={`${sortedSegments.length - 5} more segments`}>
-                      +{sortedSegments.length - 5}
-                    </span>
-                  )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-base font-semibold tracking-tight">{option.name}</CardTitle>
                 </div>
-              )}
-            </div>
-            <div className="flex items-center gap-1 shrink-0 ml-auto">
-              <button
-                type="button"
-                className="rounded-full p-1 text-muted-foreground hover:text-foreground transition-colors"
-                title={isHidden ? "Show option" : "Hide option"}
-                onClick={(e) => { e.stopPropagation(); onToggleVisibility(option) }}
-              >
-                {isHidden ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
-              </button>
-              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(option) }} aria-label="Edit option">
-                <EditIcon className="h-4 w-4" />
-              </Button>
+                <div className="mt-0.5 text-xs text-muted-foreground/80">
+                  <div className={cn(activeSortField === "startDate" ? "sort-highlight" : "")}>{formatOptionDateWithWeekday(option.startDateTimeUtc, userPreferredOffset)}</div>
+                  <div className={cn(activeSortField === "endDate" ? "sort-highlight" : "")}>{formatOptionDateWithWeekday(option.endDateTimeUtc, userPreferredOffset)}</div>
+                </div>
+                {sortedSegments.length > 0 && (
+                  <div className="mt-2 flex items-center gap-1">
+                    {(sortedSegments.length <= 6 ? sortedSegments : sortedSegments.slice(0, 5)).map((seg, i) =>
+                      seg.segmentType?.iconSvg ? (
+                        <button
+                          key={`${seg.id}-${i}`}
+                          type="button"
+                          className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary/60 text-secondary-foreground shadow-sm ring-1 ring-black/5 dark:bg-white dark:text-black hover:ring-2 hover:ring-primary/40 transition-all"
+                          title={seg.segmentType.name}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (cardSegmentId === seg.id) {
+                              setCardSegmentId(null)
+                              setCardAnchorEl(null)
+                            } else {
+                              setCardSegmentId(seg.id)
+                              setCardAnchorEl(e.currentTarget as unknown as HTMLDivElement)
+                            }
+                          }}
+                        >
+                          <span className="w-4 h-4" dangerouslySetInnerHTML={{ __html: seg.segmentType.iconSvg }} suppressHydrationWarning />
+                        </button>
+                      ) : null
+                    )}
+                    {sortedSegments.length > 6 && (
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-muted-foreground shadow-sm ring-1 ring-black/5 text-xs font-medium" title={`${sortedSegments.length - 5} more segments`}>
+                        +{sortedSegments.length - 5}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-1 shrink-0 ml-auto">
+                <button
+                  type="button"
+                  className="rounded-full p-1 text-muted-foreground hover:text-foreground transition-colors"
+                  title={isHidden ? "Show option" : "Hide option"}
+                  onClick={(e) => { e.stopPropagation(); onToggleVisibility(option) }}
+                >
+                  {isHidden ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+                </button>
+                <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(option) }} aria-label="Edit option">
+                  <EditIcon className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
+          <div className="px-4 pb-4 pt-3 border-t border-border/50">
+            <CostSummary
+              option={option}
+              displayCurrencyId={displayCurrencyId}
+              tripCurrencyId={tripCurrencyId}
+              currencies={currencies}
+              conversions={conversions}
+              activeSortField={activeSortField}
+            />
+          </div>
         </div>
-        <div className="md:w-1/2 md:shrink-0 p-4 pt-0 md:pt-4">
-          <CostSummary
-            option={option}
-            displayCurrencyId={displayCurrencyId}
-            tripCurrencyId={tripCurrencyId}
-            currencies={currencies}
-            conversions={conversions}
-            activeSortField={activeSortField}
-          />
-        </div>
-      </div>
-    </Card>
+      </Card>
+
+      <TimelineSegmentCard
+        segment={cardSegment}
+        segmentType={cardSegmentType}
+        anchorEl={cardAnchorEl}
+        formatSegmentCost={formatSegmentCost}
+        onClose={() => { setCardSegmentId(null); setCardAnchorEl(null) }}
+        onNavigateToSegment={openSegmentDetail}
+      />
+    </>
   )
 }
 
@@ -303,6 +357,7 @@ export function OptionsList({
   onEditOption,
   onRefresh,
 }: OptionsListProps) {
+
   const [filterState, setFilterState] = useState<OptionFilterValue>({
     locations: [],
     dateRange: { start: "", end: "" },
@@ -426,6 +481,7 @@ export function OptionsList({
                   currencies={currencies}
                   conversions={conversions}
                   connectedSegments={connectedSegments[option.id] ?? []}
+                  allSegments={segments}
                   userPreferredOffset={userPreferredOffset}
                   isSelected={selectedOptionIds.has(option.id)}
                   onToggleSelect={toggleOptionSelection}

@@ -1,7 +1,8 @@
 // TripPanelLayout.tsx
-// CSS-grid 3-panel shell. Columns animate as panels open/close.
-// Desktop: up to 3 panels side by side.
-// Tablet: up to 2 panels.
+// CSS-grid shell with up to 4 panels: chat | list | option-detail | segment-detail.
+// Columns animate as panels open/close.
+// Desktop: up to 4 panels side by side.
+// Tablet: up to 3 panels.
 // Mobile: handled by parent (detail/chat render as Sheets).
 "use client"
 
@@ -11,26 +12,43 @@ import { cn } from "../../lib/utils"
 interface TripPanelLayoutProps {
   chatPanel: React.ReactNode
   listPanel: React.ReactNode
+  /** Option detail content */
   detailPanel: React.ReactNode
+  /** Segment detail content — shown as 4th column when set and optionPanel is open */
+  secondaryDetailPanel?: React.ReactNode
+  /** Whether the option detail column is visible */
+  isOptionPanelOpen: boolean
+  /** Whether the segment detail column is visible */
+  isSegmentPanelOpen: boolean
 }
 
-export function TripPanelLayout({ chatPanel, listPanel, detailPanel }: TripPanelLayoutProps) {
-  const { isChatOpen, detailPanel: detailState, panelMode } = useTripLayout()
+export function TripPanelLayout({
+  chatPanel,
+  listPanel,
+  detailPanel,
+  secondaryDetailPanel,
+  isOptionPanelOpen,
+  isSegmentPanelOpen,
+}: TripPanelLayoutProps) {
+  const { isChatOpen, panelMode } = useTripLayout()
 
-  const isDetailOpen = detailState !== null
   const showChatColumn = isChatOpen && panelMode !== "mobile"
-  const showDetailColumn = isDetailOpen && panelMode !== "mobile"
+  const showOptionColumn = isOptionPanelOpen && panelMode !== "mobile"
+  const showSegmentColumn = isSegmentPanelOpen && panelMode !== "mobile"
 
   // Build grid-template-columns dynamically
   let gridCols = "1fr"
   if (panelMode === "desktop") {
-    if (showChatColumn && showDetailColumn) gridCols = "300px 1fr 420px"
+    if (showChatColumn && showOptionColumn && showSegmentColumn) gridCols = "1fr 1fr 1fr 1fr"
+    else if (showChatColumn && showOptionColumn) gridCols = "1fr 1fr 2fr"
+    else if (showOptionColumn && showSegmentColumn) gridCols = "1fr 2fr 1fr"
     else if (showChatColumn) gridCols = "300px 1fr"
-    else if (showDetailColumn) gridCols = "1fr 420px"
+    else if (showOptionColumn) gridCols = "1fr 2fr"
     else gridCols = "1fr"
   } else if (panelMode === "tablet") {
-    if (showChatColumn) gridCols = "300px 1fr"
-    else if (showDetailColumn) gridCols = "1fr 420px"
+    if (showOptionColumn && showSegmentColumn) gridCols = "1fr 1fr 1fr"
+    else if (showChatColumn) gridCols = "300px 1fr"
+    else if (showOptionColumn) gridCols = "1fr 1.5fr"
     else gridCols = "1fr"
   }
 
@@ -57,16 +75,29 @@ export function TripPanelLayout({ chatPanel, listPanel, detailPanel }: TripPanel
         {listPanel}
       </div>
 
-      {/* Detail panel column */}
+      {/* Option detail panel column */}
       <div
         className={cn(
           "overflow-hidden transition-all duration-300 ease-in-out border-l bg-background",
-          showDetailColumn ? "opacity-100" : "opacity-0 w-0 pointer-events-none hidden"
+          showOptionColumn ? "opacity-100" : "opacity-0 w-0 pointer-events-none hidden"
         )}
-        aria-hidden={!showDetailColumn}
+        aria-hidden={!showOptionColumn}
       >
         <div className="h-full overflow-y-auto">
           {detailPanel}
+        </div>
+      </div>
+
+      {/* Segment detail panel column */}
+      <div
+        className={cn(
+          "overflow-hidden transition-all duration-300 ease-in-out border-l bg-background",
+          showSegmentColumn ? "opacity-100" : "opacity-0 w-0 pointer-events-none hidden"
+        )}
+        aria-hidden={!showSegmentColumn}
+      >
+        <div className="h-full overflow-y-auto">
+          {secondaryDetailPanel}
         </div>
       </div>
     </div>
