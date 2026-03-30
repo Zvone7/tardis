@@ -212,7 +212,7 @@ export const buildSegmentConfigFromApi = (
   segmentType?: SegmentType,
 ): SegmentTitleConfig => ({
   name: isPlaceholderName(segment.name) ? null : segment.name,
-  fallbackName: segmentType?.name ?? (isPlaceholderName(segment.name) ? null : segment.name),
+  fallbackName: segmentType?.name ?? (isPlaceholderName(segment.name) ? undefined : segment.name),
   segmentType: segmentType ?? null,
   startLocationLabel: getStartLocation(segment as any)?.name ?? "",
   endLocationLabel: getEndLocation(segment as any)?.name ?? "",
