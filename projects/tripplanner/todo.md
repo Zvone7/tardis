@@ -1,10 +1,5 @@
 -------------------------
 
-whenever comparing locations, both on backend and frontend, make sure the comparison happens via latitude and logitude - and if its close enough (not sure what that really means) then its okay
-
-
-
-additionally, when segment times are being edited by chatgpt, make sure that chat understands the timezone - if it doesnt, it should ask. i often provide screenshots from skyscanner - i am not sure if times when plane is landing in a different area is shown in that time zone or in takeoff time zone. gpt can use the user preferred location (its set in settings) as well as respect its set currency for the trip, but it should still try to udnerstand the necessary recalculation - time and currency
 
 -------------------------
 I'm thinking, I want to create a trip itiniearay page. I am not sure how it will look, but it will be acting in the same size as option editing when it comes to grid - so there will be a button when option is opened, inside its detail view, saying "itinierary" - it will have world globe icon.

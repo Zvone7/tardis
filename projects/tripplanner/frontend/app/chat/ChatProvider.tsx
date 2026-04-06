@@ -24,6 +24,8 @@ interface ChatContextValue {
   isMinimized: boolean
   setIsMinimized: (minimized: boolean) => void
   registerRefreshCallback: (cb: () => void) => () => void
+  setPreferredUtcOffset: (offset: number) => void
+  setPreferredCurrencyId: (id: number | null) => void
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null)
@@ -40,6 +42,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
   const [preferredUtcOffset, setPreferredUtcOffset] = useState(0)
+  const [preferredCurrencyId, setPreferredCurrencyId] = useState<number | null>(null)
   const refreshCallbacks = useRef<Set<() => void>>(new Set())
 
   const onDataChanged = useCallback(() => {
@@ -50,6 +53,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     tripId,
     tripName,
     preferredUtcOffset,
+    preferredCurrencyId,
     onDataChanged,
   })
 
@@ -77,6 +81,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         isMinimized,
         setIsMinimized,
         registerRefreshCallback,
+        setPreferredUtcOffset,
+        setPreferredCurrencyId,
       }}
     >
       {children}

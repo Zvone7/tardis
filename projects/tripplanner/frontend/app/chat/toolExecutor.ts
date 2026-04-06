@@ -10,6 +10,7 @@ export interface ToolContext {
   segments: SegmentApi[]
   options: OptionApi[]
   preferredUtcOffset: number
+  preferredCurrencyId: number | null
 }
 
 interface ToolResult {

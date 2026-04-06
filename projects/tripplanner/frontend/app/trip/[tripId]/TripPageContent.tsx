@@ -182,6 +182,15 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
     setUserPreferredOffset(user.userPreference?.preferredUtcOffset ?? 0)
   }, [user])
 
+  // Sync user preferences to chat context
+  useEffect(() => {
+    chatContext.setPreferredUtcOffset(userPreferredOffset)
+  }, [userPreferredOffset])
+
+  useEffect(() => {
+    chatContext.setPreferredCurrencyId(userPreferredCurrencyId)
+  }, [userPreferredCurrencyId])
+
   // Default display currency
   useEffect(() => {
     if (displayCurrencyId !== null) return
