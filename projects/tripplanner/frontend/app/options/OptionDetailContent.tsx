@@ -21,6 +21,7 @@ import {
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
 import { SaveIcon, Trash2Icon, EyeOffIcon, EyeIcon, LayersIcon, Loader2, LayoutListIcon, CalendarRangeIcon, MapPinIcon } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { SegmentSelectCard } from "../components/SegmentSelectCard";
 import type { SegmentType, SegmentApi, OptionApi, OptionSave, Currency, CurrencyConversion, Segment } from "../types/models";
 import { TitleTokens } from "../components/TitleTokens";
@@ -42,6 +43,7 @@ import { TimelineSegmentCard } from "../components/timeline/TimelineSegmentCard"
 import { useTripLayout } from "../trip/[tripId]/TripLayoutContext"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select"
 import { locationKeyOf } from "../lib/tripLocations"
+import { ItineraryView } from "../components/itinerary/ItineraryView"
 
 const arraysEqual = (a: number[], b: number[]) => a.length === b.length && a.every((val, idx) => val === b[idx])
 type DiagramSegment = SegmentApi & { segmentType: SegmentType }
@@ -107,6 +109,7 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
   })
   const [segmentSortState, setSegmentSortState] = useState<SegmentSortValue | null>(null)
   const [segmentViewMode, setSegmentViewMode] = useState<"timeline" | "list">("timeline")
+  const [viewMode, setViewMode] = useState<"edit" | "itinerary">("itinerary")
   const [listCardSegmentId, setListCardSegmentId] = useState<number | null>(null)
   const [listCardAnchorEl, setListCardAnchorEl] = useState<HTMLDivElement | null>(null)
   const listCardHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -166,6 +169,8 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
         setSelectedSegments(ids);
         initialSelectedSegmentsRef.current = [...ids].sort((a, b) => a - b);
         setBaselineReady(true);
+        // Only switch to edit once we know for sure there are no segments
+        if (ids.length === 0) setViewMode("edit");
       } catch (error) {
         console.error("Error fetching connected segments:", error);
         toast({ title: "Error", description: "Failed to fetch connected segments. Please try again." });
@@ -193,9 +198,11 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
       setSelectedSegments([]);
       setIsUiVisible(true);
     }
+    setViewMode(option ? "itinerary" : "edit")
     void fetchSegments();
     void fetchSegmentTypes();
   }, [option, fetchConnectedSegments, fetchSegments, fetchSegmentTypes]);
+
 
   useEffect(() => {
     if (option) {
@@ -605,7 +612,33 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        {isEditing && (
+          <div className="px-4 pt-3 pb-1 border-b border-border">
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "itinerary" | "edit")}>
+              <TabsList>
+                <TabsTrigger value="itinerary">Itinerary view</TabsTrigger>
+                <TabsTrigger value="edit">Itinerary edit</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+        )}
+
+        {viewMode === "itinerary" && isEditing ? (
+          <div className="flex-1 overflow-hidden">
+            <ItineraryView
+              segments={segments}
+              selectedSegmentIds={selectedSegments}
+              segmentTypes={segmentTypes}
+              currencies={currencies}
+              conversions={conversions}
+              tripCurrencyId={tripCurrencyId}
+              displayCurrencyId={resolvedDisplayCurrencyId}
+              isLoading={!baselineReady || segmentsLoading}
+            />
+          </div>
+        ) : null}
+
+        <div className={viewMode === "itinerary" && isEditing ? "hidden" : "flex-1 overflow-y-auto px-4 py-4 space-y-3"}>
           <Collapsible title={generalSummaryTitle} open={generalOpen} onToggle={() => setGeneralOpen((prev) => !prev)}>
             <div className="space-y-4 pt-4">
               <div className="grid grid-cols-4 items-center gap-4">

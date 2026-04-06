@@ -4,16 +4,13 @@ import type { OptionSortValue } from "../components/sorting/optionSortTypes"
 import { computeCostChips } from "../components/filters/costChips"
 
 const DAY_MS = 86_400_000
-const MAX_RANGE_MS = 30 * DAY_MS
 
-/** Pads raw min/max timestamps by 1 day each side, capped to a 30-day total span. */
+/** Pads raw min/max timestamps by 1 day each side. */
 function padDateBounds(min: number | null, max: number | null): { min: string; max: string } {
   if (min === null || max === null) return { min: "", max: "" }
-  const paddedMin = min - DAY_MS
-  const paddedMax = Math.min(max + DAY_MS, paddedMin + MAX_RANGE_MS)
   return {
-    min: new Date(paddedMin).toISOString().split("T")[0],
-    max: new Date(paddedMax).toISOString().split("T")[0],
+    min: new Date(min - DAY_MS).toISOString().split("T")[0],
+    max: new Date(max + DAY_MS).toISOString().split("T")[0],
   }
 }
 
