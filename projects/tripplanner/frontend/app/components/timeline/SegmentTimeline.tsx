@@ -17,8 +17,8 @@ import { useTripLayout } from "../../trip/[tripId]/TripLayoutContext"
 import { cn } from "../../lib/utils"
 
 const MS_DAY = 86_400_000
-const MAX_WINDOW_DAYS = 30
-const VISIBLE_DAYS = 5
+const PAGINATED_WINDOW_DAYS = 29  // window size when trip is too long to show all at once
+const PAGINATION_THRESHOLD = 29   // trips longer than this get pagination
 
 type StageBuilderReturn = ReturnType<typeof useStageBuilder>
 
@@ -93,24 +93,27 @@ export function SegmentTimeline({
     }
   }, [segments])
 
-  // Trip duration in days (capped at MAX_WINDOW_DAYS per chunk)
+  // Window size in days:
+  // - trips ≤ 28 days: show all days + 1 padding on each side, no pagination
+  // - trips ≥ 29 days: fixed 29-day window, paginate with prev/next buttons
   const tripDays = useMemo(() => {
-    if (dataStart === null || dataEnd === null) return VISIBLE_DAYS
+    if (dataStart === null || dataEnd === null) return 5
     const rawDays = Math.ceil((dataEnd - dataStart) / MS_DAY)
-    return Math.max(VISIBLE_DAYS, Math.min(rawDays + 1, MAX_WINDOW_DAYS))
+    if (rawDays < PAGINATION_THRESHOLD) return rawDays + 2  // show full trip + 1 day padding each side
+    return PAGINATED_WINDOW_DAYS
   }, [dataStart, dataEnd])
 
-  // windowMs is min(trip length, 30 days); widthFactor is how many times wider the canvas is vs visible
+  const VISIBLE_DAYS = 5
   const windowMs = tripDays * MS_DAY
-  const widthFactor = tripDays / VISIBLE_DAYS // canvas is wider than viewport if trip > 5 days
+  const widthFactor = tripDays / VISIBLE_DAYS
 
-  // Initialize window to UTC-day boundary of earliest segment
+  // Initialize window start: 1 day before earliest segment (padding day)
   useEffect(() => {
     if (dataStart === null) return
     setWindowStart((prev) => {
       if (prev !== null) return prev
       const d = new Date(dataStart)
-      return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+      return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - MS_DAY
     })
   }, [dataStart])
 
@@ -118,7 +121,7 @@ export function SegmentTimeline({
     if (windowStart !== null) return windowStart
     if (dataStart === null) return 0
     const d = new Date(dataStart)
-    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - MS_DAY
   }, [windowStart, dataStart])
 
   const effectiveWindowEnd = effectiveWindowStart + windowMs
@@ -203,9 +206,10 @@ export function SegmentTimeline({
   const selectedLanes = useMemo(() => assignLanes(selectedInWindow), [selectedInWindow])
   const unselectedLanes = useMemo(() => assignLanes(unselectedInWindow), [unselectedInWindow])
 
-  // Nav: show when the total data range exceeds the current window
-  const showPrev = dataStart !== null && effectiveWindowStart > dataStart
-  const showNext = dataEnd !== null && effectiveWindowEnd < dataEnd + MS_DAY
+  // Nav buttons only shown for paginated trips (≥ 29 days) and only when segments exist in that direction
+  const isPaginated = tripDays === PAGINATED_WINDOW_DAYS
+  const showPrev = isPaginated && dataStart !== null && effectiveWindowStart > dataStart - MS_DAY
+  const showNext = isPaginated && dataEnd !== null && effectiveWindowEnd < dataEnd + MS_DAY
 
   const prevDay = useCallback(() => setWindowStart(effectiveWindowStart - MS_DAY), [effectiveWindowStart])
   const nextDay = useCallback(() => setWindowStart(effectiveWindowStart + MS_DAY), [effectiveWindowStart])

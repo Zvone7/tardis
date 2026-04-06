@@ -4,7 +4,6 @@ import { useRef, useEffect, useCallback, useState } from "react"
 import dynamic from "next/dynamic"
 import { PlusIcon, MinusIcon } from "lucide-react"
 import type { ItineraryLocation, ItineraryArc } from "../../hooks/useItineraryData"
-import type { SegmentType } from "../../types/models"
 import { useThemePreference } from "../../providers/ThemeProvider"
 
 // Dynamic import to avoid SSR issues with three.js/WebGL
@@ -54,21 +53,25 @@ function geoCentroid(locations: ItineraryLocation[]): { lat: number; lng: number
   }
 }
 
-/** Returns pointOfView that fits all locations with padding. */
+/** Returns pointOfView that fits all locations, centered on the first (start) location. */
 function fitLocations(locations: ItineraryLocation[]): { lat: number; lng: number; altitude: number } {
   if (locations.length === 0) return { lat: 20, lng: 10, altitude: 2.5 }
-  if (locations.length === 1) return { lat: locations[0].lat, lng: locations[0].lng, altitude: 1.4 }
 
+  const start = locations[0]
+  if (locations.length === 1) return { lat: start.lat, lng: start.lng, altitude: 1.4 }
+
+  // Compute altitude based on how spread out all locations are from their centroid
   const center = geoCentroid(locations)
   let maxRad = 0
   for (const loc of locations) {
     maxRad = Math.max(maxRad, angularDist(center.lat, center.lng, loc.lat, loc.lng))
   }
 
-  if (maxRad > toRad(90)) return { lat: locations[0].lat, lng: locations[0].lng, altitude: 2.5 }
+  if (maxRad > toRad(90)) return { lat: start.lat, lng: start.lng, altitude: 2.5 }
 
   const altitude = Math.min((1 / Math.cos(maxRad) - 1) * 1.25 + 0.15, 2.5)
-  return { lat: center.lat, lng: center.lng, altitude: Math.max(altitude, 0.3) }
+  // Center on the starting location, zoom to fit all
+  return { lat: start.lat, lng: start.lng, altitude: Math.max(altitude, 0.3) }
 }
 
 // ---------------------
@@ -76,7 +79,6 @@ function fitLocations(locations: ItineraryLocation[]): { lat: number; lng: numbe
 interface ItineraryGlobeProps {
   locations: ItineraryLocation[]
   arcs: ItineraryArc[]
-  segmentTypes: SegmentType[]
   width: number
   height: number
   onLocationClick: (locationKey: string) => void
@@ -94,7 +96,6 @@ interface ArcMidpoint {
 export function ItineraryGlobe({
   locations,
   arcs,
-  segmentTypes,
   width,
   height,
   onLocationClick,

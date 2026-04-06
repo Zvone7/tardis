@@ -5,8 +5,9 @@ import type { SegmentApi, SegmentType, Currency, CurrencyConversion } from "../.
 import { useItineraryData, type ItineraryLocation } from "../../hooks/useItineraryData"
 import { ItineraryGlobe } from "./ItineraryGlobe"
 import { ItineraryCostBreakdown } from "./ItineraryCostBreakdown"
+import { TimelineSegmentCard } from "../timeline/TimelineSegmentCard"
 import { useTripLayout } from "../../trip/[tripId]/TripLayoutContext"
-import { GlobeIcon, XIcon, PencilIcon } from "lucide-react"
+import { GlobeIcon, XIcon } from "lucide-react"
 import { formatCurrencyAmount } from "../../utils/currency"
 
 const GLOBE_HEIGHT = 380
@@ -44,6 +45,7 @@ export function ItineraryView({
   const [globeWidth, setGlobeWidth] = useState(0)
   const [activePopover, setActivePopover] = useState<LocationPopover | null>(null)
   const [cardSegmentId, setCardSegmentId] = useState<number | null>(null)
+  const [cardAnchorEl, setCardAnchorEl] = useState<HTMLDivElement | null>(null)
   const [globeReady, setGlobeReady] = useState(false)
   const globeFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const skipNextGlobeClickRef = useRef(false)
@@ -80,15 +82,17 @@ export function ItineraryView({
     [data.displayCurrencyId, currencies]
   )
 
-  const openCard = useCallback((segmentId: number) => {
-    // Signal the globe click handler to skip this cycle — the globe fires its
-    // onGlobeClick even when an HTML element (arc icon) was clicked
+  const openCard = useCallback((segmentId: number, anchorEl?: HTMLDivElement, keepPopover = false) => {
     skipNextGlobeClickRef.current = true
     setCardSegmentId((prev) => (prev === segmentId ? null : segmentId))
-    setActivePopover(null)
+    if (anchorEl) setCardAnchorEl(anchorEl)
+    if (!keepPopover) setActivePopover(null)
   }, [])
 
-  const closeCard = useCallback(() => setCardSegmentId(null), [])
+  const closeCard = useCallback(() => {
+    setCardSegmentId(null)
+    setCardAnchorEl(null)
+  }, [])
 
   const handleGlobeReady = useCallback(() => {
     if (globeFallbackTimerRef.current) {
@@ -139,15 +143,15 @@ export function ItineraryView({
   )
 
   const handleArcClick = useCallback(
-    (segmentId: number, _anchorEl: HTMLDivElement) => {
+    (segmentId: number, anchorEl: HTMLDivElement) => {
       setActivePopover(null)
-      openCard(segmentId)
+      openCard(segmentId, anchorEl)
     },
     [openCard]
   )
 
   const cardSegment = cardSegmentId != null ? segments.find((s) => s.id === cardSegmentId) ?? null : null
-  const cardCostLabel = cardSegment ? formatSegmentCost(cardSegment) : null
+  const cardSegmentType = cardSegment ? (segmentTypes.find((t) => t.id === cardSegment.segmentTypeId) ?? null) : null
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -203,34 +207,15 @@ export function ItineraryView({
           />
         )}
 
-        {/* Segment info card — absolute overlay at top-left of globe */}
-        {cardSegment && (
-          <div
-            className="absolute top-3 left-3 z-20 w-56 rounded-lg border border-border bg-background/95 backdrop-blur-sm shadow-lg p-3"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="absolute top-2 right-2 p-0.5 rounded hover:bg-muted transition-colors"
-              onClick={closeCard}
-              aria-label="Close"
-            >
-              <XIcon className="h-3.5 w-3.5 text-muted-foreground" />
-            </button>
-            <div className="text-sm font-medium pr-5 mb-1 leading-snug">{cardSegment.name}</div>
-            {cardCostLabel && (
-              <div className="text-xs text-muted-foreground mb-3">{cardCostLabel}</div>
-            )}
-            <button
-              type="button"
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => { openSegmentDetail(cardSegment.id); closeCard() }}
-            >
-              <PencilIcon className="h-3.5 w-3.5" />
-              Edit segment
-            </button>
-          </div>
-        )}
+        {/* Segment info card — uses TimelineSegmentCard for consistent display */}
+        <TimelineSegmentCard
+          segment={cardSegment}
+          segmentType={cardSegmentType}
+          anchorEl={cardAnchorEl}
+          formatSegmentCost={formatSegmentCost}
+          onClose={closeCard}
+          onNavigateToSegment={(id) => { openSegmentDetail(id); closeCard() }}
+        />
 
         {/* Location popover — bottom overlay listing all segments at a pin */}
         {activePopover && (
@@ -258,7 +243,7 @@ export function ItineraryView({
                   className="w-full flex items-center gap-2 text-left rounded px-2 py-1 hover:bg-muted/60 transition-colors"
                   onClick={(e) => {
                     e.stopPropagation()
-                    openCard(seg.id)
+                    openCard(seg.id, e.currentTarget as unknown as HTMLDivElement, true)
                   }}
                 >
                   {st?.iconSvg ? (
