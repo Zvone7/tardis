@@ -16,24 +16,16 @@ export function useStageBuilder(segments: SegmentApi[], selectedSegmentIds: numb
     return map
   }, [segments])
 
-  // All unique start locations derived from all trip segments.
-  // Primary dedup by lat,lng; secondary dedup by name+country to catch the same
-  // city stored with slightly different coordinates across different searches.
+  // All unique start locations derived from all trip segments, deduplicated by proximity key (~111m).
   const availableStartLocations = useMemo((): StageLocation[] => {
     const byCoord = new Map<string, StageLocation>()
     segments.forEach((seg) => {
       const loc = normalizeLocation(seg.startLocation)
       if (!loc || !loc.name) return
-      const key = `${loc.lat},${loc.lng}`
-      if (!byCoord.has(key)) byCoord.set(key, { key, name: loc.name, country: loc.country })
+      const key = locationKeyOf(seg.startLocation)
+      if (key && !byCoord.has(key)) byCoord.set(key, { key, name: loc.name, country: loc.country })
     })
-    // Second pass: deduplicate by "name, country" (case-insensitive)
-    const byName = new Map<string, StageLocation>()
-    byCoord.forEach((loc) => {
-      const nameKey = `${loc.name.toLowerCase()}|${(loc.country ?? "").toLowerCase()}`
-      if (!byName.has(nameKey)) byName.set(nameKey, loc)
-    })
-    return Array.from(byName.values())
+    return Array.from(byCoord.values())
   }, [segments])
 
   // Derive stage location label from key, falling back to raw key if not found in list

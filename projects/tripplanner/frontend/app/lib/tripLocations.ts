@@ -1,10 +1,15 @@
 import type { Segment, LocationOption, LocationDto, SegmentApi } from "../types/models"
 import { normalizeLocation } from "./mapping"
 
+/** Round to 3 decimal places (~111m precision at the equator). */
+export function roundCoord(n: number): number {
+  return Math.round(n * 1000) / 1000
+}
+
 export function locationKeyOf(loc: LocationOption | LocationDto | null | undefined): string | null {
   const normalized = normalizeLocation(loc)
   if (!normalized || (normalized.lat === 0 && normalized.lng === 0)) return null
-  return `${normalized.lat},${normalized.lng}`
+  return `${roundCoord(normalized.lat)},${roundCoord(normalized.lng)}`
 }
 
 export function locationLabelOf(loc: LocationOption | LocationDto | null | undefined): string | null {
@@ -25,8 +30,8 @@ export function extractTripLocations(segments: Segment[]): LocationOption[] {
     for (const raw of [seg.startLocation, seg.endLocation]) {
       const loc = normalizeLocation(raw)
       if (!loc || !loc.name) continue
-      const key = `${loc.lat},${loc.lng}`
-      if (!seen.has(key)) seen.set(key, loc)
+      const key = locationKeyOf(raw)
+      if (key && !seen.has(key)) seen.set(key, loc)
     }
   }
   return Array.from(seen.values())
