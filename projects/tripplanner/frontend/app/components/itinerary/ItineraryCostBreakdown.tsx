@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDownIcon, ChevronRightIcon, UnlinkIcon } from "lucide-react"
+import { ChevronDownIcon, ChevronRightIcon, ChevronUpIcon, UnlinkIcon } from "lucide-react"
 import { cn } from "../../lib/utils"
 import type { CostBreakdownEntry } from "../../hooks/useItineraryData"
 import type { Currency } from "../../types/models"
@@ -67,6 +67,7 @@ export function ItineraryCostBreakdown({
   onSegmentClick,
   onDisconnectSegment,
 }: ItineraryCostBreakdownProps) {
+  const [collapsed, setCollapsed] = useState(true)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
 
   const toggleCategory = (category: string) => {
@@ -87,49 +88,66 @@ export function ItineraryCostBreakdown({
   const legendEntries = costBreakdown.filter((e) => e.totalCost > 0)
 
   return (
-    <div className="px-4 py-4 space-y-4 border-t border-border">
-      {/* Summary header */}
-      <div className="space-y-1">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="text-lg font-semibold">{fmt(totalCost)}</span>
+    <div className="border-t border-border">
+      {/* Collapsed / expanded toggle header */}
+      <button
+        type="button"
+        className="w-full flex items-center justify-between px-4 py-2 hover:bg-muted/40 transition-colors"
+        onClick={() => setCollapsed((c) => !c)}
+        aria-expanded={!collapsed}
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-semibold">{fmt(totalCost)}</span>
           {totalDays > 0 && (
             <span className="text-xs text-muted-foreground">
               {totalDays} {totalDays === 1 ? "day" : "days"} · {fmt(costPerDay)}/day
             </span>
           )}
+          {(dateRange.start || dateRange.end) && (
+            <span className="text-xs text-muted-foreground hidden sm:inline">
+              {dateRange.start ? formatDateCompact(dateRange.start) : "?"} → {dateRange.end ? formatDateCompact(dateRange.end) : "?"}
+            </span>
+          )}
         </div>
-        {(dateRange.start || dateRange.end) && (
-          <div className="text-xs text-muted-foreground">
-            {dateRange.start ? formatDateCompact(dateRange.start) : "?"} → {dateRange.end ? formatDateCompact(dateRange.end) : "?"}
-          </div>
-        )}
-      </div>
+        {collapsed
+          ? <ChevronDownIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+          : <ChevronUpIcon className="h-4 w-4 text-muted-foreground shrink-0" />}
+      </button>
 
-      {/* Pie chart + legend */}
-      {costBreakdown.length > 0 && (
-        <div className="flex items-center gap-4">
-          <CostPieChart transport={transport} accommodation={accommodation} other={other} />
-          <div className="space-y-2 text-xs text-muted-foreground">
-            {legendEntries.length === 0 ? (
-              <div>No categorized costs yet.</div>
-            ) : (
-              legendEntries.map((entry) => (
-                <div key={entry.category} className="flex items-center gap-2">
-                  <span
-                    className="inline-block h-2 w-2 rounded-sm ring-1 ring-black/10 dark:ring-white/40"
-                    style={{ backgroundColor: entry.color }}
-                  />
-                  <span className="text-foreground">{entry.category}</span>
-                  <span>({fmt(entry.totalCost)})</span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+      {!collapsed && (
+        <div className="px-4 pb-4 space-y-4">
+          {/* Date range (full width when expanded) */}
+          {(dateRange.start || dateRange.end) && (
+            <div className="text-xs text-muted-foreground sm:hidden">
+              {dateRange.start ? formatDateCompact(dateRange.start) : "?"} → {dateRange.end ? formatDateCompact(dateRange.end) : "?"}
+            </div>
+          )}
 
-      {/* Per-category segment breakdown */}
-      <div className="space-y-2">
+          {/* Pie chart + legend */}
+          {costBreakdown.length > 0 && (
+            <div className="flex items-center gap-4">
+              <CostPieChart transport={transport} accommodation={accommodation} other={other} />
+              <div className="space-y-2 text-xs text-muted-foreground">
+                {legendEntries.length === 0 ? (
+                  <div>No categorized costs yet.</div>
+                ) : (
+                  legendEntries.map((entry) => (
+                    <div key={entry.category} className="flex items-center gap-2">
+                      <span
+                        className="inline-block h-2 w-2 rounded-sm ring-1 ring-black/10 dark:ring-white/40"
+                        style={{ backgroundColor: entry.color }}
+                      />
+                      <span className="text-foreground">{entry.category}</span>
+                      <span>({fmt(entry.totalCost)})</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Per-category segment breakdown */}
+          <div className="space-y-2">
         {costBreakdown.map((entry) => {
           const isExpanded = expandedCategories.has(entry.category)
           return (
@@ -205,7 +223,9 @@ export function ItineraryCostBreakdown({
             </div>
           )
         })}
-      </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

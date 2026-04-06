@@ -1,7 +1,7 @@
 // components/RangeLocationPicker.tsx
 "use client"
 
-import React, { useEffect, useRef, useState } from "react"
+import React, { useEffect, useRef, useState, useCallback } from "react"
 import { Label } from "./ui/label"
 import { Input } from "./ui/input"
 import { Button } from "./ui/button"
@@ -167,14 +167,14 @@ export function Autocomplete({
   }
 
   const clearSelection = () => {
-    onSelected(null)
-
-    // Avoid a new fetch due to empty string; also close the list
-    suppressNextSearchRef.current = true
+    // Clear the text so the user can type a new location, but do NOT call onSelected(null)
+    // — removing the location entirely is the job of the "Remove destination" button.
+    suppressNextSearchRef.current = false  // allow the empty query to show existing locations
     setQuery("")
-    setItems([])
-    setFocusedIdx(-1)
-    setOpen(false)
+    setItems(existingLocations ?? [])
+    setOpen(!!(existingLocations?.length))
+    setFocusedIdx(existingLocations?.length ? 0 : -1)
+    inputRef.current?.focus()
   }
 
   return (
@@ -189,8 +189,14 @@ export function Autocomplete({
           setOpen(true)
         }}
         onFocus={() => {
-          // show existing list if we already have results
-          if (items.length) setOpen(true)
+          if (items.length) {
+            setOpen(true)
+          } else if (existingLocations?.length && query.length < minChars) {
+            // Show all existing trip locations immediately when the field is empty/short
+            setItems(existingLocations)
+            setOpen(true)
+            setFocusedIdx(0)
+          }
         }}
         onKeyDown={(e) => {
           if (!open) return
@@ -232,7 +238,7 @@ export function Autocomplete({
       )}
 
       {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow">
+        <div className="absolute z-[9999] mt-1 w-full rounded-md border bg-popover shadow">
           <ScrollArea className="max-h-64">
             {loading ? (
               <div className="px-3 py-2 text-sm text-muted-foreground">Searching…</div>
@@ -290,11 +296,14 @@ export const RangeLocationPicker: React.FC<RangeLocationPickerProps> = React.mem
     const { start, end } = value
     const grid = compact ? "grid grid-cols-4 items-center gap-2" : "grid grid-cols-4 items-center gap-3"
 
-    const handleSwap = () => {
-      if (start && end) {
-        onChange({ start: end, end: start })
-      }
-    }
+    // Track whether the end field has been added — stays true even when the Autocomplete
+    // X button clears its text (which sets end=null). Only "Remove destination" hides it.
+    const [endVisible, setEndVisible] = useState(end !== null)
+    useEffect(() => { if (end !== null) setEndVisible(true) }, [end])
+
+    const handleSwap = useCallback(() => {
+      if (start && end) onChange({ start: end, end: start })
+    }, [start, end, onChange])
 
     return (
       <div className="space-y-3">
@@ -322,7 +331,7 @@ export const RangeLocationPicker: React.FC<RangeLocationPickerProps> = React.mem
 
         {/* End location (hidden in singleMode) */}
         {!singleMode && (
-          end === null ? (
+          !endVisible ? (
             <div className={grid}>
               <Label className="text-right text-sm" />
               <div className="col-span-3">
@@ -330,7 +339,7 @@ export const RangeLocationPicker: React.FC<RangeLocationPickerProps> = React.mem
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => onChange({ ...value, end: value.start ?? null })}
+                  onClick={() => { setEndVisible(true); onChange({ ...value, end: value.start ?? null }) }}
                 >
                   + Add destination
                 </Button>
@@ -380,7 +389,7 @@ export const RangeLocationPicker: React.FC<RangeLocationPickerProps> = React.mem
               <div className={grid}>
                 <Label className="text-right text-sm" />
                 <div className="col-span-3 flex items-center gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={() => onChange({ ...value, end: null })}>
+                  <Button type="button" variant="outline" size="sm" onClick={() => { setEndVisible(false); onChange({ ...value, end: null }) }}>
                     Remove destination
                   </Button>
                 </div>

@@ -1,7 +1,6 @@
 import { useMemo } from "react"
 import type { SegmentApi, SegmentType, Currency, CurrencyConversion } from "../types/models"
 import { normalizeLocation } from "../lib/mapping"
-import { locationKeyOf } from "../lib/tripLocations"
 import { isTransportType, isAccommodationType, segmentColor } from "../utils/segmentVisuals"
 import { convertWithFallback } from "../utils/currency"
 
@@ -74,13 +73,24 @@ export function useItineraryData({
     // Build location map
     const locationMap = new Map<string, ItineraryLocation>()
 
-    // Use providerPlaceId when available so the same city geocoded at slightly
-    // different coordinates still maps to a single pin on the globe.
+    // Key for globe location deduplication:
+    // 1. Name + country (case-insensitive) — same city name → same pin regardless of coordinates
+    // 2. Fallback to 1dp coordinate grid (~11 km) when name is absent
     const getGlobeKey = (raw: SegmentApi["startLocation"]): string | null => {
       if (!raw) return null
-      const placeId = (raw as { providerPlaceId?: string }).providerPlaceId
-      if (placeId) return `place:${placeId}`
-      return locationKeyOf(raw)
+      const loc = normalizeLocation(raw)
+      if (!loc) return null
+      if (loc.name) {
+        const name = loc.name.trim().toLowerCase()
+        const country = (loc.country ?? "").trim().toLowerCase()
+        return country ? `name:${name}|${country}` : `name:${name}`
+      }
+      if (loc.lat !== 0 || loc.lng !== 0) {
+        const lat = Math.round(loc.lat * 10) / 10
+        const lng = Math.round(loc.lng * 10) / 10
+        return `coord:${lat},${lng}`
+      }
+      return null
     }
 
     const getOrAddLocation = (raw: SegmentApi["startLocation"]) => {
