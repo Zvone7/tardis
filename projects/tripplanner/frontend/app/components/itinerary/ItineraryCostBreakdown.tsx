@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
+import { ChevronDownIcon, ChevronRightIcon, UnlinkIcon } from "lucide-react"
 import { cn } from "../../lib/utils"
 import type { CostBreakdownEntry } from "../../hooks/useItineraryData"
 import type { Currency } from "../../types/models"
@@ -52,6 +52,8 @@ interface ItineraryCostBreakdownProps {
   dateRange: { start: string | null; end: string | null }
   displayCurrencyId: number | null
   currencies: Currency[]
+  onSegmentClick?: (segmentId: number) => void
+  onDisconnectSegment?: (segmentId: number) => void
 }
 
 export function ItineraryCostBreakdown({
@@ -62,6 +64,8 @@ export function ItineraryCostBreakdown({
   dateRange,
   displayCurrencyId,
   currencies,
+  onSegmentClick,
+  onDisconnectSegment,
 }: ItineraryCostBreakdownProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
 
@@ -149,7 +153,17 @@ export function ItineraryCostBreakdown({
               {isExpanded && (
                 <div className="divide-y divide-border">
                   {entry.segments.map(({ segment: seg, segmentType: st }) => (
-                    <div key={seg.id} className="flex items-start gap-3 px-3 py-2">
+                    <div
+                      key={seg.id}
+                      role={onSegmentClick ? "button" : undefined}
+                      tabIndex={onSegmentClick ? 0 : undefined}
+                      className={cn(
+                        "flex items-start gap-3 px-3 py-2 transition-colors",
+                        onSegmentClick ? "hover:bg-muted/50 cursor-pointer" : "cursor-default"
+                      )}
+                      onClick={onSegmentClick ? () => onSegmentClick(seg.id) : undefined}
+                      onKeyDown={onSegmentClick ? (e) => { if (e.key === "Enter" || e.key === " ") onSegmentClick(seg.id) } : undefined}
+                    >
                       {/* Icon */}
                       {st?.iconSvg ? (
                         <div
@@ -173,6 +187,17 @@ export function ItineraryCostBreakdown({
                       <div className="text-sm font-medium shrink-0">
                         {formatCurrencyAmount(seg.cost ?? 0, seg.currencyId ?? displayCurrencyId, currencies)}
                       </div>
+                      {/* Disconnect */}
+                      {onDisconnectSegment && (
+                        <button
+                          type="button"
+                          className="shrink-0 p-1 rounded text-muted-foreground hover:text-destructive hover:bg-muted transition-colors"
+                          onClick={(e) => { e.stopPropagation(); onDisconnectSegment(seg.id) }}
+                          aria-label="Disconnect segment"
+                        >
+                          <UnlinkIcon className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -10,9 +10,9 @@ import { useThemePreference } from "../../providers/ThemeProvider"
 // Dynamic import to avoid SSR issues with three.js/WebGL
 const Globe = dynamic(() => import("react-globe.gl"), { ssr: false })
 
-// Reliable hosted earth texture URLs (light = blue marble, dark = city lights at night)
-const EARTH_LIGHT_URL = "//unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
-const EARTH_DARK_URL  = "//unpkg.com/three-globe/example/img/earth-night.jpg"
+// Locally hosted earth textures (copied from three-globe package to /public)
+const EARTH_LIGHT_URL = "/earth-blue-marble.jpg"
+const EARTH_DARK_URL  = "/earth-night.jpg"
 
 // Zoom constants — 10 clicks covers full 0–100% range on a log scale
 const MIN_ALT  = 0.0016          // ≈10 km above surface
@@ -103,6 +103,8 @@ export function ItineraryGlobe({
   onReady,
 }: ItineraryGlobeProps) {
   const globeRef = useRef<any>(null)
+  const onReadyRef = useRef(onReady)
+  onReadyRef.current = onReady
   const { resolvedTheme } = useThemePreference()
   const isDark = resolvedTheme === "dark"
 
@@ -266,8 +268,8 @@ export function ItineraryGlobe({
       const { lat, lng, altitude } = fitLocations(locations)
       globeRef.current.pointOfView({ lat, lng, altitude }, 0)
     }
-    onReady?.()
-  }, [locations, onReady])
+    onReadyRef.current?.()
+  }, [locations])
 
   const handleZoom = useCallback((direction: "in" | "out") => {
     if (!globeRef.current) return

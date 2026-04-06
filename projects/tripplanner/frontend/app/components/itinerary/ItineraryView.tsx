@@ -25,6 +25,7 @@ interface ItineraryViewProps {
   tripCurrencyId: number | null
   displayCurrencyId: number | null
   isLoading?: boolean
+  onDisconnectSegment?: (segmentId: number) => void
 }
 
 export function ItineraryView({
@@ -36,6 +37,7 @@ export function ItineraryView({
   tripCurrencyId,
   displayCurrencyId,
   isLoading = false,
+  onDisconnectSegment,
 }: ItineraryViewProps) {
   const { openSegmentDetail } = useTripLayout()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -43,8 +45,7 @@ export function ItineraryView({
   const [activePopover, setActivePopover] = useState<LocationPopover | null>(null)
   const [cardSegmentId, setCardSegmentId] = useState<number | null>(null)
   const [globeReady, setGlobeReady] = useState(false)
-  // Prevents onGlobeClick from immediately closing a card that was just opened
-  // by an icon click (globe fires its click even when HTML elements are clicked)
+  const globeFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const skipNextGlobeClickRef = useRef(false)
 
   const data = useItineraryData({
@@ -89,6 +90,35 @@ export function ItineraryView({
 
   const closeCard = useCallback(() => setCardSegmentId(null), [])
 
+  const handleGlobeReady = useCallback(() => {
+    if (globeFallbackTimerRef.current) {
+      clearTimeout(globeFallbackTimerRef.current)
+      globeFallbackTimerRef.current = null
+    }
+    setGlobeReady(true)
+  }, [])
+
+  const showEmpty = !isLoading && (selectedSegmentIds.length === 0 || data.locations.length === 0)
+
+  // Reset globeReady each time data finishes loading so the spinner shows again.
+  useEffect(() => {
+    if (isLoading) {
+      setGlobeReady(false)
+      if (globeFallbackTimerRef.current) {
+        clearTimeout(globeFallbackTimerRef.current)
+        globeFallbackTimerRef.current = null
+      }
+    }
+  }, [isLoading])
+
+  // Start fallback timer once the Globe is actually mounted (globeWidth > 0 and data ready).
+  // Guard with ref so ResizeObserver re-runs don't create multiple timers.
+  useEffect(() => {
+    if (globeWidth === 0 || isLoading || showEmpty) return
+    if (globeFallbackTimerRef.current) return
+    globeFallbackTimerRef.current = setTimeout(() => setGlobeReady(true), 5000)
+  }, [globeWidth, isLoading, showEmpty])
+
   const handleGlobeClick = useCallback(() => {
     if (skipNextGlobeClickRef.current) {
       skipNextGlobeClickRef.current = false
@@ -117,54 +147,49 @@ export function ItineraryView({
   )
 
   const cardSegment = cardSegmentId != null ? segments.find((s) => s.id === cardSegmentId) ?? null : null
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
-        <GlobeIcon className="h-10 w-10 animate-spin" strokeWidth={1.2} style={{ animationDuration: "3s" }} />
-        <p className="text-sm">Loading itinerary…</p>
-      </div>
-    )
-  }
-
-  if (selectedSegmentIds.length === 0 || data.locations.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-center px-6 py-12 text-muted-foreground">
-        <GlobeIcon className="h-10 w-10 mb-3 opacity-30" strokeWidth={1.2} />
-        <p className="text-sm">No location data to display.</p>
-        <p className="text-xs mt-1">Switch to Itinerary edit and connect segments with locations.</p>
-      </div>
-    )
-  }
-
   const cardCostLabel = cardSegment ? formatSegmentCost(cardSegment) : null
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
-      {/* Cost breakdown — shown above the globe */}
-      <ItineraryCostBreakdown
-        costBreakdown={data.costBreakdown}
-        totalCost={data.totalCost}
-        totalDays={data.totalDays}
-        costPerDay={data.costPerDay}
-        dateRange={data.dateRange}
-        displayCurrencyId={data.displayCurrencyId}
-        currencies={currencies}
-      />
+      {/* Cost breakdown — only when there's data */}
+      {!isLoading && !showEmpty && (
+        <ItineraryCostBreakdown
+          costBreakdown={data.costBreakdown}
+          totalCost={data.totalCost}
+          totalDays={data.totalDays}
+          costPerDay={data.costPerDay}
+          dateRange={data.dateRange}
+          displayCurrencyId={data.displayCurrencyId}
+          currencies={currencies}
+          onSegmentClick={openSegmentDetail}
+          onDisconnectSegment={onDisconnectSegment}
+        />
+      )}
 
-      {/* Globe */}
+      {/* Globe container — always mounted so ResizeObserver fires on first render */}
       <div
         ref={containerRef}
         className="relative shrink-0 w-full"
         style={{ height: GLOBE_HEIGHT }}
         onClick={closeCard}
       >
-        {!globeReady && (
-          <div className="absolute inset-0 flex items-center justify-center bg-muted/30 rounded-lg z-10">
-            <GlobeIcon className="h-8 w-8 animate-spin text-muted-foreground" strokeWidth={1.2} style={{ animationDuration: "3s" }} />
+        {/* Loading overlay */}
+        {(isLoading || (!globeReady && !showEmpty)) && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground z-10">
+            <GlobeIcon className="h-10 w-10 animate-spin" strokeWidth={1.2} style={{ animationDuration: "3s" }} />
+            {isLoading && <p className="text-sm">Loading itinerary…</p>}
           </div>
         )}
-        {globeWidth > 0 && (
+
+        {/* Empty state overlay */}
+        {showEmpty && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 text-muted-foreground">
+            <GlobeIcon className="h-10 w-10 mb-3 opacity-30" strokeWidth={1.2} />
+            <p className="text-sm">No location data to display.</p>
+            <p className="text-xs mt-1">Switch to Itinerary edit and connect segments with locations.</p>
+          </div>
+        )}
+        {globeWidth > 0 && !isLoading && !showEmpty && (
           <ItineraryGlobe
             locations={data.locations}
             arcs={data.arcs}
@@ -174,7 +199,7 @@ export function ItineraryView({
             onLocationClick={handleLocationClick}
             onArcClick={handleArcClick}
             onGlobeClick={handleGlobeClick}
-            onReady={() => setGlobeReady(true)}
+            onReady={handleGlobeReady}
           />
         )}
 

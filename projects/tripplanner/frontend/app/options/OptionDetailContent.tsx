@@ -634,6 +634,7 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
               tripCurrencyId={tripCurrencyId}
               displayCurrencyId={resolvedDisplayCurrencyId}
               isLoading={!baselineReady || segmentsLoading}
+              onDisconnectSegment={(segmentId) => handleSegmentCheckedChange(segmentId, false)}
             />
           </div>
         ) : null}
