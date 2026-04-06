@@ -42,13 +42,16 @@ export function TripPanelLayout({
     if (showChatColumn && showOptionColumn && showSegmentColumn) gridCols = "1fr 1fr 1fr 1fr"
     else if (showChatColumn && showOptionColumn) gridCols = "1fr 1fr 2fr"
     else if (showOptionColumn && showSegmentColumn) gridCols = "1fr 2fr 1fr"
+    else if (showChatColumn && showSegmentColumn) gridCols = "1fr 1fr 2fr"
     else if (showChatColumn) gridCols = "300px 1fr"
     else if (showOptionColumn) gridCols = "1fr 2fr"
+    else if (showSegmentColumn) gridCols = "1fr 2fr"
     else gridCols = "1fr"
   } else if (panelMode === "tablet") {
     if (showOptionColumn && showSegmentColumn) gridCols = "1fr 1fr 1fr"
     else if (showChatColumn) gridCols = "300px 1fr"
     else if (showOptionColumn) gridCols = "1fr 1.5fr"
+    else if (showSegmentColumn) gridCols = "1fr 1.5fr"
     else gridCols = "1fr"
   }
 

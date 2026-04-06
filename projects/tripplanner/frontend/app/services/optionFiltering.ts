@@ -3,6 +3,20 @@ import type { OptionFilterValue } from "../components/filters/OptionFilterPanel"
 import type { OptionSortValue } from "../components/sorting/optionSortTypes"
 import { computeCostChips } from "../components/filters/costChips"
 
+const DAY_MS = 86_400_000
+const MAX_RANGE_MS = 30 * DAY_MS
+
+/** Pads raw min/max timestamps by 1 day each side, capped to a 30-day total span. */
+function padDateBounds(min: number | null, max: number | null): { min: string; max: string } {
+  if (min === null || max === null) return { min: "", max: "" }
+  const paddedMin = min - DAY_MS
+  const paddedMax = Math.min(max + DAY_MS, paddedMin + MAX_RANGE_MS)
+  return {
+    min: new Date(paddedMin).toISOString().split("T")[0],
+    max: new Date(paddedMax).toISOString().split("T")[0],
+  }
+}
+
 const getLocationLabel = (loc: any | null) => {
   if (!loc) return ""
   const name = loc?.name ?? ""
@@ -14,8 +28,8 @@ export const buildOptionMetadata = (options: OptionApi[], segments: SegmentApi[]
   const locations = new Set<string>()
   const startDateSet = new Set<string>()
   const endDateSet = new Set<string>()
-  let minDate: number | null = null
-  let maxDate: number | null = null
+  let rawMin: number | null = null
+  let rawMax: number | null = null
 
   segments.forEach((segment) => {
     const startLoc = (segment as any).startLocation ?? null
@@ -24,22 +38,25 @@ export const buildOptionMetadata = (options: OptionApi[], segments: SegmentApi[]
     const endLabel = getLocationLabel(endLoc)
     if (startLabel) locations.add(startLabel)
     if (endLabel) locations.add(endLabel)
+    // Use segment dates as the authoritative trip bounds
+    if (segment.startDateTimeUtc) {
+      const ts = new Date(segment.startDateTimeUtc).getTime()
+      if (!Number.isNaN(ts)) rawMin = rawMin === null ? ts : Math.min(rawMin, ts)
+    }
+    if (segment.endDateTimeUtc) {
+      const ts = new Date(segment.endDateTimeUtc).getTime()
+      if (!Number.isNaN(ts)) rawMax = rawMax === null ? ts : Math.max(rawMax, ts)
+    }
   })
 
   options.forEach((option) => {
     if (option.startDateTimeUtc) {
       const start = new Date(option.startDateTimeUtc).getTime()
-      if (!Number.isNaN(start)) {
-        minDate = minDate === null ? start : Math.min(minDate, start)
-        startDateSet.add(new Date(start).toISOString().split("T")[0])
-      }
+      if (!Number.isNaN(start)) startDateSet.add(new Date(start).toISOString().split("T")[0])
     }
     if (option.endDateTimeUtc) {
       const end = new Date(option.endDateTimeUtc).getTime()
-      if (!Number.isNaN(end)) {
-        maxDate = maxDate === null ? end : Math.max(maxDate, end)
-        endDateSet.add(new Date(end).toISOString().split("T")[0])
-      }
+      if (!Number.isNaN(end)) endDateSet.add(new Date(end).toISOString().split("T")[0])
     }
   })
 
@@ -50,10 +67,7 @@ export const buildOptionMetadata = (options: OptionApi[], segments: SegmentApi[]
     locations: Array.from(locations),
     uniqueStartDates: Array.from(startDateSet).sort(),
     uniqueEndDates: Array.from(endDateSet).sort(),
-    dateBounds: {
-      min: minDate ? new Date(minDate).toISOString().split("T")[0] : "",
-      max: maxDate ? new Date(maxDate).toISOString().split("T")[0] : "",
-    },
+    dateBounds: padDateBounds(rawMin, rawMax),
     costChips,
   }
 }

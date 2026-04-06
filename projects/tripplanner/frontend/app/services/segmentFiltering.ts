@@ -4,6 +4,19 @@ import type { SegmentSortValue } from "../components/sorting/segmentSortTypes"
 import { convertWithFallback } from "../utils/currency"
 import { computeCostChips } from "../components/filters/costChips"
 
+const DAY_MS = 86_400_000
+const MAX_RANGE_MS = 30 * DAY_MS
+
+function padDateBounds(min: number | null, max: number | null): { min: string; max: string } {
+  if (min === null || max === null) return { min: "", max: "" }
+  const paddedMin = min - DAY_MS
+  const paddedMax = Math.min(max + DAY_MS, paddedMin + MAX_RANGE_MS)
+  return {
+    min: new Date(paddedMin).toISOString().split("T")[0],
+    max: new Date(paddedMax).toISOString().split("T")[0],
+  }
+}
+
 const getLocationLabel = (loc: any | null) => {
   if (!loc) return ""
   const name = loc?.name ?? ""
@@ -47,10 +60,7 @@ export const buildSegmentMetadata = (segments: Segment[], segmentTypes: SegmentT
     types: segmentTypes.filter((type) => typeSet.has(type.id)),
     uniqueStartDates: Array.from(startDateSet).sort(),
     uniqueEndDates: Array.from(endDateSet).sort(),
-    dateBounds: {
-      min: minDate ? new Date(minDate).toISOString().split("T")[0] : "",
-      max: maxDate ? new Date(maxDate).toISOString().split("T")[0] : "",
-    },
+    dateBounds: padDateBounds(minDate, maxDate),
     costChips,
   }
 }

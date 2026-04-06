@@ -28,6 +28,10 @@ interface RangeDateTimePickerProps {
   allowDifferentOffsets?: boolean
   /** default: false. If true, compact spacing */
   compact?: boolean
+  /** default: false. If true, end time is always shown and cannot be removed */
+  requireEnd?: boolean
+  /** default: false. If true, show "X nights" count when both start and end are set */
+  showNights?: boolean
 }
 
 /** Helpers (no timezone libs; pure offset math) */
@@ -58,11 +62,23 @@ function utcMsToLocal(utcMs: number, offsetH: number): string {
 }
 
 export const RangeDateTimePicker: React.FC<RangeDateTimePickerProps> = React.memo(
-  ({ id, label = "When", value, onChange, allowDifferentOffsets = false, compact = false }) => {
+  ({ id, label = "When", value, onChange, allowDifferentOffsets = false, compact = false, requireEnd = false, showNights = false }) => {
     const { startLocal, endLocal, startOffsetH, endOffsetH } = value
 
     // Effective end offset (falls back to startOffsetH)
     const effEndOffset = endOffsetH ?? startOffsetH
+
+    // Compute nights count from calendar date diff (ignoring time)
+    const nightsCount = useMemo(() => {
+      if (!showNights || !startLocal || !endLocal) return null
+      const startDate = startLocal.split("T")[0]
+      const endDate = endLocal.split("T")[0]
+      if (!startDate || !endDate) return null
+      const startMs = new Date(startDate).getTime()
+      const endMs = new Date(endDate).getTime()
+      const nights = Math.round((endMs - startMs) / (1000 * 60 * 60 * 24))
+      return nights > 0 ? nights : null
+    }, [showNights, startLocal, endLocal])
 
     // Compute a min for the end field: start instant seen in end offset
     const endMinLocal = useMemo(() => {
@@ -134,8 +150,8 @@ export const RangeDateTimePicker: React.FC<RangeDateTimePickerProps> = React.mem
         )}
 
         {/* End controls */}
-        {endLocal === null ? (
-          // Collapsed state
+        {endLocal === null && !requireEnd ? (
+          // Collapsed state (hidden when requireEnd)
           <div className={grid}>
             <Label className="text-right text-sm" />
             <div className="col-span-3">
@@ -155,7 +171,7 @@ export const RangeDateTimePicker: React.FC<RangeDateTimePickerProps> = React.mem
               </Button>
             </div>
           </div>
-        ) : (
+        ) : endLocal !== null ? (
           <div className="space-y-2">
             <div className={grid}>
               <Label htmlFor={`${id}-end`} className="text-right text-sm">
@@ -187,20 +203,32 @@ export const RangeDateTimePicker: React.FC<RangeDateTimePickerProps> = React.mem
               </div>
             </div>
 
-            {/* Clear end button placed below end inputs, left-aligned */}
-            <div className={grid}>
-              <Label className="text-right text-sm" />
-              <div className="col-span-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onChange({ ...value, endLocal: null, endOffsetH: null })}
-                >
-                  Remove end time
-                </Button>
+            {/* Nights count (accommodation only) */}
+            {nightsCount !== null && (
+              <div className={grid}>
+                <Label className="text-right text-sm" />
+                <div className="col-span-3 text-sm text-muted-foreground">
+                  {nightsCount} {nightsCount === 1 ? "night" : "nights"}
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Remove end button (hidden when requireEnd) */}
+            {!requireEnd && (
+              <div className={grid}>
+                <Label className="text-right text-sm" />
+                <div className="col-span-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onChange({ ...value, endLocal: null, endOffsetH: null })}
+                  >
+                    Remove end time
+                  </Button>
+                </div>
+              </div>
+            )}
 
             <div className={grid}>
               <Label className="text-right text-xs text-muted-foreground" />
@@ -209,7 +237,7 @@ export const RangeDateTimePicker: React.FC<RangeDateTimePickerProps> = React.mem
               </div>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     )
   },

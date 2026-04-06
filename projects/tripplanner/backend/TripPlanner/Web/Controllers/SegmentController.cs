@@ -76,6 +76,7 @@ public class SegmentController : ControllerBase
     [Route(nameof(UpdateConnectedOptions))]
     public async Task<ActionResult> UpdateConnectedOptions([FromQuery]int tripId, UpdateConnectedOptionsAm am, CancellationToken cancellationToken)
     {
+        am.TripId = tripId;
         await _segmentService_.ConnectSegmentWithOptionsAsync(am, cancellationToken);
         return Ok();
     }

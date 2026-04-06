@@ -34,6 +34,8 @@ interface RangeLocationPickerProps {
   debounceMs?: number
   renderPicker?: (props: PickerRenderProps) => React.ReactNode
   existingLocations?: LocationOption[]
+  /** When true, shows a single "Location" field with no start/end distinction */
+  singleMode?: boolean
 }
 
 /* -------------------- small utilities -------------------- */
@@ -283,6 +285,7 @@ export const RangeLocationPicker: React.FC<RangeLocationPickerProps> = React.mem
     debounceMs = 250,
     renderPicker,
     existingLocations,
+    singleMode = false,
   }) => {
     const { start, end } = value
     const grid = compact ? "grid grid-cols-4 items-center gap-2" : "grid grid-cols-4 items-center gap-3"
@@ -295,17 +298,17 @@ export const RangeLocationPicker: React.FC<RangeLocationPickerProps> = React.mem
 
     return (
       <div className="space-y-3">
-        {/* Start location */}
+        {/* Start / single location */}
         <div className={grid}>
           <Label htmlFor={`${id}-start`} className="text-right text-sm">
-            Start
+            {singleMode ? "Location" : "Start"}
           </Label>
           <div className="col-span-3 flex items-center gap-2">
             {renderPicker
-              ? renderPicker({ id: `${id}-start`, placeholder: "Select start...", selected: start, onSelected: (loc) => onChange({ ...value, start: loc }) })
+              ? renderPicker({ id: `${id}-start`, placeholder: singleMode ? "Select location..." : "Select start...", selected: start, onSelected: (loc) => onChange({ ...value, start: loc }) })
               : <Autocomplete
                   id={`${id}-start`}
-                  placeholder="Search a start location"
+                  placeholder={singleMode ? "Search location" : "Search a start location"}
                   selected={start}
                   onSelected={(loc) => onChange({ ...value, start: loc })}
                   searchEndpoint={searchEndpoint}
@@ -317,71 +320,73 @@ export const RangeLocationPicker: React.FC<RangeLocationPickerProps> = React.mem
           </div>
         </div>
 
-        {/* End location (optional) */}
-        {end === null ? (
-          <div className={grid}>
-            <Label className="text-right text-sm" />
-            <div className="col-span-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onChange({ ...value, end: value.start ?? null })}
-              >
-                + Add destination
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {start && end && (
-              <div className={grid}>
-                <Label className="text-right text-sm" />
-                <div className="col-span-3 flex justify-center">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={handleSwap}
-                    title="Swap start and destination"
-                  >
-                    <ArrowLeftRight className="h-4 w-4" />
-                    <span className="sr-only">Swap start and destination</span>
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            <div className={grid}>
-              <Label htmlFor={`${id}-end`} className="text-right text-sm">
-                Destination
-              </Label>
-              <div className="col-span-3 flex items-center gap-2">
-                {renderPicker
-                  ? renderPicker({ id: `${id}-end`, placeholder: "Select destination...", selected: end, onSelected: (loc) => onChange({ ...value, end: loc }) })
-                  : <Autocomplete
-                      id={`${id}-end`}
-                      placeholder="Search an end location"
-                      selected={end}
-                      onSelected={(loc) => onChange({ ...value, end: loc })}
-                      searchEndpoint={searchEndpoint}
-                      minChars={minChars}
-                      debounceMs={debounceMs}
-                      existingLocations={existingLocations}
-                    />
-                }
-              </div>
-            </div>
-
+        {/* End location (hidden in singleMode) */}
+        {!singleMode && (
+          end === null ? (
             <div className={grid}>
               <Label className="text-right text-sm" />
-              <div className="col-span-3 flex items-center gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => onChange({ ...value, end: null })}>
-                  Remove destination
+              <div className="col-span-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onChange({ ...value, end: value.start ?? null })}
+                >
+                  + Add destination
                 </Button>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-2">
+              {start && end && (
+                <div className={grid}>
+                  <Label className="text-right text-sm" />
+                  <div className="col-span-3 flex justify-center">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={handleSwap}
+                      title="Swap start and destination"
+                    >
+                      <ArrowLeftRight className="h-4 w-4" />
+                      <span className="sr-only">Swap start and destination</span>
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <div className={grid}>
+                <Label htmlFor={`${id}-end`} className="text-right text-sm">
+                  Destination
+                </Label>
+                <div className="col-span-3 flex items-center gap-2">
+                  {renderPicker
+                    ? renderPicker({ id: `${id}-end`, placeholder: "Select destination...", selected: end, onSelected: (loc) => onChange({ ...value, end: loc }) })
+                    : <Autocomplete
+                        id={`${id}-end`}
+                        placeholder="Search an end location"
+                        selected={end}
+                        onSelected={(loc) => onChange({ ...value, end: loc })}
+                        searchEndpoint={searchEndpoint}
+                        minChars={minChars}
+                        debounceMs={debounceMs}
+                        existingLocations={existingLocations}
+                      />
+                  }
+                </div>
+              </div>
+
+              <div className={grid}>
+                <Label className="text-right text-sm" />
+                <div className="col-span-3 flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => onChange({ ...value, end: null })}>
+                    Remove destination
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )
         )}
       </div>
     )

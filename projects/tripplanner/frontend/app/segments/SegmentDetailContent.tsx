@@ -65,6 +65,7 @@ import { useCurrencyConversions } from "../hooks/useCurrencyConversions"
 
 import { localToUtcMs, utcMsToIso, utcIsoToLocalInput, formatLocalWithPreferredOffset, normalizeOffsetHours } from "../lib/utils"
 import { buildOptionTitleTokens, buildOptionConfigFromApi, tokensToLabel } from "../utils/formatters"
+import { isTransportType, isAccommodationType } from "../utils/segmentVisuals"
 import { optionsApi, segmentsApi, userApi } from "../utils/apiClient"
 import { getDefaultCurrencyId, useCurrencies } from "../hooks/useCurrencies"
 import { formatCurrencyAmount, formatConvertedAmount } from "../utils/currency"
@@ -270,6 +271,9 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
     if (segmentTypeId === null) return null
     return segmentTypes.find((type) => type.id === segmentTypeId) ?? null
   }, [segmentTypeId, segmentTypes])
+
+  const isTransport = isTransportType(selectedSegmentType)
+  const isAccommodation = isAccommodationType(selectedSegmentType)
 
   const { currencies, isLoading: isLoadingCurrencies } = useCurrencies()
   const { conversions } = useCurrencyConversions()
@@ -888,6 +892,26 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
     }
   }, [segment, currencyId, userPreferredCurrencyId, tripCurrencyId, defaultCurrencyId])
 
+  // When segment type changes, adjust location/time fields to match type requirements
+  const prevSegmentTypeIdRef = useRef<number | null>(segmentTypeId)
+  useEffect(() => {
+    const prev = prevSegmentTypeIdRef.current
+    prevSegmentTypeIdRef.current = segmentTypeId
+    // Only run when the type actually changes (not on initial mount)
+    if (prev === segmentTypeId) return
+
+    if (isAccommodation) {
+      // Accommodation: clear end location (single location mode)
+      setLocRange((prev) => ({ ...prev, end: null }))
+      // Ensure end time is expanded
+      setRange((prev) => prev.endLocal === null ? { ...prev, endLocal: prev.startLocal || "", endOffsetH: null } : prev)
+    } else if (isTransport) {
+      // Transport: auto-expand end location and end time if not already set
+      setLocRange((prev) => prev.end === null ? { ...prev, end: prev.start } : prev)
+      setRange((prev) => prev.endLocal === null ? { ...prev, endLocal: prev.startLocal || "", endOffsetH: null } : prev)
+    }
+  }, [segmentTypeId, isAccommodation, isTransport])
+
   const handleOptionChange = (optionId: number, checkedState: boolean | "indeterminate") => {
     const checked = checkedState === true
     setOptionsTouched(true)
@@ -1033,8 +1057,17 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
     const parsedCostCheck = Number.parseFloat(cost)
     if (!cost || Number.isNaN(parsedCostCheck)) messages.push("Enter a valid cost amount")
     if (!currencyId && !isLoadingCurrencies) messages.push("Select a currency")
+    if (isTransport) {
+      if (!rangeEndLocal) messages.push("Choose an end date and time")
+      if (!locRangeStart) messages.push("Select a start location")
+      if (!locRangeEnd) messages.push("Select a destination")
+    }
+    if (isAccommodation) {
+      if (!rangeEndLocal) messages.push("Choose an end date and time")
+      if (!locRangeStart) messages.push("Select a location")
+    }
     return messages
-  }, [segmentTypeId, rangeStartLocal, cost, currencyId, isLoadingCurrencies])
+  }, [segmentTypeId, rangeStartLocal, rangeEndLocal, cost, currencyId, isLoadingCurrencies, isTransport, isAccommodation, locRangeStart, locRangeEnd])
 
   const hasMissingFields = missingFieldMessages.length > 0
   const triggerMissingFieldsHint = useCallback(() => {
@@ -1075,6 +1108,35 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
         triggerMissingFieldsHint()
         toast({ title: "Error", description: "Please enter a valid cost amount." })
         return
+      }
+      if (isTransport) {
+        if (!rangeEndLocal) {
+          triggerMissingFieldsHint()
+          toast({ title: "Error", description: "Please choose an end date and time." })
+          return
+        }
+        if (!locRangeStart) {
+          triggerMissingFieldsHint()
+          toast({ title: "Error", description: "Please select a start location." })
+          return
+        }
+        if (!locRangeEnd) {
+          triggerMissingFieldsHint()
+          toast({ title: "Error", description: "Please select a destination." })
+          return
+        }
+      }
+      if (isAccommodation) {
+        if (!rangeEndLocal) {
+          triggerMissingFieldsHint()
+          toast({ title: "Error", description: "Please choose an end date and time." })
+          return
+        }
+        if (!locRangeStart) {
+          triggerMissingFieldsHint()
+          toast({ title: "Error", description: "Please select a location." })
+          return
+        }
       }
 
       const startUtcMs = localToUtcMs(rangeStartLocal, rangeStartOffsetH)
@@ -1166,6 +1228,8 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
       defaultCurrencyId,
       triggerMissingFieldsHint,
       parsedCost,
+      isTransport,
+      isAccommodation,
     ],
   )
 
@@ -1448,13 +1512,15 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
                 onChange={setRange}
                 allowDifferentOffsets
                 compact
+                requireEnd={isTransport || isAccommodation}
+                showNights={isAccommodation}
               />
             </div>
           </Collapsible>
 
           <Collapsible title={locationSummaryTitle} open={locationsOpen} onToggle={() => setLocationsOpen((o) => !o)}>
             <div className="pt-4">
-              <RangeLocationPicker id="segment-where" label="" value={locRange} onChange={setLocRange} compact existingLocations={existingLocations} />
+              <RangeLocationPicker id="segment-where" label="" value={locRange} onChange={setLocRange} compact existingLocations={existingLocations} singleMode={isAccommodation} />
             </div>
           </Collapsible>
 

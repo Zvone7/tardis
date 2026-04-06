@@ -22,6 +22,10 @@ export function isTransportType(segType: SegmentType | null | undefined): boolea
   return Boolean(segType?.shortName?.startsWith("transport_"))
 }
 
+export function isAccommodationType(segType: SegmentType | null | undefined): boolean {
+  return Boolean(segType?.shortName?.startsWith("accomodation_"))
+}
+
 export function formatDateCompact(iso?: string | null): string {
   if (!iso) return "N/A"
   const date = new Date(iso)
