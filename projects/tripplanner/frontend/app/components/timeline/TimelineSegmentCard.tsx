@@ -64,6 +64,7 @@ export function TimelineSegmentCard({
     <div
       className="fixed z-[100] rounded-lg border bg-popover shadow-lg p-3"
       style={{ left: pos.left, bottom: pos.bottom, width: CARD_WIDTH }}
+      onClick={(e) => e.stopPropagation()}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >

@@ -14,16 +14,10 @@ const EARTH_LIGHT_URL = "/earth-blue-marble.jpg"
 const EARTH_DARK_URL  = "/earth-night.jpg"
 
 // Zoom constants — 10 clicks covers full 0–100% range on a log scale
-const MIN_ALT  = 0.0016          // ≈10 km above surface
+const MIN_ALT  = 0.0016
 const MAX_ALT  = 8
-const LOG_RANGE = Math.log(MAX_ALT / MIN_ALT)   // ≈8.52
-const ZOOM_FACTOR = Math.exp(LOG_RANGE / 10)    // per-click factor ≈2.34
-
-// Badge background/icon colours matching the timeline bar pattern
-const BADGE_BG_LIGHT  = "#ffffff"
-const BADGE_BG_DARK   = "#27272a"
-const ICON_FILL_LIGHT = "#3f3f46"
-const ICON_FILL_DARK  = "#e4e4e7"
+const LOG_RANGE = Math.log(MAX_ALT / MIN_ALT)
+const ZOOM_FACTOR = Math.exp(LOG_RANGE / 10)
 
 // --- Geo helpers ---
 
@@ -60,7 +54,6 @@ function fitLocations(locations: ItineraryLocation[]): { lat: number; lng: numbe
   const start = locations[0]
   if (locations.length === 1) return { lat: start.lat, lng: start.lng, altitude: 1.4 }
 
-  // Compute altitude based on how spread out all locations are from their centroid
   const center = geoCentroid(locations)
   let maxRad = 0
   for (const loc of locations) {
@@ -70,7 +63,6 @@ function fitLocations(locations: ItineraryLocation[]): { lat: number; lng: numbe
   if (maxRad > toRad(90)) return { lat: start.lat, lng: start.lng, altitude: 2.5 }
 
   const altitude = Math.min((1 / Math.cos(maxRad) - 1) * 1.25 + 0.15, 2.5)
-  // Center on the starting location, zoom to fit all
   return { lat: start.lat, lng: start.lng, altitude: Math.max(altitude, 0.3) }
 }
 
@@ -82,15 +74,9 @@ interface ItineraryGlobeProps {
   width: number
   height: number
   onLocationClick: (locationKey: string) => void
-  onArcClick: (segmentId: number, anchorEl: HTMLDivElement) => void
+  onArcClick: (arc: ItineraryArc) => void
   onGlobeClick: () => void
   onReady?: () => void
-}
-
-interface ArcMidpoint {
-  lat: number
-  lng: number
-  arc: ItineraryArc
 }
 
 export function ItineraryGlobe({
@@ -106,144 +92,70 @@ export function ItineraryGlobe({
   const globeRef = useRef<any>(null)
   const onReadyRef = useRef(onReady)
   onReadyRef.current = onReady
+  const onArcClickRef = useRef(onArcClick)
+  onArcClickRef.current = onArcClick
   const { resolvedTheme } = useThemePreference()
   const isDark = resolvedTheme === "dark"
 
   // Tracks current altitude for dynamic arc stroke + zoom % display
   const [currentAlt, setCurrentAlt] = useState(2.5)
-  const arcStroke = Math.min(Math.max(currentAlt * 0.1, 0.002), 1.0)
-  const zoomPct = Math.round(Math.max(0, Math.min(100, 100 * Math.log(MAX_ALT / currentAlt) / LOG_RANGE)))
+  const arcStroke = Math.min(Math.max(currentAlt * 0.8, 0.06), 3.5)
 
-  const arcMidpoints: ArcMidpoint[] = arcs.map((arc) => ({
-    lat: arc.midLat,
-    lng: arc.midLng,
-    arc,
-  }))
-
-  type HtmlItem =
-    | { kind: "location"; data: ItineraryLocation }
-    | { kind: "midpoint"; data: ArcMidpoint }
-
-  const htmlItems: HtmlItem[] = [
-    ...locations.map((l) => ({ kind: "location" as const, data: l })),
-    ...arcMidpoints.map((m) => ({ kind: "midpoint" as const, data: m })),
+  // Each arc is duplicated: visible arc + invisible wide hit-area arc for easier clicking
+  type LayeredArc = ItineraryArc & { _hitArea?: true }
+  const layeredArcs: LayeredArc[] = [
+    ...arcs,
+    ...arcs.map((a) => ({ ...a, _hitArea: true as const })),
   ]
+  const zoomPct = Math.round(Math.max(0, Math.min(100, 100 * Math.log(MAX_ALT / currentAlt) / LOG_RANGE)))
 
   const buildHtmlElement = useCallback(
     (item: object): HTMLElement => {
-      const typedItem = item as HtmlItem
+      const loc = item as ItineraryLocation
       const el = document.createElement("div")
-      const badgeBg  = isDark ? BADGE_BG_DARK  : BADGE_BG_LIGHT
-      const iconFill = isDark ? ICON_FILL_DARK  : ICON_FILL_LIGHT
 
-      if (typedItem.kind === "location") {
-        const loc = typedItem.data as ItineraryLocation
-        const seenTypeIds = new Set<number>()
-        const uniqueTypes = loc.segments
-          .map((s) => s.segmentType)
-          .filter((st) => {
-            if (seenTypeIds.has(st.id)) return false
-            seenTypeIds.add(st.id)
-            return true
-          })
+      el.style.cssText = [
+        "display:flex",
+        "flex-direction:column",
+        "align-items:center",
+        "gap:3px",
+        "cursor:pointer",
+        "pointer-events:all",
+      ].join(";")
 
-        el.style.cssText = [
-          "display:flex",
-          "flex-direction:column",
-          "align-items:center",
-          "gap:4px",
-          "cursor:pointer",
-          "pointer-events:all",
-        ].join(";")
+      // Location name label above the pin
+      const label = document.createElement("div")
+      label.textContent = loc.name
+      label.style.cssText = [
+        "font-size:10px",
+        "font-weight:600",
+        "white-space:nowrap",
+        "padding:1px 5px",
+        "border-radius:3px",
+        "background:rgba(0,0,0,0.55)",
+        "color:#ffffff",
+        "letter-spacing:0.01em",
+      ].join(";")
 
-        // Teardrop map-pin shape (SVG)
-        const pinWrap = document.createElement("div")
-        pinWrap.innerHTML = `<svg width="22" height="30" viewBox="0 0 22 30" xmlns="http://www.w3.org/2000/svg">
-          <path d="M11 0C4.925 0 0 4.925 0 11c0 8.25 11 19 11 19s11-10.75 11-19c0-6.075-4.925-11-11-11z"
-            fill="#ffffff" stroke="rgba(0,0,0,0.35)" stroke-width="1.5"/>
-          <circle cx="11" cy="11" r="4.5" fill="rgba(0,0,0,0.25)"/>
-        </svg>`
-        pinWrap.style.cssText = "line-height:0;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))"
+      // Teardrop map-pin shape (SVG)
+      const pinWrap = document.createElement("div")
+      pinWrap.innerHTML = `<svg width="22" height="30" viewBox="0 0 22 30" xmlns="http://www.w3.org/2000/svg">
+        <path d="M11 0C4.925 0 0 4.925 0 11c0 8.25 11 19 11 19s11-10.75 11-19c0-6.075-4.925-11-11-11z"
+          fill="#ffffff" stroke="rgba(0,0,0,0.35)" stroke-width="1.5"/>
+        <circle cx="11" cy="11" r="4.5" fill="rgba(0,0,0,0.25)"/>
+      </svg>`
+      pinWrap.style.cssText = "line-height:0;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))"
 
-        // Segment-type badge row
-        const row = document.createElement("div")
-        row.style.cssText = "display:flex;gap:3px"
-
-        for (const st of uniqueTypes.slice(0, 4)) {
-          const typeColor = st.color?.trim() || "#6b7280"
-          const badge = document.createElement("div")
-          badge.style.cssText = [
-            "width:26px;height:26px",
-            "border-radius:50%",
-            `background:${badgeBg}`,
-            `border:2px solid ${typeColor}`,
-            "display:flex;align-items:center;justify-content:center",
-            "overflow:hidden",
-            "box-shadow:0 1px 5px rgba(0,0,0,0.35)",
-          ].join(";")
-          if (st.iconSvg) {
-            const wrap = document.createElement("span")
-            wrap.style.cssText = `display:flex;width:14px;height:14px;color:${iconFill}`
-            wrap.innerHTML = st.iconSvg
-            const svg = wrap.querySelector("svg")
-            if (svg) {
-              svg.style.width = "14px"
-              svg.style.height = "14px"
-              svg.style.fill = iconFill
-            }
-            badge.appendChild(wrap)
-          } else {
-            badge.textContent = st.shortName?.charAt(0)?.toUpperCase() ?? "?"
-            badge.style.fontSize = "10px"
-            badge.style.color = iconFill
-          }
-          row.appendChild(badge)
-        }
-
-        el.appendChild(pinWrap)
-        el.appendChild(row)
-        el.addEventListener("click", (e) => {
-          e.stopPropagation()
-          onLocationClick(loc.key)
-        })
-      } else {
-        // Arc midpoint — coloured circle with segment type icon
-        const mp = typedItem.data as ArcMidpoint
-        const st = mp.arc.segmentType
-        el.style.cssText = [
-          "width:30px;height:30px",
-          "border-radius:50%",
-          `background:${mp.arc.color}`,
-          "border:2px solid rgba(255,255,255,0.6)",
-          "display:flex;align-items:center;justify-content:center",
-          "cursor:pointer;pointer-events:all",
-          "box-shadow:0 2px 8px rgba(0,0,0,0.5)",
-        ].join(";")
-        if (st.iconSvg) {
-          const wrap = document.createElement("span")
-          wrap.style.cssText = "display:flex;width:18px;height:18px;color:#ffffff"
-          wrap.innerHTML = st.iconSvg
-          const svg = wrap.querySelector("svg")
-          if (svg) {
-            svg.style.width = "18px"
-            svg.style.height = "18px"
-            svg.style.fill = "#ffffff"
-          }
-          el.appendChild(wrap)
-        } else {
-          el.textContent = st.shortName?.charAt(0)?.toUpperCase() ?? "?"
-          el.style.fontSize = "11px"
-          el.style.color = "#fff"
-        }
-        el.addEventListener("click", (e) => {
-          e.stopPropagation()
-          onArcClick(mp.arc.segment.id, el as HTMLDivElement)
-        })
-      }
+      el.appendChild(label)
+      el.appendChild(pinWrap)
+      el.addEventListener("click", (e) => {
+        e.stopPropagation()
+        onLocationClick(loc.key)
+      })
 
       return el
     },
-    [onLocationClick, onArcClick, isDark]
+    [onLocationClick]
   )
 
   // Re-center when locations change (subsequent updates after initial mount)
@@ -258,13 +170,11 @@ export function ItineraryGlobe({
     const controls = globeRef.current.controls()
     if (controls) {
       controls.autoRotate = false
-      // Track altitude changes so arc stroke and zoom % update dynamically
       controls.addEventListener("change", () => {
         const pov = globeRef.current?.pointOfView()
         if (pov?.altitude !== undefined) setCurrentAlt(pov.altitude)
       })
     }
-    // Center immediately once the globe is fully initialized (dynamic import delay)
     if (locations.length > 0) {
       const { lat, lng, altitude } = fitLocations(locations)
       globeRef.current.pointOfView({ lat, lng, altitude }, 0)
@@ -275,7 +185,6 @@ export function ItineraryGlobe({
   const handleZoom = useCallback((direction: "in" | "out") => {
     if (!globeRef.current) return
     const current = globeRef.current.pointOfView()
-    // Each click = 10% of log zoom range (10 clicks covers full 0–100%)
     const next = direction === "in"
       ? Math.max(current.altitude / ZOOM_FACTOR, MIN_ALT)
       : Math.min(current.altitude * ZOOM_FACTOR, MAX_ALT)
@@ -291,36 +200,35 @@ export function ItineraryGlobe({
         backgroundColor="rgba(0,0,0,0)"
         globeImageUrl={isDark ? EARTH_DARK_URL : EARTH_LIGHT_URL}
         showAtmosphere={false}
-        // Arcs — dashed animated lines for transport routes
-        arcsData={arcs}
-        arcStartLat={(d) => (d as ItineraryArc).startLat}
-        arcStartLng={(d) => (d as ItineraryArc).startLng}
-        arcEndLat={(d) => (d as ItineraryArc).endLat}
-        arcEndLng={(d) => (d as ItineraryArc).endLng}
-        arcColor={(d: object) => (d as ItineraryArc).color}
+        // Arcs — each real arc duplicated with an invisible wide hit-area twin for easier clicking
+        arcsData={layeredArcs}
+        arcStartLat={(d) => (d as LayeredArc).startLat}
+        arcStartLng={(d) => (d as LayeredArc).startLng}
+        arcEndLat={(d) => (d as LayeredArc).endLat}
+        arcEndLng={(d) => (d as LayeredArc).endLng}
+        arcColor={(d: object) => {
+          const a = d as LayeredArc
+          return a._hitArea ? "rgba(0,0,0,0.01)" : a.color
+        }}
         arcAltitudeAutoScale={0.4}
-        arcStroke={arcStroke}
-        arcDashLength={0.4}
-        arcDashGap={0.2}
-        arcDashAnimateTime={5000}
-        // HTML elements — location markers + arc midpoint icons
-        htmlElementsData={htmlItems}
-        htmlLat={(d) => {
-          const item = d as HtmlItem
-          return item.kind === "location"
-            ? (item.data as ItineraryLocation).lat
-            : (item.data as ArcMidpoint).lat
+        arcStroke={(d: object) => {
+          const a = d as LayeredArc
+          return a._hitArea ? arcStroke * 5 : arcStroke
         }}
-        htmlLng={(d) => {
-          const item = d as HtmlItem
-          return item.kind === "location"
-            ? (item.data as ItineraryLocation).lng
-            : (item.data as ArcMidpoint).lng
+        arcDashLength={(d: object) => (d as LayeredArc)._hitArea ? 1 : 0.3}
+        arcDashGap={(d: object) => (d as LayeredArc)._hitArea ? 0 : 0.08}
+        arcDashAnimateTime={(d: object) => (d as LayeredArc)._hitArea ? 0 : 12000}
+        onArcClick={(arc: object) => {
+          const a = arc as LayeredArc
+          const base: ItineraryArc = { ...a }
+          delete (base as LayeredArc)._hitArea
+          onArcClickRef.current(base)
         }}
-        htmlAltitude={(d) => {
-          const item = d as HtmlItem
-          return item.kind === "midpoint" ? 0.1 : 0
-        }}
+        // HTML elements — location pins only
+        htmlElementsData={locations}
+        htmlLat={(d) => (d as ItineraryLocation).lat}
+        htmlLng={(d) => (d as ItineraryLocation).lng}
+        htmlAltitude={0}
         htmlElement={buildHtmlElement}
         onGlobeReady={handleGlobeReady}
         onGlobeClick={onGlobeClick}

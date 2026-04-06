@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import type { SegmentApi, SegmentType, Currency, CurrencyConversion } from "../../types/models"
-import { useItineraryData, type ItineraryLocation } from "../../hooks/useItineraryData"
+import { useItineraryData, type ItineraryLocation, type ItineraryArc } from "../../hooks/useItineraryData"
 import { ItineraryGlobe } from "./ItineraryGlobe"
 import { ItineraryCostBreakdown } from "./ItineraryCostBreakdown"
 import { TimelineSegmentCard } from "../timeline/TimelineSegmentCard"
@@ -44,11 +44,15 @@ export function ItineraryView({
   const containerRef = useRef<HTMLDivElement>(null)
   const [globeWidth, setGlobeWidth] = useState(0)
   const [activePopover, setActivePopover] = useState<LocationPopover | null>(null)
+  const [activeArcPopover, setActiveArcPopover] = useState<ItineraryArc | null>(null)
   const [cardSegmentId, setCardSegmentId] = useState<number | null>(null)
   const [cardAnchorEl, setCardAnchorEl] = useState<HTMLDivElement | null>(null)
   const [globeReady, setGlobeReady] = useState(false)
   const globeFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const skipNextGlobeClickRef = useRef(false)
+  // Prevents the document-level click handler from immediately closing a popover/card
+  // that was just opened by an arc/location click in the same event.
+  const skipDocumentClickRef = useRef(false)
 
   const data = useItineraryData({
     segments,
@@ -84,9 +88,13 @@ export function ItineraryView({
 
   const openCard = useCallback((segmentId: number, anchorEl?: HTMLDivElement, keepPopover = false) => {
     skipNextGlobeClickRef.current = true
+    skipDocumentClickRef.current = true
     setCardSegmentId((prev) => (prev === segmentId ? null : segmentId))
     if (anchorEl) setCardAnchorEl(anchorEl)
-    if (!keepPopover) setActivePopover(null)
+    if (!keepPopover) {
+      setActivePopover(null)
+      setActiveArcPopover(null)
+    }
   }, [])
 
   const closeCard = useCallback(() => {
@@ -104,7 +112,6 @@ export function ItineraryView({
 
   const showEmpty = !isLoading && (selectedSegmentIds.length === 0 || data.locations.length === 0)
 
-  // Reset globeReady each time data finishes loading so the spinner shows again.
   useEffect(() => {
     if (isLoading) {
       setGlobeReady(false)
@@ -115,13 +122,28 @@ export function ItineraryView({
     }
   }, [isLoading])
 
-  // Start fallback timer once the Globe is actually mounted (globeWidth > 0 and data ready).
-  // Guard with ref so ResizeObserver re-runs don't create multiple timers.
   useEffect(() => {
     if (globeWidth === 0 || isLoading || showEmpty) return
     if (globeFallbackTimerRef.current) return
     globeFallbackTimerRef.current = setTimeout(() => setGlobeReady(true), 5000)
   }, [globeWidth, isLoading, showEmpty])
+
+  // Close all overlays when clicking anywhere outside them.
+  // Uses a skip-ref so the same click that opens a popover/card doesn't immediately close it.
+  useEffect(() => {
+    const handler = () => {
+      if (skipDocumentClickRef.current) {
+        skipDocumentClickRef.current = false
+        return
+      }
+      setCardSegmentId(null)
+      setCardAnchorEl(null)
+      setActivePopover(null)
+      setActiveArcPopover(null)
+    }
+    document.addEventListener("click", handler)
+    return () => document.removeEventListener("click", handler)
+  }, [])
 
   const handleGlobeClick = useCallback(() => {
     if (skipNextGlobeClickRef.current) {
@@ -130,25 +152,29 @@ export function ItineraryView({
     }
     setCardSegmentId(null)
     setActivePopover(null)
+    setActiveArcPopover(null)
   }, [])
 
   const handleLocationClick = useCallback(
     (locationKey: string) => {
       const location = data.locations.find((l) => l.key === locationKey)
       if (!location) return
+      skipNextGlobeClickRef.current = true
+      skipDocumentClickRef.current = true
       closeCard()
+      setActiveArcPopover(null)
       setActivePopover((prev) => (prev?.locationKey === locationKey ? null : { locationKey, location }))
     },
     [data.locations, closeCard]
   )
 
-  const handleArcClick = useCallback(
-    (segmentId: number, anchorEl: HTMLDivElement) => {
-      setActivePopover(null)
-      openCard(segmentId, anchorEl)
-    },
-    [openCard]
-  )
+  const handleArcClick = useCallback((arc: ItineraryArc) => {
+    skipNextGlobeClickRef.current = true
+    skipDocumentClickRef.current = true
+    closeCard()
+    setActivePopover(null)
+    setActiveArcPopover((prev) => (prev === arc ? null : arc))
+  }, [closeCard])
 
   const cardSegment = cardSegmentId != null ? segments.find((s) => s.id === cardSegmentId) ?? null : null
   const cardSegmentType = cardSegment ? (segmentTypes.find((t) => t.id === cardSegment.segmentTypeId) ?? null) : null
@@ -175,7 +201,7 @@ export function ItineraryView({
         ref={containerRef}
         className="relative shrink-0 w-full"
         style={{ height: GLOBE_HEIGHT }}
-        onClick={closeCard}
+        onClick={() => { closeCard(); setActivePopover(null); setActiveArcPopover(null) }}
       >
         {/* Loading overlay */}
         {(isLoading || (!globeReady && !showEmpty)) && (
@@ -197,7 +223,6 @@ export function ItineraryView({
           <ItineraryGlobe
             locations={data.locations}
             arcs={data.arcs}
-            segmentTypes={segmentTypes}
             width={globeWidth}
             height={GLOBE_HEIGHT}
             onLocationClick={handleLocationClick}
@@ -207,7 +232,7 @@ export function ItineraryView({
           />
         )}
 
-        {/* Segment info card — uses TimelineSegmentCard for consistent display */}
+        {/* Segment info card */}
         <TimelineSegmentCard
           segment={cardSegment}
           segmentType={cardSegmentType}
@@ -217,9 +242,9 @@ export function ItineraryView({
           onNavigateToSegment={(id) => { openSegmentDetail(id); closeCard() }}
         />
 
-        {/* Location popover — bottom overlay listing all segments at a pin */}
+        {/* Location popover — segments at a pin */}
         {activePopover && (
-          <div className="absolute bottom-4 left-4 right-4 z-10 rounded-lg border border-border bg-background/95 backdrop-blur-sm shadow-lg p-3 text-sm">
+          <div className="absolute bottom-4 left-4 right-4 z-10 rounded-lg border border-border bg-background/95 backdrop-blur-sm shadow-lg p-3 text-sm" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-2 mb-2">
               <div>
                 <div className="font-semibold">{activePopover.location.name}</div>
@@ -237,6 +262,50 @@ export function ItineraryView({
             </div>
             <div className="space-y-1">
               {activePopover.location.segments.map(({ segment: seg, segmentType: st }) => (
+                <button
+                  key={seg.id}
+                  type="button"
+                  className="w-full flex items-center gap-2 text-left rounded px-2 py-1 hover:bg-muted/60 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openCard(seg.id, e.currentTarget as unknown as HTMLDivElement, true)
+                  }}
+                >
+                  {st?.iconSvg ? (
+                    <div
+                      className="h-7 w-7 shrink-0 rounded-full flex items-center justify-center overflow-hidden [&_svg]:w-4 [&_svg]:h-4"
+                      style={{ background: st.color ?? "#6b7280" }}
+                      dangerouslySetInnerHTML={{ __html: st.iconSvg }}
+                    />
+                  ) : (
+                    <div className="h-7 w-7 shrink-0 rounded-full bg-muted flex items-center justify-center text-[10px]">
+                      {st?.shortName?.charAt(0)?.toUpperCase() ?? "?"}
+                    </div>
+                  )}
+                  <span className="text-xs truncate">{seg.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Arc popover — all segments on a clicked route */}
+        {activeArcPopover && (
+          <div className="absolute bottom-4 left-4 right-4 z-10 rounded-lg border border-border bg-background/95 backdrop-blur-sm shadow-lg p-3 text-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div className="font-semibold truncate">
+                {activeArcPopover.startName} → {activeArcPopover.endName}
+              </div>
+              <button
+                type="button"
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+                onClick={(e) => { e.stopPropagation(); setActiveArcPopover(null) }}
+              >
+                <XIcon className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-1">
+              {activeArcPopover.routeSegments.map(({ segment: seg, segmentType: st }) => (
                 <button
                   key={seg.id}
                   type="button"
