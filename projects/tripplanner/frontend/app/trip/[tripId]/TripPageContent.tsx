@@ -7,7 +7,7 @@
 //   - Segment detail panel (right detail — can coexist with option panel)
 "use client"
 
-import { useEffect, useState, useCallback, useMemo } from "react"
+import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "../../components/ui/button"
 import { PlusIcon, MessageCircle, MessageCircleOff, CombineIcon, PlaneIcon, BedDoubleIcon, MoreVerticalIcon } from "lucide-react"
@@ -94,6 +94,9 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
 
   // ---- data fetching ----
 
+  // Track which option IDs have already been hydrated so we only fetch new ones
+  const hydratedOptionIdsRef = useRef(new Set<number>())
+
   const fetchTripData = useCallback(async () => {
     try {
       const data = await tripsApi.getById(tripId)
@@ -110,6 +113,18 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
     try {
       const data = await optionsApi.getByTripId(tripId)
       setOptions(data)
+      // Remove stale (deleted) options from hydration tracking and connected segments cache
+      const liveIds = new Set(data.map((o) => o.id))
+      hydratedOptionIdsRef.current.forEach((id) => {
+        if (!liveIds.has(id)) hydratedOptionIdsRef.current.delete(id)
+      })
+      setConnectedSegments((prev) => {
+        const pruned: typeof prev = {}
+        for (const key of Object.keys(prev)) {
+          if (liveIds.has(Number(key))) pruned[Number(key)] = prev[Number(key)]
+        }
+        return pruned
+      })
     } catch (err) {
       setOptionsError("Failed to load options")
       console.error(err)
@@ -147,16 +162,19 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
     fetchSegmentTypes()
   }, [fetchTripData, fetchOptions, fetchSegments, fetchSegmentTypes])
 
-  // Hydrate connected segments for options
+  // Hydrate connected segments — only for options not yet loaded
   useEffect(() => {
     if (!options.length || !segmentTypes.length) return
+    const toHydrate = options.filter((o) => !hydratedOptionIdsRef.current.has(o.id))
+    if (toHydrate.length === 0) return
     let cancelled = false
     const load = async () => {
       try {
         const entries = await Promise.all(
-          options.map(async (option) => {
+          toHydrate.map(async (option) => {
             try {
               const connected = await optionsApi.getConnectedSegments(tripId, option.id)
+              if (!cancelled) hydratedOptionIdsRef.current.add(option.id)
               return [option.id, connected.map((s) => ({
                 ...s,
                 segmentType: segmentTypes.find((st) => st.id === s.segmentTypeId) ?? { id: 0, name: "Unknown", shortName: "?" },
@@ -166,7 +184,7 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
             }
           })
         )
-        if (!cancelled) setConnectedSegments(Object.fromEntries(entries) as any)
+        if (!cancelled) setConnectedSegments((prev) => ({ ...prev, ...Object.fromEntries(entries) as any }))
       } catch (err) {
         if (!cancelled) console.error("Failed to load connected segments", err)
       }
@@ -174,6 +192,22 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
     void load()
     return () => { cancelled = true }
   }, [tripId, options, segmentTypes])
+
+  // Refresh connected segments for a single option (called after save/update)
+  const refreshConnectedSegments = useCallback(async (optionId: number) => {
+    try {
+      const connected = await optionsApi.getConnectedSegments(tripId, optionId)
+      setConnectedSegments((prev) => ({
+        ...prev,
+        [optionId]: connected.map((s) => ({
+          ...s,
+          segmentType: segmentTypes.find((st) => st.id === s.segmentTypeId) ?? { id: 0, name: "Unknown", shortName: "?" },
+        })) as any,
+      }))
+    } catch (err) {
+      console.error("Failed to refresh connected segments", err)
+    }
+  }, [tripId, segmentTypes])
 
   // User preferences
   useEffect(() => {
@@ -279,6 +313,8 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
     try {
       if (editingOption) {
         await optionsApi.update(String(tripId), { ...optionData, id: editingOption.id })
+        // Refresh only this option's connections — no need to re-hydrate all
+        await refreshConnectedSegments(editingOption.id)
       } else {
         await optionsApi.create(String(tripId), optionData)
       }
@@ -286,7 +322,7 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
     } catch (err) {
       console.error("Error saving option:", err)
     }
-  }, [tripId, editingOption, fetchOptions])
+  }, [tripId, editingOption, fetchOptions, refreshConnectedSegments])
 
   const handleSaveSegment = useCallback(async (segmentData: SegmentSave, isUpdate: boolean, originalSegmentId?: number) => {
     try {
@@ -460,10 +496,14 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
         tripId={tripId}
         tripName={tripName}
         refreshOptions={fetchOptions}
+        onConnectedSegmentsUpdated={refreshConnectedSegments}
         tripCurrencyId={tripCurrencyId}
         displayCurrencyId={effectiveDisplayCurrencyId}
         currencies={currencies}
         conversions={conversions}
+        segments={segments as any}
+        segmentTypes={segmentTypes}
+        segmentsLoading={segmentsLoading}
         initialSegmentFilters={initialSegmentFilters}
         initialSegmentSort={null}
       />
@@ -480,6 +520,8 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
         tripId={tripId}
         tripName={tripName}
         segmentTypes={segmentTypes}
+        options={options}
+        tripSegments={segments as any}
         tripCurrencyId={tripCurrencyId}
         displayCurrencyId={effectiveDisplayCurrencyId}
         initialOptionFilters={undefined}

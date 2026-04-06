@@ -210,6 +210,8 @@ export interface SegmentModalProps {
   tripId: number;
   tripName?: string;
   segmentTypes: SegmentType[];
+  options?: OptionApi[];
+  tripSegments?: SegmentApi[];
   tripCurrencyId?: number | null;
   displayCurrencyId?: number | null;
   initialOptionFilters?: OptionFilterPreset;

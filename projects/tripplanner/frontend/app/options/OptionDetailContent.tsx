@@ -33,7 +33,7 @@ import {
   tokensToLabel,
 } from "../utils/formatters";
 import { formatCurrencyAmount, formatConvertedAmount } from "../utils/currency";
-import { optionsApi, segmentsApi } from "../utils/apiClient";
+import { optionsApi } from "../utils/apiClient";
 import { SegmentFilterPanel, type SegmentFilterValue } from "../components/filters/SegmentFilterPanel"
 import type { SegmentSortValue } from "../components/sorting/segmentSortTypes"
 import { applySegmentFilters, buildSegmentMetadata } from "../services/segmentFiltering"
@@ -56,10 +56,14 @@ export interface OptionDetailContentProps {
   tripId: number;
   tripName?: string;
   refreshOptions: () => void;
+  onConnectedSegmentsUpdated?: (optionId: number) => void;
   tripCurrencyId: number | null;
   displayCurrencyId: number | null;
   currencies: Currency[];
   conversions: CurrencyConversion[];
+  segments: SegmentApi[];
+  segmentTypes: SegmentType[];
+  segmentsLoading?: boolean;
   initialSegmentFilters?: SegmentFilterValue;
   initialSegmentSort?: SegmentSortValue | null;
 }
@@ -78,16 +82,18 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
     tripId,
     tripName,
     refreshOptions,
+    onConnectedSegmentsUpdated,
     tripCurrencyId,
     displayCurrencyId,
     currencies,
     conversions,
+    segments,
+    segmentTypes,
+    segmentsLoading: segmentsLoadingProp = false,
     initialSegmentFilters,
     initialSegmentSort,
   }, ref) {
   const [name, setName] = useState("");
-  const [segments, setSegments] = useState<SegmentApi[]>([]);
-  const [segmentTypes, setSegmentTypes] = useState<SegmentType[]>([]);
   const [selectedSegments, setSelectedSegments] = useState<number[]>([]);
   const [isUiVisible, setIsUiVisible] = useState(true);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -136,30 +142,7 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
     [tripCurrencyId, resolvedDisplayCurrencyId, currencies, conversions],
   )
 
-  const [segmentsLoading, setSegmentsLoading] = useState(false)
-
-  const fetchSegments = useCallback(async () => {
-    setSegmentsLoading(true)
-    try {
-      const data = await segmentsApi.getByTripId(tripId);
-      setSegments(data);
-    } catch (error) {
-      console.error("Error fetching segments:", error);
-      toast({ title: "Error", description: "Failed to fetch segments. Please try again." });
-    } finally {
-      setSegmentsLoading(false)
-    }
-  }, [tripId]);
-
-  const fetchSegmentTypes = useCallback(async () => {
-    try {
-      const data = await segmentsApi.getTypes();
-      setSegmentTypes(data);
-    } catch (error) {
-      console.error("Error fetching segment types:", error);
-      toast({ title: "Error", description: "Failed to fetch segment types. Please try again." });
-    }
-  }, []);
+  const segmentsLoading = segmentsLoadingProp
 
   const fetchConnectedSegments = useCallback(
     async (optionId: number) => {
@@ -199,9 +182,7 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
       setIsUiVisible(true);
     }
     setViewMode(option ? "itinerary" : "edit")
-    void fetchSegments();
-    void fetchSegmentTypes();
-  }, [option, fetchConnectedSegments, fetchSegments, fetchSegmentTypes]);
+  }, [option, fetchConnectedSegments]);
 
 
   useEffect(() => {
@@ -299,6 +280,7 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
       await optionsApi.updateConnectedSegments(tripId, option.id, selectedSegments);
 
       toast({ title: "Success", description: "Connected segments updated successfully" });
+      onConnectedSegmentsUpdated?.(option.id)
       refreshOptions();
       handleClose();
     } catch (error) {

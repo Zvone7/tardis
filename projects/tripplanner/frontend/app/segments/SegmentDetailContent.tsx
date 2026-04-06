@@ -189,6 +189,8 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
     tripId,
     tripName,
     segmentTypes,
+    options: optionsProp = [],
+    tripSegments: tripSegmentsProp = [],
     tripCurrencyId,
     displayCurrencyId,
     initialOptionFilters,
@@ -221,8 +223,8 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
   const [comment, setComment] = useState("")
   const [currencyId, setCurrencyId] = useState<number | null>(null)
   const [segmentTypeId, setSegmentTypeId] = useState<number | null>(null)
-  const [options, setOptions] = useState<OptionApi[]>([])
-  const [tripSegments, setTripSegments] = useState<SegmentApi[]>([])
+  const options = optionsProp
+  const tripSegments = tripSegmentsProp
   const [selectedOptions, setSelectedOptions] = useState<number[]>([])
   const [optionsTouched, setOptionsTouched] = useState(false)
   const optionsTouchedRef = useRef(optionsTouched)
@@ -447,35 +449,6 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
     fetchUserPreferences()
   }, [fetchUserPreferences])
 
-  const fetchOptions = useCallback(async () => {
-    try {
-      const data = await optionsApi.getByTripId(tripId)
-      setOptions(data)
-    } catch (error) {
-      console.error("Error fetching options:", error)
-      toast({ title: "Error", description: "Failed to fetch options. Please try again." })
-    }
-  }, [tripId])
-
-  useEffect(() => {
-    let active = true
-    const loadSegments = async () => {
-      try {
-        const data = await segmentsApi.getByTripId(tripId)
-        if (active) setTripSegments(data)
-      } catch (error) {
-        console.error("Error fetching trip segments:", error)
-      }
-    }
-    loadSegments()
-    return () => {
-      active = false
-    }
-  }, [tripId])
-
-  useEffect(() => {
-    fetchOptions()
-  }, [fetchOptions])
 
   const applyBookingSuggestion = (suggestion: SegmentSuggestion) => {
     setRange((prev) => ({
