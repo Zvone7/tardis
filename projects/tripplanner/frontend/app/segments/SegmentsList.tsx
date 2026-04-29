@@ -390,8 +390,9 @@ export function SegmentsList({
         extraActions={[
           {
             icon: <MapPinIcon className="h-4 w-4" />,
-            label: "Set Location",
+            label: "Edit locations",
             onClick: () => setIsBatchLocationOpen(true),
+            variant: "default",
           },
         ]}
       />
