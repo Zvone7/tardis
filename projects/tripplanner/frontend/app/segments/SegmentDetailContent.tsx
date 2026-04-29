@@ -64,7 +64,7 @@ import { RangeLocationPicker, type RangeLocationPickerValue } from "../component
 import { useCurrencyConversions } from "../hooks/useCurrencyConversions"
 
 import { localToUtcMs, utcMsToIso, utcIsoToLocalInput, formatLocalWithPreferredOffset, normalizeOffsetHours } from "../lib/utils"
-import { buildOptionTitleTokens, buildOptionConfigFromApi, tokensToLabel } from "../utils/formatters"
+import { buildOptionTitleTokens, buildOptionConfigFromApi, tokensToLabel, buildSegmentTitleTokens, buildSegmentConfigFromApi, getSegmentNickname } from "../utils/formatters"
 import { isTransportType, isAccommodationType } from "../utils/segmentVisuals"
 import { optionsApi, segmentsApi, userApi } from "../utils/apiClient"
 import { getDefaultCurrencyId, useCurrencies } from "../hooks/useCurrencies"
@@ -358,8 +358,9 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
   }, [formattedSegmentCost, hasCostValue, parsedCost])
 
   const generalSummaryTitle = useMemo(() => {
-    const displayName = (name && name.trim()) || segment?.name || "New segment"
     const conversionLabel = userConversionLabel ?? tripConversionLabel ?? null
+    const typeName = selectedSegmentType?.name ?? "General"
+    const nickname = getSegmentNickname(name || segment?.name)
     return (
       <span className="flex items-start gap-3 text-sm">
         {selectedSegmentType?.iconSvg ? (
@@ -376,7 +377,8 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
           </span>
         )}
         <span className="flex flex-col leading-tight">
-          <span className="font-semibold">{displayName}</span>
+          <span className="font-semibold">{typeName}</span>
+          {nickname ? <span className="text-xs text-muted-foreground italic">"{nickname}"</span> : null}
           {generalCostLabel ? <span className="text-sm text-foreground">{generalCostLabel}</span> : null}
           {conversionLabel ? <span className="text-xs text-muted-foreground">{conversionLabel}</span> : null}
         </span>
@@ -913,6 +915,7 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
 
   const handleDuplicateSegment = () => {
     setIsDuplicateMode(true)
+    setName("")
     setSelectedOptions([])
     setPrefilledStart(null)
     setPrefilledEnd(null)
@@ -1224,7 +1227,10 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
     ],
   )
 
-  const headerName = (name && name.trim()) || segment?.name || (isCreateMode ? (tripName || "New segment") : "Segment")
+  const headerTokens = segment
+    ? buildSegmentTitleTokens(buildSegmentConfigFromApi(segment, selectedSegmentType ?? undefined))
+    : []
+  const headerNickname = getSegmentNickname(name || segment?.name)
   const headerSubtitle = isCreateMode ? "Creating new segment" : "Editing existing segment"
   const headerIcon = selectedSegmentType?.iconSvg ? (
     <span className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-secondary-foreground">
@@ -1294,11 +1300,19 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
             <XIcon className="h-4 w-4" />
           </button>
           <div className="mb-3 space-y-1">
-            <div className="flex items-center gap-3 text-lg font-semibold leading-snug">
+            <div className="flex items-center gap-3 leading-snug">
               {headerIcon}
-              <span>{headerName}</span>
+              <span className="text-sm font-medium flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                {headerTokens.length > 0
+                  ? <TitleTokens tokens={headerTokens} />
+                  : <span className="text-base font-semibold">{isCreateMode ? (tripName || "New segment") : "Segment"}</span>
+                }
+              </span>
             </div>
-            <p className="text-xs text-muted-foreground">{headerSubtitle}</p>
+            <div className="space-y-0.5">
+              <p className="text-xs text-muted-foreground">{headerSubtitle}</p>
+              {headerNickname && <p className="text-xs text-muted-foreground italic">"{headerNickname}"</p>}
+            </div>
           </div>
 
           <div className="flex items-center justify-between gap-2">

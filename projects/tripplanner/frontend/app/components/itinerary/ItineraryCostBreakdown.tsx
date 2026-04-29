@@ -7,6 +7,8 @@ import type { CostBreakdownEntry } from "../../hooks/useItineraryData"
 import type { Currency } from "../../types/models"
 import { formatCurrencyAmount } from "../../utils/currency"
 import { formatDateCompact } from "../../utils/segmentVisuals"
+import { buildSegmentTitleTokens, buildSegmentConfigFromApi, getSegmentNickname } from "../../utils/formatters"
+import { TitleTokens } from "../TitleTokens"
 
 function CostPieChart({ transport, accommodation, other }: { transport: number; accommodation: number; other: number }) {
   const total = transport + accommodation + other
@@ -196,10 +198,12 @@ export function ItineraryCostBreakdown({
                       )}
                       {/* Details */}
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">{seg.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatDateCompact(seg.startDateTimeUtc)} → {formatDateCompact(seg.endDateTimeUtc)}
+                        <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-sm">
+                          <TitleTokens tokens={buildSegmentTitleTokens({ ...buildSegmentConfigFromApi(seg, st ?? undefined), cost: null })} />
                         </div>
+                        {getSegmentNickname(seg.name) && (
+                          <p className="text-xs text-muted-foreground italic truncate">"{getSegmentNickname(seg.name)}"</p>
+                        )}
                       </div>
                       {/* Cost */}
                       <div className="text-sm font-medium shrink-0">

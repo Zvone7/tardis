@@ -9,6 +9,7 @@ import { TimelineSegmentCard } from "../timeline/TimelineSegmentCard"
 import { useTripLayout } from "../../trip/[tripId]/TripLayoutContext"
 import { GlobeIcon, XIcon } from "lucide-react"
 import { formatCurrencyAmount } from "../../utils/currency"
+import { buildSegmentTitleTokens, buildSegmentConfigFromApi, getSegmentNickname, tokensToLabel } from "../../utils/formatters"
 
 const GLOBE_HEIGHT = 380
 
@@ -282,7 +283,12 @@ export function ItineraryView({
                       {st?.shortName?.charAt(0)?.toUpperCase() ?? "?"}
                     </div>
                   )}
-                  <span className="text-xs truncate">{seg.name}</span>
+                  <span
+                    className="text-xs truncate"
+                    title={getSegmentNickname(seg.name) ?? undefined}
+                  >
+                    {tokensToLabel(buildSegmentTitleTokens(buildSegmentConfigFromApi(seg, st ?? undefined))) || st?.name || "Segment"}
+                  </span>
                 </button>
               ))}
             </div>
@@ -326,7 +332,12 @@ export function ItineraryView({
                       {st?.shortName?.charAt(0)?.toUpperCase() ?? "?"}
                     </div>
                   )}
-                  <span className="text-xs truncate">{seg.name}</span>
+                  <span
+                    className="text-xs truncate"
+                    title={getSegmentNickname(seg.name) ?? undefined}
+                  >
+                    {tokensToLabel(buildSegmentTitleTokens(buildSegmentConfigFromApi(seg, st ?? undefined))) || st?.name || "Segment"}
+                  </span>
                 </button>
               ))}
             </div>

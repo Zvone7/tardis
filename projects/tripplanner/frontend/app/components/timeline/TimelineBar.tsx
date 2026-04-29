@@ -5,6 +5,7 @@ import { cn } from "../../lib/utils"
 import type { SegmentApi, SegmentType } from "../../types/models"
 import type { PanelMode } from "../../trip/[tripId]/TripLayoutContext"
 import { segmentColor } from "../../utils/segmentVisuals"
+import { buildSegmentTitleTokens, buildSegmentConfigFromApi, getSegmentNickname, tokensToLabel } from "../../utils/formatters"
 
 const LANE_HEIGHT_DESKTOP = 36
 const LANE_HEIGHT_TOUCH = 28
@@ -60,13 +61,18 @@ export function TimelineBar({
   // Only use dot if bar is below the minimum icon-safe width (shouldn't happen with minWidthPct set)
   const isTooNarrowForIcon = widthPct < minWidthPct * 0.8
   const typeColor = segmentColor(segmentType)
+  const ariaLabel = (() => {
+    const label = tokensToLabel(buildSegmentTitleTokens(buildSegmentConfigFromApi(segment, segmentType ?? undefined)))
+    const nickname = getSegmentNickname(segment.name)
+    return nickname ? `${label} (${nickname})` : label
+  })()
 
   return (
     <div
       ref={ref}
       role="button"
       tabIndex={0}
-      aria-label={segment.name}
+      aria-label={ariaLabel}
       aria-pressed={selected}
       className={cn(
         "absolute rounded cursor-pointer transition-all duration-150 overflow-hidden",

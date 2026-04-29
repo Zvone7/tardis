@@ -93,7 +93,8 @@ export function useChatAssistant({ tripId, tripName, preferredUtcOffset, preferr
           const curr = currencies.find((c) => c.id === s.currencyId)?.shortName ?? "?"
           const startLoc = s.startLocation ? normalizeLocation(s.startLocation)?.name : ""
           const endLoc = s.endLocation ? normalizeLocation(s.endLocation)?.name : ""
-          return `  - ID:${s.id} "${s.name}" (${typeName}) ${startLoc}→${endLoc} | ${s.startDateTimeUtc} to ${s.endDateTimeUtc} | ${s.cost} ${curr}`
+          const nicknameStr = s.name && !/^new\s*segment$/i.test(s.name.trim()) ? ` [nickname: "${s.name}"]` : ""
+          return `  - ID:${s.id}${nicknameStr} (${typeName}) ${startLoc}→${endLoc} | ${s.startDateTimeUtc} to ${s.endDateTimeUtc} | ${s.cost} ${curr}`
         })
         .join("\n")
 

@@ -67,8 +67,6 @@ export interface SegmentTitleConfig {
 export const buildSegmentTitleTokens = (config: SegmentTitleConfig): TitleToken[] => {
   const tokens: TitleToken[] = []
   const {
-    name,
-    fallbackName = "Segment",
     segmentType,
     startLocationLabel,
     endLocationLabel,
@@ -78,9 +76,6 @@ export const buildSegmentTitleTokens = (config: SegmentTitleConfig): TitleToken[
     endOffset,
     cost,
   } = config
-
-  const displayName = normalizeText(name, fallbackName || "Segment")
-  if (displayName) tokens.push({ key: "name", text: displayName, emphasize: true })
 
   if (segmentType?.name) {
     tokens.push({ key: "type", text: "", iconSvg: segmentType.iconSvg })
@@ -206,6 +201,9 @@ export const summarizeSegmentsForOption = (
 
 const isPlaceholderName = (name?: string | null) =>
   !name?.trim() || /^new\s*segment$/i.test(name.trim())
+
+export const getSegmentNickname = (name?: string | null): string | null =>
+  isPlaceholderName(name) ? null : (name as string).trim()
 
 export const buildSegmentConfigFromApi = (
   segment: SegmentApi,

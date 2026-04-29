@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { XIcon, PencilIcon } from "lucide-react"
 import type { SegmentApi, SegmentType } from "../../types/models"
-import { buildSegmentTitleTokens, buildSegmentConfigFromApi } from "../../utils/formatters"
+import { buildSegmentTitleTokens, buildSegmentConfigFromApi, getSegmentNickname } from "../../utils/formatters"
 import { TitleTokens } from "../TitleTokens"
 import { Button } from "../ui/button"
 
@@ -59,6 +59,7 @@ export function TimelineSegmentCard({
   const costLabel = formatSegmentCost(segment)
   const segmentConfig = buildSegmentConfigFromApi(segment, segmentType ?? undefined)
   const tokens = buildSegmentTitleTokens({ ...segmentConfig, cost: costLabel ?? segmentConfig.cost })
+  const nickname = getSegmentNickname(segment.name)
 
   return (
     <div
@@ -77,8 +78,11 @@ export function TimelineSegmentCard({
         <XIcon className="h-3.5 w-3.5 text-muted-foreground" />
       </button>
 
-      <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-sm pr-5 mb-3">
-        <TitleTokens tokens={tokens} size="sm" />
+      <div className="pr-5 mb-3">
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-sm">
+          <TitleTokens tokens={tokens} size="sm" />
+        </div>
+        {nickname && <p className="mt-0.5 text-xs text-muted-foreground italic truncate">"{nickname}"</p>}
       </div>
 
       {(onToggle || onNavigateToSegment) && (

@@ -745,7 +745,7 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
                             ...segmentConfig,
                             cost: segmentCostLabel ?? segmentConfig.cost,
                           })
-                          const summaryLabel = tokensToLabel(tokens) || segment.name
+                          const summaryLabel = tokensToLabel(tokens) || "Segment"
                           const isHiddenSegment = segment.isUiVisible === false
                           const dimmed = !segmentFilterState.showHidden && isHiddenSegment
                           const dateRangeLabel = `${formatSegmentDateWithWeekday(segment.startDateTimeUtc)} → ${formatSegmentDateWithWeekday(segment.endDateTimeUtc)}`

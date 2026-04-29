@@ -21,6 +21,8 @@ import { segmentsApi } from "../utils/apiClient"
 import { formatCurrencyAmount, convertWithFallback } from "../utils/currency"
 import { formatDateWithUserOffset, formatWeekday } from "../utils/dateformatters"
 import type { Segment, SegmentType, OptionRef, Currency, CurrencyConversion } from "../types/models"
+import { buildSegmentTitleTokens, buildSegmentConfigFromApi, getSegmentNickname, tokensToLabel } from "../utils/formatters"
+import { TitleTokens } from "../components/TitleTokens"
 
 // ---- local helpers ----
 
@@ -116,7 +118,12 @@ function SegmentCard({
                 <span className="text-xs text-muted-foreground">No connected options</span>
               )}
             </div>
-            <CardTitle className="text-lg">{segment.name}</CardTitle>
+            <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-sm font-medium mb-0.5">
+              <TitleTokens tokens={buildSegmentTitleTokens(buildSegmentConfigFromApi(segment, segmentType))} />
+            </div>
+            {getSegmentNickname(segment.name) && (
+              <p className="text-xs text-muted-foreground italic truncate">"{getSegmentNickname(segment.name)}"</p>
+            )}
             <div className="mt-2 text-sm text-muted-foreground space-y-1">
               <div className={cn(activeSortField === "startDate" || activeSortField === "startLocation" ? sortHighlight : "")}>
                 {formatSegmentDateWithWeekday(segment.startDateTimeUtc, userPreferredOffset)}
@@ -280,7 +287,11 @@ export function SegmentsList({
 
   const handleToggleVisibility = useCallback(async (segment: Segment) => {
     const isHidden = segment.isUiVisible === false
-    if (!isHidden && !window.confirm(`Hide "${segment.name}"?`)) return
+    if (!isHidden) {
+      const st = segmentTypes.find((t) => t.id === segment.segmentTypeId)
+      const label = tokensToLabel(buildSegmentTitleTokens(buildSegmentConfigFromApi(segment, st ?? undefined))) || "this segment"
+      if (!window.confirm(`Hide "${label}"?`)) return
+    }
     try {
       await segmentsApi.batchSetVisibility(String(tripId), [segment.id], isHidden)
       onRefresh()

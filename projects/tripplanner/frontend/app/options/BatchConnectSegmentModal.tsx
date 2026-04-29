@@ -238,7 +238,7 @@ export default function BatchConnectSegmentModal({
                   ...segmentConfig,
                   cost: segmentCostLabel ?? segmentConfig.cost,
                 });
-                const summaryLabel = tokensToLabel(tokens) || segment.name;
+                const summaryLabel = tokensToLabel(tokens) || "Segment";
                 const isHiddenSegment = segment.isUiVisible === false;
                 const dimmed = !filterState.showHidden && isHiddenSegment;
                 const dateRangeLabel = `${formatSegmentDateLabel(segment.startDateTimeUtc)} → ${formatSegmentDateLabel(segment.endDateTimeUtc)}`;

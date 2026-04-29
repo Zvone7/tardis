@@ -128,7 +128,7 @@ async function createSegment(args: Record<string, unknown>, ctx: ToolContext): P
   const startLocation = args.startLocationName ? await resolveLocation(args.startLocationName as string) : null
   const endLocation = args.endLocationName ? await resolveLocation(args.endLocationName as string) : null
 
-  const segmentName = (args.name as string) || "New Segment"
+  const segmentName = (args.name as string) || ""
   const payload: SegmentSave = {
     tripId: ctx.tripId,
     name: segmentName,
@@ -148,7 +148,7 @@ async function createSegment(args: Record<string, unknown>, ctx: ToolContext): P
   const result = await segmentsApi.create(ctx.tripId, payload)
   return {
     success: true,
-    result: JSON.stringify({ message: `Created segment "${result?.name ?? segmentName}"${result?.id ? ` (ID: ${result.id})` : ""}` }),
+    result: JSON.stringify({ message: `Created segment (ID: ${result?.id ?? "?"})` }),
     mutated: true,
   }
 }
