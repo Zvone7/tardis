@@ -441,7 +441,7 @@ const readFileAsDataUrl = useCallback((file: File): Promise<string> => {
   // Narrow screens: Radix Sheet (modal with overlay, appropriate for mobile)
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen} modal={false}>
-      <SheetContent side="left" hideOverlay className="flex flex-col p-0 sm:max-w-md w-[400px]">
+      <SheetContent side="left" hideOverlay hideClose className="flex flex-col p-0 sm:max-w-md w-[400px]">
         <SheetTitle className="sr-only">Trip Assistant</SheetTitle>
         {panelBody}
       </SheetContent>
