@@ -17,8 +17,13 @@ export interface TimelineLayout {
   undatedIds: Set<number>
 }
 
-/** Greedy lane packing: assign each segment to the earliest available lane. Pure, no hooks. */
-export function assignLanes(segments: SegmentApi[]): { laneAssignment: Map<number, number>; laneCount: number } {
+/** Greedy lane packing: assign each segment to the earliest available lane. Pure, no hooks.
+ *  minVisualMs: minimum rendered duration; bars narrower than this get clamped by TimelineBar,
+ *  so lane packing uses Math.max(endMs, startMs + minVisualMs) to avoid visual overlap. */
+export function assignLanes(
+  segments: SegmentApi[],
+  minVisualMs = 0,
+): { laneAssignment: Map<number, number>; laneCount: number } {
   const dated = segments.filter((s) => s.startDateTimeUtc && s.endDateTimeUtc)
   if (dated.length === 0) return { laneAssignment: new Map(), laneCount: 0 }
 
@@ -36,10 +41,11 @@ export function assignLanes(segments: SegmentApi[]): { laneAssignment: Map<numbe
   for (const seg of sorted) {
     const startMs = new Date(seg.startDateTimeUtc).getTime()
     const endMs = new Date(seg.endDateTimeUtc).getTime()
+    const visualEnd = Math.max(endMs, startMs + minVisualMs)
     let placed = false
     for (let lane = 0; lane < laneEnds.length; lane++) {
       if (startMs >= laneEnds[lane]) {
-        laneEnds[lane] = endMs
+        laneEnds[lane] = visualEnd
         laneAssignment.set(seg.id, lane)
         placed = true
         break
@@ -47,7 +53,7 @@ export function assignLanes(segments: SegmentApi[]): { laneAssignment: Map<numbe
     }
     if (!placed) {
       laneAssignment.set(seg.id, laneEnds.length)
-      laneEnds.push(endMs)
+      laneEnds.push(visualEnd)
     }
   }
 

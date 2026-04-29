@@ -107,6 +107,9 @@ export function SegmentTimeline({
   const VISIBLE_DAYS = 5
   const windowMs = tripDays * MS_DAY
   const widthFactor = tripDays / VISIBLE_DAYS
+  // Mirror the MIN_BAR_WIDTH_PCT_CANVAS formula from the render section so lane packing
+  // accounts for visual bar width clamping and prevents icon overlap.
+  const minVisualMs = (Math.max(0.5, 6 / widthFactor) / 100) * windowMs
 
   // Initialize window start: 1 day before earliest segment (padding day)
   useEffect(() => {
@@ -162,16 +165,20 @@ export function SegmentTimeline({
 
   // Segment splits
   const selectedSegs = useMemo(
-    () => segments.filter((s) => !undatedIds.has(s.id) && selectedSet.has(s.id)),
-    [segments, undatedIds, selectedSet],
+    () =>
+      segments.filter(
+        (s) =>
+          !undatedIds.has(s.id) &&
+          selectedSet.has(s.id) &&
+          (hiddenTypeIds.size === 0 || !hiddenTypeIds.has(s.segmentTypeId)),
+      ),
+    [segments, undatedIds, selectedSet, hiddenTypeIds],
   )
 
   const availableTypes = useMemo(() => {
-    const typeIds = new Set(
-      segments.filter((s) => !undatedIds.has(s.id) && !selectedSet.has(s.id)).map((s) => s.segmentTypeId),
-    )
+    const typeIds = new Set(segments.filter((s) => !undatedIds.has(s.id)).map((s) => s.segmentTypeId))
     return segmentTypes.filter((st) => typeIds.has(st.id))
-  }, [segments, undatedIds, selectedSet, segmentTypes])
+  }, [segments, undatedIds, segmentTypes])
 
   const unselectedSegs = useMemo(
     () =>
@@ -204,8 +211,8 @@ export function SegmentTimeline({
     [unselectedSegs, effectiveWindowStart, effectiveWindowEnd],
   )
 
-  const selectedLanes = useMemo(() => assignLanes(selectedInWindow), [selectedInWindow])
-  const unselectedLanes = useMemo(() => assignLanes(unselectedInWindow), [unselectedInWindow])
+  const selectedLanes = useMemo(() => assignLanes(selectedInWindow, minVisualMs), [selectedInWindow, minVisualMs])
+  const unselectedLanes = useMemo(() => assignLanes(unselectedInWindow, minVisualMs), [unselectedInWindow, minVisualMs])
 
   // Nav buttons only shown for paginated trips (≥ 29 days) and only when segments exist in that direction
   const isPaginated = tripDays === PAGINATED_WINDOW_DAYS
