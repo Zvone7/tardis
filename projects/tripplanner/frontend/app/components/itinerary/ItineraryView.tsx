@@ -8,10 +8,10 @@ import { ItineraryCostBreakdown } from "./ItineraryCostBreakdown"
 import { TimelineSegmentCard } from "../timeline/TimelineSegmentCard"
 import { useTripLayout } from "../../trip/[tripId]/TripLayoutContext"
 import { GlobeIcon, XIcon } from "lucide-react"
+import { cn } from "../../lib/utils"
 import { formatCurrencyAmount } from "../../utils/currency"
 import { buildSegmentTitleTokens, buildSegmentConfigFromApi, getSegmentNickname, tokensToLabel } from "../../utils/formatters"
 
-const GLOBE_HEIGHT = 380
 
 interface LocationPopover {
   locationKey: string
@@ -44,6 +44,8 @@ export function ItineraryView({
   const { openSegmentDetail } = useTripLayout()
   const containerRef = useRef<HTMLDivElement>(null)
   const [globeWidth, setGlobeWidth] = useState(0)
+  const [globeHeight, setGlobeHeight] = useState(0)
+  const [costCollapsed, setCostCollapsed] = useState(true)
   const [activePopover, setActivePopover] = useState<LocationPopover | null>(null)
   const [activeArcPopover, setActiveArcPopover] = useState<ItineraryArc | null>(null)
   const [cardSegmentId, setCardSegmentId] = useState<number | null>(null)
@@ -65,15 +67,17 @@ export function ItineraryView({
     displayCurrencyId,
   })
 
-  // Measure container width — read immediately on mount, then watch for resize
+  // Measure container dimensions — read immediately on mount, then watch for resize
   useEffect(() => {
     if (!containerRef.current) return
     const el = containerRef.current
-    const init = Math.floor(el.getBoundingClientRect().width)
-    if (init > 0) setGlobeWidth(init)
+    const rect = el.getBoundingClientRect()
+    if (rect.width > 0) setGlobeWidth(Math.floor(rect.width))
+    if (rect.height > 0) setGlobeHeight(Math.floor(rect.height))
     const observer = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width
-      if (w) setGlobeWidth(Math.floor(w))
+      const { width, height } = entries[0]?.contentRect ?? {}
+      if (width) setGlobeWidth(Math.floor(width))
+      if (height) setGlobeHeight(Math.floor(height))
     })
     observer.observe(el)
     return () => observer.disconnect()
@@ -124,10 +128,10 @@ export function ItineraryView({
   }, [isLoading])
 
   useEffect(() => {
-    if (globeWidth === 0 || isLoading || showEmpty) return
+    if (globeWidth === 0 || globeHeight === 0 || isLoading || showEmpty) return
     if (globeFallbackTimerRef.current) return
     globeFallbackTimerRef.current = setTimeout(() => setGlobeReady(true), 5000)
-  }, [globeWidth, isLoading, showEmpty])
+  }, [globeWidth, globeHeight, isLoading, showEmpty])
 
   // Close all overlays when clicking anywhere outside them.
   // Uses a skip-ref so the same click that opens a popover/card doesn't immediately close it.
@@ -192,16 +196,17 @@ export function ItineraryView({
           dateRange={data.dateRange}
           displayCurrencyId={data.displayCurrencyId}
           currencies={currencies}
+          collapsed={costCollapsed}
+          onToggle={() => setCostCollapsed((c) => !c)}
           onSegmentClick={openSegmentDetail}
           onDisconnectSegment={onDisconnectSegment}
         />
       )}
 
-      {/* Globe container — always mounted so ResizeObserver fires on first render */}
+      {/* Globe container — hidden when cost breakdown is expanded */}
       <div
         ref={containerRef}
-        className="relative shrink-0 w-full"
-        style={{ height: GLOBE_HEIGHT }}
+        className={cn("relative flex-1 min-h-[280px] w-full", !costCollapsed && "hidden")}
         onClick={() => { closeCard(); setActivePopover(null); setActiveArcPopover(null) }}
       >
         {/* Loading overlay */}
@@ -220,12 +225,12 @@ export function ItineraryView({
             <p className="text-xs mt-1">Switch to Itinerary edit and connect segments with locations.</p>
           </div>
         )}
-        {globeWidth > 0 && !isLoading && !showEmpty && (
+        {globeWidth > 0 && globeHeight > 0 && !isLoading && !showEmpty && (
           <ItineraryGlobe
             locations={data.locations}
             arcs={data.arcs}
             width={globeWidth}
-            height={GLOBE_HEIGHT}
+            height={globeHeight}
             onLocationClick={handleLocationClick}
             onArcClick={handleArcClick}
             onGlobeClick={handleGlobeClick}

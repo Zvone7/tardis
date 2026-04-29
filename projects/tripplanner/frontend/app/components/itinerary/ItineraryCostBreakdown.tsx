@@ -54,6 +54,8 @@ interface ItineraryCostBreakdownProps {
   dateRange: { start: string | null; end: string | null }
   displayCurrencyId: number | null
   currencies: Currency[]
+  collapsed: boolean
+  onToggle: () => void
   onSegmentClick?: (segmentId: number) => void
   onDisconnectSegment?: (segmentId: number) => void
 }
@@ -66,10 +68,11 @@ export function ItineraryCostBreakdown({
   dateRange,
   displayCurrencyId,
   currencies,
+  collapsed,
+  onToggle,
   onSegmentClick,
   onDisconnectSegment,
 }: ItineraryCostBreakdownProps) {
-  const [collapsed, setCollapsed] = useState(true)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
 
   const toggleCategory = (category: string) => {
@@ -95,7 +98,7 @@ export function ItineraryCostBreakdown({
       <button
         type="button"
         className="w-full flex items-center justify-between px-4 py-2 hover:bg-muted/40 transition-colors"
-        onClick={() => setCollapsed((c) => !c)}
+        onClick={onToggle}
         aria-expanded={!collapsed}
       >
         <div className="flex items-center gap-3">
