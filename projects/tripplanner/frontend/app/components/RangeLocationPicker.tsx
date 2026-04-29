@@ -6,7 +6,6 @@ import { createPortal } from "react-dom"
 import { Label } from "./ui/label"
 import { Input } from "./ui/input"
 import { Button } from "./ui/button"
-import { ScrollArea } from "./ui/scroll-area"
 import { ArrowLeftRight, XIcon } from "lucide-react"
 import type { LocationOption } from "../types/models"
 import { geocodingApi } from "../utils/apiClient"
@@ -197,13 +196,14 @@ export function Autocomplete({
       className="z-[200] rounded-md border bg-popover shadow"
       style={{
         position: "fixed",
+        pointerEvents: "auto",
         top: pos.openUpward ? undefined : pos.top + 4,
         bottom: pos.openUpward ? window.innerHeight - pos.top + 4 : undefined,
         left: pos.left,
         width: Math.max(pos.width, 280),
       }}
     >
-      <ScrollArea style={{ maxHeight: pos.maxHeight }}>
+      <div style={{ maxHeight: pos.maxHeight, overflowY: "auto" }}>
         {loading ? (
           <div className="px-3 py-2 text-sm text-muted-foreground">Searching…</div>
         ) : searchItems.length === 0 ? (
@@ -234,7 +234,7 @@ export function Autocomplete({
             })}
           </ul>
         )}
-      </ScrollArea>
+      </div>
     </div>
   ) : null
 
