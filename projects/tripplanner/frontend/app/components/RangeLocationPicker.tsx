@@ -193,6 +193,7 @@ export function Autocomplete({
   const dropdown = open && pos ? (
     <div
       ref={dropdownRef}
+      data-floating-portal="location-picker"
       className="z-[200] rounded-md border bg-popover shadow"
       style={{
         position: "fixed",
@@ -202,7 +203,7 @@ export function Autocomplete({
         width: Math.max(pos.width, 280),
       }}
     >
-      <ScrollArea className="max-h-52">
+      <ScrollArea style={{ maxHeight: pos.maxHeight }}>
         {loading ? (
           <div className="px-3 py-2 text-sm text-muted-foreground">Searching…</div>
         ) : searchItems.length === 0 ? (

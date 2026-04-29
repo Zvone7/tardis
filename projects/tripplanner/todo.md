@@ -9,11 +9,15 @@ can SegmentDetailContent be split into smaller files?
 
 -------------------------
 
-it seems that when Im editing 
+
 
 -------------------------
 
+
+
 -------------------------
+
+
 
 -------------------------
 

@@ -7,6 +7,7 @@ export interface FloatingPosition {
   left: number
   width: number
   openUpward: boolean
+  maxHeight: number
 }
 
 /**
@@ -25,12 +26,17 @@ export function useFloatingPosition(
     if (!el) return null
     const rect = el.getBoundingClientRect()
     const spaceBelow = window.innerHeight - rect.bottom
-    const openUpward = spaceBelow < dropdownHeight && rect.top > dropdownHeight
+    const spaceAbove = rect.top
+    // Prefer below when there's room; fall back to whichever side is larger
+    const openUpward = spaceBelow >= dropdownHeight ? false : spaceAbove > spaceBelow
+    const availableSpace = openUpward ? spaceAbove : spaceBelow
+    const maxHeight = Math.max(120, availableSpace - 8)
     return {
       top: openUpward ? rect.top : rect.bottom,
       left: rect.left,
       width: rect.width,
       openUpward,
+      maxHeight,
     }
   }, [triggerRef, dropdownHeight])
 

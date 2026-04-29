@@ -99,11 +99,6 @@ function SegmentCard({
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              {segmentType?.iconSvg ? (
-                <span className={cn("flex h-7 w-7 items-center justify-center rounded-full bg-secondary/60 text-secondary-foreground shadow-sm ring-1 ring-black/5 dark:bg-white dark:text-black shrink-0", activeSortField === "segmentType" && sortHighlight)} title={segmentType.name}>
-                  <span dangerouslySetInnerHTML={{ __html: segmentType.iconSvg }} className="w-4 h-4" suppressHydrationWarning />
-                </span>
-              ) : null}
               {isLoadingConnections ? (
                 <span className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Loader2Icon className="h-3 w-3 animate-spin" />
