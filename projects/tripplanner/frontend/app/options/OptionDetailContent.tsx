@@ -105,6 +105,7 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
     option ? { name: option.name ?? "", isUiVisible: option.isUiVisible ?? true } : null,
   );
   const initialSelectedSegmentsRef = useRef<number[] | null>(null);
+  const [baselineVersion, setBaselineVersion] = useState(0);
   const [segmentFilterState, setSegmentFilterState] = useState<SegmentFilterValue>({
     locations: [],
     types: [],
@@ -279,10 +280,15 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
     try {
       await optionsApi.updateConnectedSegments(tripId, option.id, selectedSegments);
 
-      toast({ title: "Success", description: "Connected segments updated successfully" });
+      // Reset baseline so save button disables until new changes are made
+      const sorted = [...selectedSegments].sort((a, b) => a - b)
+      initialSelectedSegmentsRef.current = sorted
+      setBaselineVersion((v) => v + 1)
+
+      toast({ title: "Saved", description: "Connected segments updated." });
       onConnectedSegmentsUpdated?.(option.id)
       refreshOptions();
-      handleClose();
+      // Panel stays open — user closes manually when done adding segments
     } catch (error) {
       console.error("Error updating connected segments:", error);
       toast({ title: "Error", description: "Failed to update connected segments. Please try again." });
@@ -341,7 +347,8 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
     const sortedCurrent = [...selectedSegments].sort((a, b) => a - b);
     if (!arraysEqual(sortedCurrent, baselineSegments)) return true;
     return false;
-  }, [isEditing, baselineReady, name, isUiVisible, selectedSegments]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing, baselineReady, baselineVersion, name, isUiVisible, selectedSegments]);
 
   const createFormTouched = useMemo(() => {
     if (isEditing) return false

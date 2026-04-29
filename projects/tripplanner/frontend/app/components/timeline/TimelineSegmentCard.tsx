@@ -85,6 +85,7 @@ export function TimelineSegmentCard({
         <div className="flex items-center gap-1.5">
           {onToggle && (
             <Button
+              type="button"
               size="sm"
               variant={selected ? "outline" : "default"}
               className="flex-1"

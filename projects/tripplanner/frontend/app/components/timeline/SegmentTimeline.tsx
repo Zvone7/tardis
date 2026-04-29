@@ -15,6 +15,7 @@ import { TimelineSegmentCard } from "./TimelineSegmentCard"
 import { segmentColor } from "../../utils/segmentVisuals"
 import { useTripLayout } from "../../trip/[tripId]/TripLayoutContext"
 import { cn } from "../../lib/utils"
+import { locationKeyOf } from "../../lib/tripLocations"
 
 const MS_DAY = 86_400_000
 const PAGINATED_WINDOW_DAYS = 29  // window size when trip is too long to show all at once
@@ -249,15 +250,22 @@ export function SegmentTimeline({
   const handleCardToggle = useCallback(
     (segmentId: number) => {
       if (!startingLocationKey) {
-        toast({
-          title: "Pick a starting location first",
-          description: "Use the dropdown above to choose where your trip begins.",
-        })
-        return
+        // Auto-set starting location from the clicked segment's start location
+        const seg = segmentMap.get(segmentId)
+        const key = seg ? locationKeyOf(seg.startLocation) : null
+        if (key) {
+          stageBuilder.setStartingLocationKey(key)
+        } else {
+          toast({
+            title: "Pick a starting location first",
+            description: "This segment has no start location. Use the dropdown above to choose where your trip begins.",
+          })
+          return
+        }
       }
       onToggleSegment(segmentId, !selectedSet.has(segmentId))
     },
-    [startingLocationKey, selectedSet, onToggleSegment],
+    [startingLocationKey, selectedSet, onToggleSegment, segmentMap, stageBuilder],
   )
 
   const activeCardSegment = activeCardSegmentId !== null ? segmentMap.get(activeCardSegmentId) ?? null : null

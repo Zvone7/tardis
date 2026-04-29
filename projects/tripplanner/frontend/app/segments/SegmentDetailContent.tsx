@@ -72,6 +72,7 @@ import { formatCurrencyAmount, formatConvertedAmount } from "../utils/currency"
 import { CurrencyDropdown } from "../components/CurrencyDropdown"
 import { applyOptionFilters, buildOptionMetadata } from "../services/optionFiltering"
 import { OptionSelectCard } from "../components/OptionSelectCard"
+import { SegmentCreationWizard } from "./SegmentCreationWizard"
 
 const arraysEqual = (a: number[], b: number[]) => a.length === b.length && a.every((val, idx) => val === b[idx])
 
@@ -257,6 +258,7 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
   const [showDescriptionModal, setShowDescriptionModal] = useState(false)
   const [descriptionDraft, setDescriptionDraft] = useState("")
   const [showMissingShake, setShowMissingShake] = useState(false)
+  const [hasAttemptedSave, setHasAttemptedSave] = useState(false)
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false)
   const skipClosePromptRef = useRef(false)
   const tripSegmentsById = useMemo(() => {
@@ -741,6 +743,7 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
     setIsDuplicateMode(false)
     setBookingUrl("")
     setIsImportingBooking(false)
+    setHasAttemptedSave(false)
   }, [userPreferredOffset])
 
   useEffect(() => {
@@ -909,9 +912,11 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
   )
 
   const handleDuplicateSegment = () => {
-    setName((n) => `DUPLICATE ${n}`)
     setIsDuplicateMode(true)
     setSelectedOptions([])
+    setPrefilledStart(null)
+    setPrefilledEnd(null)
+    setHasAttemptedSave(false)
   }
 
   const handleDelete = async () => {
@@ -1043,6 +1048,17 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
   }, [segmentTypeId, rangeStartLocal, rangeEndLocal, cost, currencyId, isLoadingCurrencies, isTransport, isAccommodation, locRangeStart, locRangeEnd])
 
   const hasMissingFields = missingFieldMessages.length > 0
+
+  // Per-field error flags — only shown after first save attempt
+  const fieldErrors = {
+    type: hasAttemptedSave && segmentTypeId === null,
+    cost: hasAttemptedSave && (!cost || !Number.isFinite(parsedCost)),
+    currency: hasAttemptedSave && !currencyId && !isLoadingCurrencies,
+    startTime: hasAttemptedSave && !rangeStartLocal,
+    endTime: hasAttemptedSave && (isTransport || isAccommodation) && !rangeEndLocal,
+    startLoc: hasAttemptedSave && (isTransport || isAccommodation) && !locRangeStart,
+    endLoc: hasAttemptedSave && isTransport && !locRangeEnd,
+  }
   const triggerMissingFieldsHint = useCallback(() => {
     if (missingShakeTimeoutRef.current) {
       clearTimeout(missingShakeTimeoutRef.current)
@@ -1066,6 +1082,8 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
       e.preventDefault()
 
       if (isSaveDisabled || isSaving) return
+
+      setHasAttemptedSave(true)
 
       if (segmentTypeId === null) {
         triggerMissingFieldsHint()
@@ -1126,8 +1144,8 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
         toast({ title: "Error", description: "Invalid end date/time." })
         return
       }
-      if (endUtcMs < startUtcMs) {
-        toast({ title: "Error", description: "End must be at or after start." })
+      if (endUtcMs < startUtcMs + 5 * 60 * 1000) {
+        toast({ title: "Error", description: "End must be at least 5 minutes after start." })
         return
       }
 
@@ -1243,6 +1261,26 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
 
   useImperativeHandle(ref, () => ({ requestClose }), [requestClose])
 
+  // New segment (not a duplicate) → use wizard flow
+  if (isCreateMode && !isDuplicateMode) {
+    return (
+      <>
+        <SegmentCreationWizard
+          tripId={tripId}
+          segmentTypes={segmentTypes}
+          existingLocations={existingLocations}
+          tripCurrencyId={tripCurrencyId}
+          displayCurrencyId={displayCurrencyId}
+          userPreferredOffset={userPreferredOffset}
+          userPreferredCurrencyId={userPreferredCurrencyId}
+          onSave={onSave}
+          onCancel={closeModal}
+        />
+        {/* Unsaved confirm dialog not needed for wizard (no partial state to lose on cancel) */}
+      </>
+    )
+  }
+
   return (
     <>
       <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
@@ -1319,22 +1357,15 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 relative min-h-0">
-          {hasMissingFields && (
+          {hasMissingFields && hasAttemptedSave && (
             <div
               className={cn(
-                "flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 sticky top-0 mt-0 z-10",
+                "flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800",
                 showMissingShake && "shake-once",
               )}
             >
-              <AlertTriangle className="mt-0.5 h-4 w-4" aria-hidden="true" />
-              <div>
-                <p className="font-medium">Missing required details</p>
-                <ul className="mt-1 list-disc space-y-0.5 pl-5">
-                  {missingFieldMessages.map((message) => (
-                    <li key={message}>{message}</li>
-                  ))}
-                </ul>
-              </div>
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>Missing: {missingFieldMessages.join(", ")}</span>
             </div>
           )}
           <div className="rounded-lg border px-2 py-2 bg-muted/30">
@@ -1383,7 +1414,7 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
                   value={segmentTypeId?.toString() || ""}
                   onValueChange={(value) => setSegmentTypeId(Number.parseInt(value))}
                 >
-                  <SelectTrigger className="col-span-3">
+                  <SelectTrigger className={cn("col-span-3", fieldErrors.type && "ring-1 ring-destructive border-destructive")}>
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1415,8 +1446,8 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
                   <Input
                     id="cost"
                     value={cost}
-                    onChange={(e) => setCost(e.target.value)}
-                    className="w-full sm:flex-1 font-mono"
+                    onChange={(e) => setCost(e.target.value.replace(/[^0-9+\-*/().,\s]/g, ""))}
+                    className={cn("w-full sm:flex-1 font-mono", fieldErrors.cost && "ring-1 ring-destructive border-destructive")}
                     required
                     placeholder="e.g. 2600/4 or 150+150"
                     inputMode="decimal"
@@ -1428,7 +1459,7 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
                     placeholder={isLoadingCurrencies ? "Loading..." : "Currency"}
                     disabled={isLoadingCurrencies}
                     className="w-full sm:w-[220px]"
-                    triggerClassName="w-full"
+                    triggerClassName={cn("w-full", fieldErrors.currency && "ring-1 ring-destructive border-destructive")}
                   />
                 </div>
                 {(userConversionLabel || tripConversionLabel) && (
@@ -1476,26 +1507,30 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
             </div>
           </Collapsible>
 
-          <Collapsible title={timeSummaryTitle} open={timesOpen} onToggle={() => setTimesOpen((o) => !o)}>
-            <div className="pt-4">
-              <RangeDateTimePicker
-                id="segment-when"
-                label=""
-                value={range}
-                onChange={setRange}
-                allowDifferentOffsets
-                compact
-                requireEnd={isTransport || isAccommodation}
-                showNights={isAccommodation}
-              />
-            </div>
-          </Collapsible>
+          <div className={cn(fieldErrors.startTime || fieldErrors.endTime ? "rounded-md ring-1 ring-destructive" : "")}>
+            <Collapsible title={timeSummaryTitle} open={timesOpen} onToggle={() => setTimesOpen((o) => !o)}>
+              <div className="pt-4">
+                <RangeDateTimePicker
+                  id="segment-when"
+                  label=""
+                  value={range}
+                  onChange={setRange}
+                  allowDifferentOffsets
+                  compact
+                  requireEnd={isTransport || isAccommodation}
+                  showNights={isAccommodation}
+                />
+              </div>
+            </Collapsible>
+          </div>
 
-          <Collapsible title={locationSummaryTitle} open={locationsOpen} onToggle={() => setLocationsOpen((o) => !o)}>
-            <div className="pt-4">
-              <RangeLocationPicker id="segment-where" label="" value={locRange} onChange={setLocRange} compact existingLocations={existingLocations} singleMode={isAccommodation} />
-            </div>
-          </Collapsible>
+          <div className={cn(fieldErrors.startLoc || fieldErrors.endLoc ? "rounded-md ring-1 ring-destructive" : "")}>
+            <Collapsible title={locationSummaryTitle} open={locationsOpen} onToggle={() => setLocationsOpen((o) => !o)}>
+              <div className="pt-4">
+                <RangeLocationPicker id="segment-where" label="" value={locRange} onChange={setLocRange} compact existingLocations={existingLocations} singleMode={isAccommodation} />
+              </div>
+            </Collapsible>
+          </div>
 
           {segment && !isDuplicateMode && (
             <Collapsible
