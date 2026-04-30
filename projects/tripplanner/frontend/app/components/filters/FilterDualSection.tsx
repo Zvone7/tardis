@@ -10,6 +10,7 @@ interface DualPanelProps {
   showCountWhenNone: boolean
   hideCount?: boolean
   onReset?: () => void
+  onClear?: () => void
   children: ReactNode
 }
 
@@ -22,7 +23,7 @@ interface FilterDualSectionProps {
   right: DualPanelProps
 }
 
-function PanelColumn({ label, selectedCount, totalCount, showCountWhenAll, showCountWhenNone, hideCount = false, onReset, children }: DualPanelProps) {
+function PanelColumn({ label, selectedCount, totalCount, showCountWhenAll, showCountWhenNone, hideCount = false, onReset, onClear, children }: DualPanelProps) {
   const hasCount = selectedCount != null && totalCount != null && totalCount > 0
   const isPartial = hasCount && selectedCount > 0 && selectedCount < totalCount
   const isAll = hasCount && selectedCount === totalCount
@@ -41,11 +42,18 @@ function PanelColumn({ label, selectedCount, totalCount, showCountWhenAll, showC
       <div className="flex flex-col gap-1.5 flex-1">
         {children}
       </div>
-      {isNonDefault && onReset && (
-        <button type="button" onClick={onReset} className="text-xs text-muted-foreground hover:text-foreground mt-2 self-start">
-          Reset
-        </button>
-      )}
+      <div className="flex items-center gap-2 mt-2">
+        {onClear && (
+          <button type="button" onClick={onClear} className="text-xs text-muted-foreground hover:text-foreground self-start">
+            Deselect all
+          </button>
+        )}
+        {isNonDefault && onReset && (
+          <button type="button" onClick={onReset} className="text-xs text-muted-foreground hover:text-foreground self-start">
+            Reset
+          </button>
+        )}
+      </div>
     </div>
   )
 }

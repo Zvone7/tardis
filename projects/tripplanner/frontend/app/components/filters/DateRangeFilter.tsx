@@ -7,6 +7,8 @@ import { FilterDualSection } from "./FilterDualSection"
 export interface DateRangeValue {
   start: string
   end: string
+  startCleared?: boolean
+  endCleared?: boolean
 }
 
 type ChipMode = "none" | "preset" | "custom"
@@ -19,6 +21,8 @@ function DateChipContent({
   maxDate,
   uniqueDates,
   direction,
+  cleared,
+  onUnClear,
 }: {
   value: string
   onChange: (next: string) => void
@@ -27,6 +31,8 @@ function DateChipContent({
   maxDate?: string
   uniqueDates?: string[]
   direction: "start" | "end"
+  cleared?: boolean
+  onUnClear?: () => void
 }) {
   const sortedDates = useMemo(() => [...(uniqueDates ?? [])].sort(), [uniqueDates])
   const hasPresets = sortedDates.length > 1
@@ -44,6 +50,7 @@ function DateChipContent({
       {hasPresets && sortedDates.map((date) => {
         const fmt = new Date(date + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })
         const isSelected = (() => {
+          if (cleared) return false
           if (mode === "none") return true
           if (mode !== "preset" || !selectedDate) return false
           if (direction === "start") return date >= selectedDate
@@ -58,6 +65,13 @@ function DateChipContent({
             className="w-full justify-center"
             onClick={(e) => {
               e.stopPropagation()
+              if (cleared) {
+                onUnClear?.()
+                setMode("preset")
+                setSelectedDate(date)
+                onChange(date)
+                return
+              }
               const idx = sortedDates.indexOf(date)
               if (isSelected) {
                 if (direction === "start") {
@@ -103,7 +117,7 @@ function DateChipContent({
       {hasPresets && (
         <Button
           type="button"
-          variant={mode === "custom" ? "default" : "outline"}
+          variant={!cleared && mode === "custom" ? "default" : "outline"}
           size="sm"
           className="w-full justify-center"
           onClick={(e) => { e.stopPropagation(); setMode(mode === "custom" ? "none" : "custom") }}
@@ -111,11 +125,11 @@ function DateChipContent({
           Custom
         </Button>
       )}
-      {(sortedDates.length === 0 || mode === "custom") && (
+      {(sortedDates.length === 0 || (!cleared && mode === "custom")) && (
         <div onClick={(e) => e.stopPropagation()}>
           <Input
             type="date"
-            value={value}
+            value={cleared ? "" : value}
             min={minDate}
             max={maxDate}
             onChange={(e) => onChange(e.target.value)}
@@ -168,11 +182,11 @@ export function DateRangeFilter({
   const didAutoFill = useRef(false)
 
   useEffect(() => {
-    if (!didAutoFill.current && !value.start && !value.end && minDate && maxDate) {
+    if (!didAutoFill.current && !value.start && !value.end && !value.startCleared && !value.endCleared && minDate && maxDate) {
       didAutoFill.current = true
       onChange({ start: minDate, end: maxDate })
     }
-  }, [minDate, maxDate, value.start, value.end, onChange])
+  }, [minDate, maxDate, value.start, value.end, value.startCleared, value.endCleared, onChange])
 
   const startCounts = useDateChipCounts(value.start, minDate, uniqueStartDates, "start")
   const endCounts = useDateChipCounts(value.end, maxDate, uniqueEndDates, "end")
@@ -190,7 +204,8 @@ export function DateRangeFilter({
         showCountWhenAll: false,
         showCountWhenNone: false,
         hideCount: true,
-        onReset: () => onChange({ ...value, start: minDate ?? "" }),
+        onReset: () => onChange({ ...value, start: minDate ?? "", startCleared: false }),
+        onClear: () => onChange({ ...value, startCleared: true, start: "" }),
         children: (
           <DateChipContent
             value={value.start}
@@ -200,6 +215,8 @@ export function DateRangeFilter({
             maxDate={value.end || maxDate}
             uniqueDates={uniqueStartDates}
             direction="start"
+            cleared={!!value.startCleared}
+            onUnClear={() => onChange({ ...value, startCleared: false })}
           />
         ),
       }}
@@ -210,7 +227,8 @@ export function DateRangeFilter({
         showCountWhenAll: false,
         showCountWhenNone: false,
         hideCount: true,
-        onReset: () => onChange({ ...value, end: maxDate ?? "" }),
+        onReset: () => onChange({ ...value, end: maxDate ?? "", endCleared: false }),
+        onClear: () => onChange({ ...value, endCleared: true, end: "" }),
         children: (
           <DateChipContent
             value={value.end}
@@ -220,6 +238,8 @@ export function DateRangeFilter({
             maxDate={maxDate}
             uniqueDates={uniqueEndDates}
             direction="end"
+            cleared={!!value.endCleared}
+            onUnClear={() => onChange({ ...value, endCleared: false })}
           />
         ),
       }}

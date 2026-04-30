@@ -342,8 +342,8 @@ function TripPanelInner({ tripId, initialTab }: { tripId: number; initialTab: Ac
   const effectiveDisplayCurrencyId = displayCurrencyId ?? tripCurrencyId ?? userPreferredCurrencyId ?? null
 
   const initialSegmentFilters = useMemo<SegmentFilterValue>(() => ({
-    locations: [],
-    types: [],
+    locations: null,
+    types: null,
     dateRange: { start: "", end: "" },
     costMin: null,
     costMax: null,

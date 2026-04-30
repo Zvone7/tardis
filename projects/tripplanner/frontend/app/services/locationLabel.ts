@@ -5,12 +5,12 @@ export interface LocationChip {
 
 export function getLocationKey(loc: any | null): string {
   if (!loc) return ""
-  const provider = loc.provider ?? ""
-  const id = loc.providerPlaceId ?? ""
-  if (provider && id) return `${provider}:${id}`
   const name = (loc.name ?? "").toLowerCase().trim()
   const country = (loc.country ?? "").toLowerCase().trim()
-  return `${name}|${country}`
+  if (name || country) return `${name}|${country}`
+  const provider = loc.provider ?? ""
+  const id = loc.providerPlaceId ?? ""
+  return `${provider}:${id}`
 }
 
 export function getLocationLabel(loc: any | null): string {

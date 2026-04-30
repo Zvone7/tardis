@@ -246,7 +246,7 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
   const [locationsOpen, setLocationsOpen] = useState(() => !segment)
   const [connectedOptionsOpen, setConnectedOptionsOpen] = useState(true)
   const [optionFilterState, setOptionFilterState] = useState<OptionFilterValue>({
-    locations: [],
+    locations: null,
     dateRange: { start: "", end: "" },
     costMin: null,
     costMax: null,
@@ -797,7 +797,8 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
     })
 
     fetchConnectedOptions(segment.id)
-  }, [segment, fetchConnectedOptions])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segment?.id, fetchConnectedOptions])
 
   useEffect(() => {
     if (segment) return
@@ -818,7 +819,7 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
     const presetFilters = latestOptionFiltersRef.current
     if (presetFilters) {
       setOptionFilterState({
-        locations: [...presetFilters.locations],
+        locations: presetFilters.locations === null ? null : [...presetFilters.locations],
         dateRange: { ...presetFilters.dateRange },
         costMin: presetFilters.costMin ?? null,
         costMax: presetFilters.costMax ?? null,
@@ -826,7 +827,7 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
       })
     } else {
       setOptionFilterState({
-        locations: [],
+        locations: null,
         dateRange: { start: "", end: "" },
         costMin: null,
         costMax: null,

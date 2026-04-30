@@ -5,8 +5,8 @@ import type { SegmentType } from "../../types/models"
 
 interface SegmentTypeFilterProps {
   types: SegmentType[]
-  value: string[]
-  onChange: (next: string[]) => void
+  value: string[] | null
+  onChange: (next: string[] | null) => void
 }
 
 export function SegmentTypeFilter({
@@ -16,18 +16,20 @@ export function SegmentTypeFilter({
 }: SegmentTypeFilterProps) {
   const sorted = useMemo(() => types.slice().sort((a, b) => a.name.localeCompare(b.name)), [types])
 
-  const isVisible = (id: string) => value.length === 0 || value.includes(id)
+  // null = all visible; [] = none visible; [id...] = those specific
+  const isVisible = (id: string) => value === null || value.includes(id)
 
   const toggle = (id: string) => {
     const allIds = sorted.map((t) => t.id.toString())
-    if (value.length === 0) {
+    if (value === null) {
+      // currently showing all — deselect this one
       onChange(allIds.filter((v) => v !== id))
     } else if (value.includes(id)) {
-      const next = value.filter((v) => v !== id)
-      onChange(next.length === 0 ? [] : next)
+      onChange(value.filter((v) => v !== id))
     } else {
       const next = [...value, id]
-      onChange(next.length === allIds.length ? [] : next)
+      // if all are now selected, collapse back to null (default)
+      onChange(next.length === allIds.length ? null : next)
     }
   }
 

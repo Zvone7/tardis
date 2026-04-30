@@ -107,8 +107,8 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
   const initialSelectedSegmentsRef = useRef<number[] | null>(null);
   const [baselineVersion, setBaselineVersion] = useState(0);
   const [segmentFilterState, setSegmentFilterState] = useState<SegmentFilterValue>({
-    locations: [],
-    types: [],
+    locations: null,
+    types: null,
     dateRange: { start: "", end: "" },
     costMin: null,
     costMax: null,
@@ -218,8 +218,8 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
     const initialFilters = latestInitialFiltersRef.current
     if (initialFilters) {
       setSegmentFilterState({
-        locations: [...initialFilters.locations],
-        types: [...initialFilters.types],
+        locations: initialFilters.locations === null ? null : [...initialFilters.locations],
+        types: initialFilters.types === null ? null : [...initialFilters.types],
         dateRange: { ...initialFilters.dateRange },
         costMin: initialFilters.costMin ?? null,
         costMax: initialFilters.costMax ?? null,
@@ -227,8 +227,8 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
       })
     } else {
       setSegmentFilterState({
-        locations: [],
-        types: [],
+        locations: null,
+        types: null,
         dateRange: { start: "", end: "" },
         costMin: null,
         costMax: null,

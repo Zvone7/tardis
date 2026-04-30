@@ -359,7 +359,7 @@ export function OptionsList({
 }: OptionsListProps) {
 
   const [filterState, setFilterState] = useState<OptionFilterValue>({
-    locations: [],
+    locations: null,
     dateRange: { start: "", end: "" },
     costMin: null,
     costMax: null,

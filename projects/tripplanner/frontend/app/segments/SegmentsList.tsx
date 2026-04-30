@@ -190,8 +190,8 @@ export function SegmentsList({
   onRefresh,
 }: SegmentsListProps) {
   const [filterState, setFilterState] = useState<SegmentFilterValue>({
-    locations: [],
-    types: [],
+    locations: null,
+    types: null,
     dateRange: { start: "", end: "" },
     costMin: null,
     costMax: null,

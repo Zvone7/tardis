@@ -16,6 +16,7 @@ export interface FilterSectionProps {
   /** When true, "none selected" is the default state (no dot). Partial or all shows dot. */
   selectNoneByDefault?: boolean
   onReset?: () => void
+  onDeselectAll?: () => void
   children?: ReactNode
   toggle?: boolean
   active?: boolean
@@ -34,6 +35,7 @@ export function FilterSection({
   selectAllByDefault = false,
   selectNoneByDefault = false,
   onReset,
+  onDeselectAll,
   children,
   toggle = false,
   active = false,
@@ -104,15 +106,26 @@ export function FilterSection({
                 <span className="text-xs text-muted-foreground">{selectedCount}/{totalCount}</span>
               )}
             </div>
-            {isNonDefault && onReset && (
-              <button
-                type="button"
-                onClick={onReset}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                Reset
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {onDeselectAll && !isNone && (
+                <button
+                  type="button"
+                  onClick={onDeselectAll}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Deselect all
+                </button>
+              )}
+              {isNonDefault && onReset && (
+                <button
+                  type="button"
+                  onClick={onReset}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             {children}

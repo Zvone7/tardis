@@ -26,7 +26,9 @@ function padDateBounds(min: number | null, max: number | null): { min: string; m
 function segmentPassesNonLocationFilters(segment: Segment, filters: SegmentFilterValue): boolean {
   if (!filters.showHidden && segment.isUiVisible === false) return false
 
-  if (filters.types.length > 0 && !filters.types.includes(segment.segmentTypeId.toString())) return false
+  if (filters.types !== null && !filters.types.includes(segment.segmentTypeId.toString())) return false
+
+  if (filters.dateRange.startCleared || filters.dateRange.endCleared) return false
 
   const startDate = filters.dateRange.start ? new Date(filters.dateRange.start) : null
   if (startDate) startDate.setHours(0, 0, 0, 0)
@@ -104,15 +106,18 @@ export const filterSegments = (segments: Segment[], filters: SegmentFilterValue)
   return segments.filter((segment) => {
     if (!filters.showHidden && segment.isUiVisible === false) return false
 
-    if (filters.locations.length > 0) {
+    if (filters.locations !== null) {
+      if (filters.locations.length === 0) return false
       const startKey = getLocationKey((segment as any).startLocation ?? null)
       const endKey = getLocationKey((segment as any).endLocation ?? null)
       if (!filters.locations.some((loc) => loc === startKey || loc === endKey)) return false
     }
 
-    if (filters.types.length > 0 && !filters.types.includes(segment.segmentTypeId.toString())) {
+    if (filters.types !== null && !filters.types.includes(segment.segmentTypeId.toString())) {
       return false
     }
+
+    if (filters.dateRange.startCleared || filters.dateRange.endCleared) return false
 
     if (startDate || endDate) {
       const segmentStart = new Date(segment.startDateTimeUtc)

@@ -49,8 +49,8 @@ export default function BatchConnectSegmentModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterState, setFilterState] = useState<SegmentFilterValue>({
-    locations: [],
-    types: [],
+    locations: null,
+    types: null,
     dateRange: { start: "", end: "" },
     costMin: null,
     costMax: null,
@@ -139,7 +139,7 @@ export default function BatchConnectSegmentModal({
 
   const handleClose = () => {
     setSelectedSegmentIds([]);
-    setFilterState({ locations: [], types: [], dateRange: { start: "", end: "" }, costMin: null, costMax: null, showHidden: false });
+    setFilterState({ locations: null, types: null, dateRange: { start: "", end: "" }, costMin: null, costMax: null, showHidden: false });
     setSortState(null);
     setFilterOpen(false);
     setConnect(true);

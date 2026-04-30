@@ -9,7 +9,7 @@ import { CostDualFilter } from "./CostDualFilter"
 import { FilterSection } from "./FilterSection"
 
 export interface BaseFilterValue {
-  locations: string[]
+  locations: string[] | null
   dateRange: DateRangeValue
   costMin: number | null
   costMax: number | null
@@ -53,15 +53,17 @@ interface FilterPanelProps<TFilter extends BaseFilterValue, TSort extends BaseSo
 export function hasBaseFilters(value: BaseFilterValue, minDate?: string, maxDate?: string) {
   const hasDateFilter =
     (value.dateRange.start && value.dateRange.start !== (minDate ?? "")) ||
-    (value.dateRange.end && value.dateRange.end !== (maxDate ?? ""))
-  return value.locations.length > 0 || !!hasDateFilter || value.costMin != null || value.costMax != null
+    (value.dateRange.end && value.dateRange.end !== (maxDate ?? "")) ||
+    value.dateRange.startCleared || value.dateRange.endCleared
+  return value.locations !== null || !!hasDateFilter || value.costMin != null || value.costMax != null
 }
 
 export function countBaseActiveFilters(value: BaseFilterValue, sort: BaseSortValue | null, minDate?: string, maxDate?: string) {
   let count = 0
-  if (value.locations.length > 0) count++
+  if (value.locations !== null) count++
   if (value.dateRange.start && value.dateRange.start !== (minDate ?? "")) count++
   if (value.dateRange.end && value.dateRange.end !== (maxDate ?? "")) count++
+  if (value.dateRange.startCleared || value.dateRange.endCleared) count++
   if (value.costMin != null) count++
   if (value.costMax != null) count++
   if (sort) count++
@@ -95,7 +97,7 @@ export function FilterPanel<TFilter extends BaseFilterValue, TSort extends BaseS
 }: FilterPanelProps<TFilter, TSort>) {
   const getInitialSection = (): string | null => {
     if (extraInitialSection) return extraInitialSection
-    if (value.locations.length > 0) return "locations"
+    if (value.locations !== null) return "locations"
     if (sort) return "sort"
     return null
   }
@@ -110,7 +112,7 @@ export function FilterPanel<TFilter extends BaseFilterValue, TSort extends BaseS
   const handleReset = () => {
     onChange({
       ...value,
-      locations: [],
+      locations: null,
       dateRange: { start: minDate ?? "", end: maxDate ?? "" },
       costMin: null,
       costMax: null,
@@ -208,11 +210,12 @@ export function FilterPanel<TFilter extends BaseFilterValue, TSort extends BaseS
             shakeKey={shakeKey}
             expanded={activeSection === "locations"}
             onToggle={() => toggle("locations")}
-            selectedCount={value.locations.length === 0 ? availableLocations.length : value.locations.length}
+            selectedCount={value.locations === null ? availableLocations.length : value.locations.length}
             totalCount={availableLocations.length}
             showCountWhenAll={false}
             showCountWhenNone={true}
-            onReset={() => update({ locations: [] })}
+            onReset={() => update({ locations: null })}
+            onDeselectAll={availableLocations.length > 1 ? () => update({ locations: [] }) : undefined}
           >
             {availableLocations.length <= 1 ? (
               <span className="text-xs text-muted-foreground">All same location</span>

@@ -5,7 +5,7 @@ import type { DateRangeValue } from "./DateRangeFilter"
 import type { LocationChip } from "../../services/locationLabel"
 
 export interface OptionFilterValue {
-  locations: string[]
+  locations: string[] | null
   dateRange: DateRangeValue
   costMin: number | null
   costMax: number | null

@@ -31,6 +31,8 @@ function optionPassesNonLocationFilters(
   const connected = connectedSegments[option.id]
   const connectedList = connected ?? []
 
+  if (filters.dateRange.startCleared || filters.dateRange.endCleared) return false
+
   const startDate = filters.dateRange.start ? new Date(filters.dateRange.start) : null
   if (startDate) startDate.setHours(0, 0, 0, 0)
   const endDate = filters.dateRange.end ? new Date(filters.dateRange.end) : null
@@ -151,7 +153,8 @@ export const filterOptions = (
     const connected = connectedSegments[option.id]
     const connectedList = connected ?? []
 
-    if (filters.locations.length > 0) {
+    if (filters.locations !== null) {
+      if (filters.locations.length === 0) return false
       if (connected === undefined) return true
       if (connectedList.length === 0) return false
       const matchesLocation = connectedList.some((segment) => {
@@ -160,10 +163,12 @@ export const filterOptions = (
         const endLoc = (segment as any).endLocation ?? fallback?.endLocation ?? null
         const startKey = getLocationKey(startLoc)
         const endKey = getLocationKey(endLoc)
-        return filters.locations.some((loc) => loc === startKey || loc === endKey)
+        return filters.locations!.some((loc) => loc === startKey || loc === endKey)
       })
       if (!matchesLocation) return false
     }
+
+    if (filters.dateRange.startCleared || filters.dateRange.endCleared) return false
 
     if (startDate || endDate) {
       if (connected === undefined || connectedList.length === 0) return true

@@ -4,22 +4,24 @@ import { cn } from "../../lib/utils"
 
 interface LocationFilterProps {
   locations: LocationChip[]
-  value: string[]
-  onChange: (next: string[]) => void
+  value: string[] | null
+  onChange: (next: string[] | null) => void
 }
 
 export function LocationFilter({ locations, value, onChange }: LocationFilterProps) {
-  const isVisible = (key: string) => value.length === 0 || value.includes(key)
+  // null = all visible; [] = none visible; [key...] = those specific
+  const isVisible = (key: string) => value === null || value.includes(key)
 
   const toggle = (key: string) => {
-    if (value.length === 0) {
+    if (value === null) {
+      // currently showing all — deselect this one
       onChange(locations.map((l) => l.key).filter((k) => k !== key))
     } else if (value.includes(key)) {
-      const next = value.filter((k) => k !== key)
-      onChange(next.length === 0 ? [] : next)
+      onChange(value.filter((k) => k !== key))
     } else {
       const next = [...value, key]
-      onChange(next.length === locations.length ? [] : next)
+      // if all are now selected, collapse back to null (default)
+      onChange(next.length === locations.length ? null : next)
     }
   }
 

@@ -9,8 +9,8 @@ import type { DateRangeValue } from "./DateRangeFilter"
 import type { LocationChip } from "../../services/locationLabel"
 
 export interface SegmentFilterValue {
-  locations: string[]
-  types: string[]
+  locations: string[] | null
+  types: string[] | null
   dateRange: DateRangeValue
   costMin: number | null
   costMax: number | null
@@ -39,11 +39,11 @@ interface SegmentFilterPanelProps {
 }
 
 export function useSegmentFilterHasFilters(value: SegmentFilterValue, minDate?: string, maxDate?: string) {
-  return hasBaseFilters(value, minDate, maxDate) || value.types.length > 0
+  return hasBaseFilters(value, minDate, maxDate) || value.types !== null
 }
 
 export function countSegmentActiveFilters(value: SegmentFilterValue, sort: SegmentSortValue | null, minDate?: string, maxDate?: string) {
-  return countBaseActiveFilters(value, sort, minDate, maxDate) + (value.types.length > 0 ? 1 : 0)
+  return countBaseActiveFilters(value, sort, minDate, maxDate) + (value.types !== null ? 1 : 0)
 }
 
 export function SegmentFilterPanel({
@@ -87,9 +87,9 @@ export function SegmentFilterPanel({
       allSameCost={allSameCost}
       currencyLabel={currencyLabel}
       className={className}
-      extraHasFilters={value.types.length > 0}
-      extraResetFields={{ types: [] }}
-      extraInitialSection={value.types.length > 0 ? "types" : null}
+      extraHasFilters={value.types !== null}
+      extraResetFields={{ types: null }}
+      extraInitialSection={value.types !== null ? "types" : null}
       extraFilters={({ activeSection, toggle, shakeKey }) => (
         <FilterSection
           label="Types"
@@ -98,11 +98,12 @@ export function SegmentFilterPanel({
           shakeKey={shakeKey}
           expanded={activeSection === "types"}
           onToggle={() => toggle("types")}
-          selectedCount={value.types.length === 0 ? availableTypes.length : value.types.length}
+          selectedCount={value.types === null ? availableTypes.length : value.types.length}
           totalCount={availableTypes.length}
           showCountWhenAll={false}
           showCountWhenNone={true}
-          onReset={() => onChange({ ...value, types: [] })}
+          onReset={() => onChange({ ...value, types: null })}
+          onDeselectAll={availableTypes.length > 1 ? () => onChange({ ...value, types: [] }) : undefined}
         >
           {availableTypes.length <= 1 ? (
             <span className="text-xs text-muted-foreground">All same type</span>

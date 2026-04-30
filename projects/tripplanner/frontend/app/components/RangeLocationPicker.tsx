@@ -187,6 +187,7 @@ export function Autocomplete({
     setOpen(false)
     setFocusedIdx(-1)
     inputRef.current?.focus()
+    onSelected(null)
   }
 
   const dropdown = open && pos ? (
