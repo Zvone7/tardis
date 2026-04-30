@@ -247,7 +247,10 @@ export function SegmentsList({
     })
   }, [segments, filterState, sortState, segmentTypes, effectiveDisplayCurrencyId, tripCurrencyId, userPreferredCurrencyId, currencies, conversions])
 
-  const segmentMetadata = useMemo(() => buildSegmentMetadata(segments, segmentTypes), [segments, segmentTypes])
+  const segmentMetadata = useMemo(
+    () => buildSegmentMetadata(segments, segmentTypes, filterState),
+    [segments, segmentTypes, filterState],
+  )
   const costChips = useMemo(() => computeCostChips(segments.map((s) => Number(s.cost) || 0)), [segments])
   const tripCurrencyLabel = useMemo(() => currencies.find((c) => c.id === tripCurrencyId)?.shortName ?? "", [currencies, tripCurrencyId])
 

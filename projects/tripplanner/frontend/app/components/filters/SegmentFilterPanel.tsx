@@ -6,6 +6,7 @@ import type { SegmentType } from "../../types/models"
 import type { SegmentSortValue } from "../sorting/segmentSortTypes"
 import { SEGMENT_SORT_FIELDS } from "../sorting/segmentSortTypes"
 import type { DateRangeValue } from "./DateRangeFilter"
+import type { LocationChip } from "../../services/locationLabel"
 
 export interface SegmentFilterValue {
   locations: string[]
@@ -21,7 +22,7 @@ interface SegmentFilterPanelProps {
   onChange: (value: SegmentFilterValue) => void
   sort: SegmentSortValue | null
   onSortChange: (value: SegmentSortValue | null) => void
-  availableLocations: string[]
+  availableLocations: LocationChip[]
   availableTypes: SegmentType[]
   minDate?: string
   maxDate?: string

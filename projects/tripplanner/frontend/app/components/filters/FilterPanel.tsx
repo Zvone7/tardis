@@ -3,6 +3,7 @@ import { Button } from "../ui/button"
 import { Eye, EyeOff, MapPin, ArrowUpDown, RotateCcw } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { LocationFilter } from "./LocationFilter"
+import type { LocationChip } from "../../services/locationLabel"
 import { DateRangeFilter, type DateRangeValue } from "./DateRangeFilter"
 import { CostDualFilter } from "./CostDualFilter"
 import { FilterSection } from "./FilterSection"
@@ -26,7 +27,7 @@ interface FilterPanelProps<TFilter extends BaseFilterValue, TSort extends BaseSo
   sort: TSort | null
   onSortChange: (value: TSort | null) => void
   sortFields: { field: string; label: string }[]
-  availableLocations: string[]
+  availableLocations: LocationChip[]
   entityLabel: string
   minDate?: string
   maxDate?: string

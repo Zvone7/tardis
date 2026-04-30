@@ -346,11 +346,10 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
     currencies,
     conversions,
   ])
-  const optionMetadata = useMemo(() => {
-    const flattened = Object.values(optionConnections).flat()
-    const segSource = flattened.length ? flattened : tripSegments
-    return buildOptionMetadata(options, segSource)
-  }, [options, optionConnections, tripSegments])
+  const optionMetadata = useMemo(
+    () => buildOptionMetadata(options, optionConnections, tripSegments, optionFilterState),
+    [options, optionConnections, tripSegments, optionFilterState],
+  )
   const generalCostLabel = useMemo(() => {
     if (formattedSegmentCost) return formattedSegmentCost
     if (hasCostValue) return parsedCost.toString()
@@ -938,14 +937,14 @@ export const SegmentDetailContent = forwardRef<SegmentDetailContentHandle, Segme
 
   const filteredOptionsForDisplay = useMemo(() => {
     if (!segment || isDuplicateMode) return []
-    const filtered = applyOptionFilters(options, optionFilterState, optionSortState, optionConnections)
+    const filtered = applyOptionFilters(options, optionFilterState, optionSortState, optionConnections, tripSegments)
     const selectedSet = new Set(selectedOptions)
     return [...filtered].sort((a, b) => {
       const aSelected = selectedSet.has(a.id) ? 0 : 1
       const bSelected = selectedSet.has(b.id) ? 0 : 1
       return aSelected - bSelected
     })
-  }, [segment, isDuplicateMode, options, optionFilterState, optionSortState, optionConnections, selectedOptions])
+  }, [segment, isDuplicateMode, options, optionFilterState, optionSortState, optionConnections, selectedOptions, tripSegments])
 
   const hasChanges = useMemo(() => {
     if (isCreateMode) return true

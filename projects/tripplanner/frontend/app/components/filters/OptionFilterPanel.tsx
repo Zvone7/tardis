@@ -2,6 +2,7 @@ import { FilterPanel, hasBaseFilters, countBaseActiveFilters } from "./FilterPan
 import type { OptionSortValue } from "../sorting/optionSortTypes"
 import { OPTION_SORT_FIELDS } from "../sorting/optionSortTypes"
 import type { DateRangeValue } from "./DateRangeFilter"
+import type { LocationChip } from "../../services/locationLabel"
 
 export interface OptionFilterValue {
   locations: string[]
@@ -16,7 +17,7 @@ interface OptionFilterPanelProps {
   onChange: (value: OptionFilterValue) => void
   sort: OptionSortValue | null
   onSortChange: (value: OptionSortValue | null) => void
-  availableLocations: string[]
+  availableLocations: LocationChip[]
   minDate?: string
   maxDate?: string
   uniqueStartDates?: string[]

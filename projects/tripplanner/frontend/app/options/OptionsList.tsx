@@ -371,16 +371,14 @@ export function OptionsList({
   const [isBatchDeleting, setIsBatchDeleting] = useState(false)
 
   const sortedOptions = useMemo(
-    () => applyOptionFilters(options, filterState, sortState, connectedSegments),
-    [options, filterState, sortState, connectedSegments]
+    () => applyOptionFilters(options, filterState, sortState, connectedSegments, segments as SegmentApi[]),
+    [options, filterState, sortState, connectedSegments, segments]
   )
 
-  const optionMetadata = useMemo(() => {
-    const segSource = Object.values(connectedSegments).flat().length
-      ? Object.values(connectedSegments).flat()
-      : segments
-    return buildOptionMetadata(options, segSource as SegmentApi[])
-  }, [options, connectedSegments, segments])
+  const optionMetadata = useMemo(
+    () => buildOptionMetadata(options, connectedSegments, segments as SegmentApi[], filterState),
+    [options, connectedSegments, segments, filterState],
+  )
 
   const costChips = useMemo(() => computeCostChips(options.map((o) => o.totalCost ?? 0)), [options])
   const tripCurrencyLabel = useMemo(() => currencies.find((c) => c.id === tripCurrencyId)?.shortName ?? "", [currencies, tripCurrencyId])

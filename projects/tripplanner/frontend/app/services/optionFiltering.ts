@@ -2,10 +2,17 @@ import type { OptionApi, SegmentApi } from "../types/models"
 import type { OptionFilterValue } from "../components/filters/OptionFilterPanel"
 import type { OptionSortValue } from "../components/sorting/optionSortTypes"
 import { computeCostChips } from "../components/filters/costChips"
+import {
+  type LocationChip,
+  getLocationKey,
+  collectLocationIntoMap,
+  sortLocationChips,
+} from "./locationLabel"
+
+export type { LocationChip }
 
 const DAY_MS = 86_400_000
 
-/** Pads raw min/max timestamps by 1 day each side. */
 function padDateBounds(min: number | null, max: number | null): { min: string; max: string } {
   if (min === null || max === null) return { min: "", max: "" }
   return {
@@ -14,28 +21,56 @@ function padDateBounds(min: number | null, max: number | null): { min: string; m
   }
 }
 
-const getLocationLabel = (loc: any | null) => {
-  if (!loc) return ""
-  const name = loc?.name ?? ""
-  const country = loc?.country ?? ""
-  return country ? `${name}, ${country}` : name ?? ""
+function optionPassesNonLocationFilters(
+  option: OptionApi,
+  filters: OptionFilterValue,
+  connectedSegments: Record<number, SegmentApi[]>,
+): boolean {
+  if (option.isUiVisible === false) return filters.showHidden
+
+  const connected = connectedSegments[option.id]
+  const connectedList = connected ?? []
+
+  const startDate = filters.dateRange.start ? new Date(filters.dateRange.start) : null
+  if (startDate) startDate.setHours(0, 0, 0, 0)
+  const endDate = filters.dateRange.end ? new Date(filters.dateRange.end) : null
+  if (endDate) endDate.setHours(23, 59, 59, 999)
+
+  if (startDate || endDate) {
+    if (connected === undefined || connectedList.length === 0) return true
+    const matchesDate = connectedList.some((segment) => {
+      const segmentStart = new Date(segment.startDateTimeUtc)
+      const segmentEnd = new Date(segment.endDateTimeUtc)
+      if (startDate && segmentStart < startDate) return false
+      if (endDate && segmentEnd > endDate) return false
+      return true
+    })
+    if (!matchesDate) return false
+  }
+
+  const cost = option.totalCost ?? 0
+  if (filters.costMin != null && cost < filters.costMin) return false
+  if (filters.costMax != null && cost > filters.costMax) return false
+
+  return true
 }
 
-export const buildOptionMetadata = (options: OptionApi[], segments: SegmentApi[]) => {
-  const locations = new Set<string>()
+export const buildOptionMetadata = (
+  options: OptionApi[],
+  connectedSegments: Record<number, SegmentApi[]>,
+  segmentsFallback: SegmentApi[],
+  filters: OptionFilterValue,
+) => {
+  const locationMap = new Map<string, string>()
   const startDateSet = new Set<string>()
   const endDateSet = new Set<string>()
   let rawMin: number | null = null
   let rawMax: number | null = null
 
-  segments.forEach((segment) => {
-    const startLoc = (segment as any).startLocation ?? null
-    const endLoc = (segment as any).endLocation ?? null
-    const startLabel = getLocationLabel(startLoc)
-    const endLabel = getLocationLabel(endLoc)
-    if (startLabel) locations.add(startLabel)
-    if (endLabel) locations.add(endLabel)
-    // Use segment dates as the authoritative trip bounds
+  const allConnected = Object.values(connectedSegments).flat()
+  const hasHydratedSegments = allConnected.length > 0
+
+  const collectSegmentDates = (segment: SegmentApi) => {
     if (segment.startDateTimeUtc) {
       const ts = new Date(segment.startDateTimeUtc).getTime()
       if (!Number.isNaN(ts)) rawMin = rawMin === null ? ts : Math.min(rawMin, ts)
@@ -44,7 +79,30 @@ export const buildOptionMetadata = (options: OptionApi[], segments: SegmentApi[]
       const ts = new Date(segment.endDateTimeUtc).getTime()
       if (!Number.isNaN(ts)) rawMax = rawMax === null ? ts : Math.max(rawMax, ts)
     }
-  })
+  }
+
+  const segmentsById = new Map(segmentsFallback.map((s) => [s.id, s as any]))
+
+  if (hasHydratedSegments) {
+    options.forEach((option) => {
+      if (!optionPassesNonLocationFilters(option, filters, connectedSegments)) return
+      const segs = connectedSegments[option.id] ?? []
+      segs.forEach((seg) => {
+        const fallback = segmentsById.get(seg.id)
+        const startLoc = (seg as any).startLocation ?? fallback?.startLocation ?? null
+        const endLoc = (seg as any).endLocation ?? fallback?.endLocation ?? null
+        collectLocationIntoMap(locationMap, startLoc)
+        collectLocationIntoMap(locationMap, endLoc)
+      })
+    })
+    allConnected.forEach(collectSegmentDates)
+  } else {
+    segmentsFallback.forEach((seg) => {
+      collectLocationIntoMap(locationMap, (seg as any).startLocation ?? null)
+      collectLocationIntoMap(locationMap, (seg as any).endLocation ?? null)
+      collectSegmentDates(seg)
+    })
+  }
 
   options.forEach((option) => {
     if (option.startDateTimeUtc) {
@@ -60,8 +118,12 @@ export const buildOptionMetadata = (options: OptionApi[], segments: SegmentApi[]
   const costs = options.map((o) => o.totalCost ?? 0)
   const costChips = computeCostChips(costs)
 
+  const locations: LocationChip[] = sortLocationChips(
+    Array.from(locationMap.entries()).map(([key, label]) => ({ key, label })),
+  )
+
   return {
-    locations: Array.from(locations),
+    locations,
     uniqueStartDates: Array.from(startDateSet).sort(),
     uniqueEndDates: Array.from(endDateSet).sort(),
     dateBounds: padDateBounds(rawMin, rawMax),
@@ -73,7 +135,9 @@ export const filterOptions = (
   options: OptionApi[],
   filters: OptionFilterValue,
   connectedSegments: Record<number, SegmentApi[]>,
+  segmentsFallback: SegmentApi[] = [],
 ) => {
+  const segmentsById = new Map(segmentsFallback.map((s) => [s.id, s as any]))
   const startDate = filters.dateRange.start ? new Date(filters.dateRange.start) : null
   if (startDate) startDate.setHours(0, 0, 0, 0)
   const endDate = filters.dateRange.end ? new Date(filters.dateRange.end) : null
@@ -91,11 +155,12 @@ export const filterOptions = (
       if (connected === undefined) return true
       if (connectedList.length === 0) return false
       const matchesLocation = connectedList.some((segment) => {
-        const startLoc = (segment as any).startLocation ?? null
-        const endLoc = (segment as any).endLocation ?? null
-        const startLabel = getLocationLabel(startLoc)
-        const endLabel = getLocationLabel(endLoc)
-        return filters.locations.some((loc) => loc === startLabel || loc === endLabel)
+        const fallback = segmentsById.get(segment.id)
+        const startLoc = (segment as any).startLocation ?? fallback?.startLocation ?? null
+        const endLoc = (segment as any).endLocation ?? fallback?.endLocation ?? null
+        const startKey = getLocationKey(startLoc)
+        const endKey = getLocationKey(endLoc)
+        return filters.locations.some((loc) => loc === startKey || loc === endKey)
       })
       if (!matchesLocation) return false
     }
@@ -150,7 +215,8 @@ export const applyOptionFilters = (
   filters: OptionFilterValue,
   sort: OptionSortValue | null,
   connectedSegments: Record<number, SegmentApi[]>,
+  segmentsFallback: SegmentApi[] = [],
 ) => {
-  const filtered = filterOptions(options, filters, connectedSegments)
+  const filtered = filterOptions(options, filters, connectedSegments, segmentsFallback)
   return sortOptions(filtered, sort)
 }
