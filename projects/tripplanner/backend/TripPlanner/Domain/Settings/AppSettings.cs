@@ -36,7 +36,7 @@ public sealed class ScrapingApi
 public sealed class OpenAiSettings
 {
     public string ApiKey { get; set; } = string.Empty;
-    public string Model { get; set; } = "gpt-4o";
+    public string Model { get; set; }
 }
 
 public class Amadeus

@@ -19,6 +19,7 @@ if (backendUrl.includes("localhost")) {
 }
 
 const nextConfig = {
+  devIndicators: { appIsrStatus: false, buildActivity: false },
   async rewrites() {
 
     return [

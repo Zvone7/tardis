@@ -10,6 +10,7 @@ import type {
   User,
   UserPreference,
   LocationOption,
+  LocationDto,
   PendingUser,
   Currency,
   CurrencyConversion,
@@ -114,6 +115,24 @@ export const segmentsApi = {
       body: JSON.stringify(payload),
       responseType: "void",
     }),
+  batchUpdateLocations: (tripId: string | number, payload: { segmentIds: number[]; startLocation?: LocationOption | LocationDto | null; endLocation?: LocationOption | LocationDto | null }) =>
+    request<number>(`/api/Segment/BatchUpdateLocations?tripId=${tripId}`, {
+      method: "PUT",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload),
+    }),
+  batchDelete: (tripId: string | number, ids: number[]) =>
+    request<number>(`/api/Segment/BatchDelete?tripId=${tripId}`, {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({ ids }),
+    }),
+  batchSetVisibility: (tripId: string | number, ids: number[], isVisible: boolean) =>
+    request<number>(`/api/Segment/BatchSetVisibility?tripId=${tripId}`, {
+      method: "PUT",
+      headers: jsonHeaders,
+      body: JSON.stringify({ ids, isVisible }),
+    }),
 }
 
 export const optionsApi = {
@@ -141,6 +160,30 @@ export const optionsApi = {
       body: JSON.stringify({ OptionId: optionId, SegmentIds: segmentIds }),
       responseType: "void",
     }),
+  combineAll: (tripId: string | number, payload: { tripId: number; startLocationId: number; endLocationId: number; segmentIds: number[] }) =>
+    request<number>(`/api/Option/CombineAll?tripId=${tripId}`, {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload),
+    }),
+  batchConnectSegment: (tripId: string | number, payload: { optionIds: number[]; segmentId: number; connect: boolean }) =>
+    request<number>(`/api/Option/BatchConnectSegment?tripId=${tripId}`, {
+      method: "PUT",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload),
+    }),
+  batchDelete: (tripId: string | number, ids: number[]) =>
+    request<number>(`/api/Option/BatchDelete?tripId=${tripId}`, {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({ ids }),
+    }),
+  batchSetVisibility: (tripId: string | number, ids: number[], isVisible: boolean) =>
+    request<number>(`/api/Option/BatchSetVisibility?tripId=${tripId}`, {
+      method: "PUT",
+      headers: jsonHeaders,
+      body: JSON.stringify({ ids, isVisible }),
+    }),
 }
 
 export const userApi = {
@@ -164,8 +207,11 @@ export const userApi = {
 }
 
 export const geocodingApi = {
-  search: (endpoint: string, query: string, signal?: AbortSignal) =>
-    request<LocationOption[]>(`${endpoint}?q=${encodeURIComponent(query)}`, { signal }),
+  search: (endpoint: string, query: string, signal?: AbortSignal, viewbox?: string) => {
+    let url = `${endpoint}?q=${encodeURIComponent(query)}`
+    if (viewbox) url += `&viewbox=${encodeURIComponent(viewbox)}`
+    return request<LocationOption[]>(url, { signal })
+  },
   reverse: (lat: number, lon: number, signal?: AbortSignal) =>
     request<LocationOption | null>(`/api/geocode/reverse?lat=${lat}&lon=${lon}`, { signal }),
   airport: (code: string, signal?: AbortSignal) =>

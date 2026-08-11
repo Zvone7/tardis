@@ -1,26 +1,13 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import React, { Suspense } from "react"
-import { Skeleton } from "../components/ui/skeleton"
-import SegmentsPageContent from "../segments/SegmentsPageContent"
-
-
-export default function SegmentsPage() {
-
-  return (
-    <Suspense fallback={<LoadingSkeleton />}>
-      <SegmentsPageContent />
-      
-    </Suspense>
-  )
+interface PageProps {
+  searchParams: Promise<{ tripId?: string }>
 }
 
-function LoadingSkeleton() {
-  return (
-    <div className="space-y-2">
-      {[...Array(5)].map((_, i) => (
-        <div key={i} className="w-full h-12 bg-gray-200 rounded-md" />
-      ))}
-    </div>
-  )
+export default async function SegmentsPage({ searchParams }: PageProps) {
+  const { tripId } = await searchParams
+  if (tripId) {
+    redirect(`/trip/${tripId}?tab=segments`)
+  }
+  redirect("/trips")
 }

@@ -537,7 +537,7 @@ useEffect(() => {
                             <SelectContent>
                               {currencies.map((currency) => (
                                 <SelectItem key={currency.id} value={currency.id.toString()}>
-                                  {currency.symbol} {currency.shortName}
+                                  {currency.shortName}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -555,7 +555,7 @@ useEffect(() => {
                             <SelectContent>
                               {currencies.map((currency) => (
                                 <SelectItem key={currency.id} value={currency.id.toString()}>
-                                  {currency.symbol} {currency.shortName}
+                                  {currency.shortName}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -595,8 +595,8 @@ useEffect(() => {
                               const toCurrency = currencies.find((c) => c.id === conversion.toCurrencyId)
                               return (
                                 <TableRow key={key}>
-                                  <TableCell>{fromCurrency ? `${fromCurrency.symbol} ${fromCurrency.shortName}` : conversion.fromCurrencyId}</TableCell>
-                                  <TableCell>{toCurrency ? `${toCurrency.symbol} ${toCurrency.shortName}` : conversion.toCurrencyId}</TableCell>
+                                  <TableCell>{fromCurrency ? fromCurrency.shortName : conversion.fromCurrencyId}</TableCell>
+                                  <TableCell>{toCurrency ? toCurrency.shortName : conversion.toCurrencyId}</TableCell>
                                   <TableCell>{conversion.rate}</TableCell>
                                 </TableRow>
                               )

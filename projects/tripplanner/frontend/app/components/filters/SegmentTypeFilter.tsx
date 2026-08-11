@@ -1,50 +1,66 @@
 import { useMemo } from "react"
-import { Label } from "../ui/label"
-import { MultiSelect, type OptionType } from "../ui/multiselect"
+import { Button } from "../ui/button"
+import { cn } from "../../lib/utils"
 import type { SegmentType } from "../../types/models"
 
 interface SegmentTypeFilterProps {
   types: SegmentType[]
-  value: string[]
-  onChange: (next: string[]) => void
-  label?: string
-  placeholder?: string
+  value: string[] | null
+  onChange: (next: string[] | null) => void
 }
 
 export function SegmentTypeFilter({
   types,
   value,
   onChange,
-  label = "Segment types",
-  placeholder = "Select segment types",
 }: SegmentTypeFilterProps) {
-  const options: OptionType[] = useMemo(() => {
-    return types
-      .slice()
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map((type) => ({
-        value: type.id.toString(),
-        label: (
-          <span className="flex items-center gap-2">
-            {type.iconSvg ? (
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary/60 text-secondary-foreground shadow-sm ring-1 ring-black/5 dark:bg-white dark:text-black">
-                <span
-                  className="w-4 h-4"
-                  dangerouslySetInnerHTML={{ __html: type.iconSvg }}
-                  suppressHydrationWarning
-                />
-              </span>
-            ) : null}
-            <span>{type.name}</span>
-          </span>
-        ),
-      }))
-  }, [types])
+  const sorted = useMemo(() => types.slice().sort((a, b) => a.name.localeCompare(b.name)), [types])
+
+  // null = all visible; [] = none visible; [id...] = those specific
+  const isVisible = (id: string) => value === null || value.includes(id)
+
+  const toggle = (id: string) => {
+    const allIds = sorted.map((t) => t.id.toString())
+    if (value === null) {
+      // currently showing all — deselect this one
+      onChange(allIds.filter((v) => v !== id))
+    } else if (value.includes(id)) {
+      onChange(value.filter((v) => v !== id))
+    } else {
+      const next = [...value, id]
+      // if all are now selected, collapse back to null (default)
+      onChange(next.length === allIds.length ? null : next)
+    }
+  }
 
   return (
-    <div className="space-y-1.5">
-      <Label className="text-sm font-medium">{label}</Label>
-      <MultiSelect options={options} selected={value} onChange={onChange} placeholder={placeholder} />
+    <div className="flex flex-col gap-1.5">
+      {sorted.map((type) => {
+        const on = isVisible(type.id.toString())
+        return (
+          <Button
+            key={type.id}
+            type="button"
+            variant={on ? "default" : "outline"}
+            size="sm"
+            className={cn("w-full justify-start gap-2", !on && "opacity-50")}
+            onClick={() => toggle(type.id.toString())}
+          >
+            {type.iconSvg ? (
+              <span
+                className="w-4 h-4 shrink-0"
+                dangerouslySetInnerHTML={{ __html: type.iconSvg }}
+                suppressHydrationWarning
+              />
+            ) : (
+              <span className="w-4 h-4 shrink-0 flex items-center justify-center text-xs font-medium">
+                {type.shortName?.[0] ?? type.name[0]}
+              </span>
+            )}
+            {type.name}
+          </Button>
+        )
+      })}
     </div>
   )
 }

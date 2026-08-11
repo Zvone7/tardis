@@ -48,7 +48,7 @@ export function TestApiButton() {
       </Button>
       
       {apiResponse && (
-        <div className="mt-4 p-4 bg-gray-100 rounded-md w-full max-w-lg overflow-auto">
+        <div className="mt-4 p-4 bg-muted text-muted-foreground rounded-md w-full max-w-lg overflow-auto">
           <pre className="whitespace-pre-wrap text-sm">{apiResponse}</pre>
         </div>
       )}
