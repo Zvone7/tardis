@@ -5,19 +5,17 @@ import dynamic from "next/dynamic"
 import { PlusIcon, MinusIcon } from "lucide-react"
 import type { ItineraryLocation, ItineraryArc } from "../../hooks/useItineraryData"
 import { useThemePreference } from "../../providers/ThemeProvider"
+import {
+  detectEarthTextureResolution,
+  EARTH_TEXTURES,
+  type EarthTextureResolution,
+} from "./earthTexture"
 
 // Dynamic import to avoid SSR issues with three.js/WebGL
 const Globe = dynamic(() => import("react-globe.gl"), { ssr: false })
 
-// Locally hosted earth textures (copied from three-globe package to /public)
-const EARTH_LIGHT_URL = "/earth-blue-marble.jpg"
-const EARTH_DARK_URL  = "/earth-night.jpg"
-
 // Zoom constants — 10 clicks covers full 0–100% range on a log scale
-const MIN_ALT  = 0.0016
 const MAX_ALT  = 8
-const LOG_RANGE = Math.log(MAX_ALT / MIN_ALT)
-const ZOOM_FACTOR = Math.exp(LOG_RANGE / 10)
 
 // --- Geo helpers ---
 
@@ -96,6 +94,14 @@ export function ItineraryGlobe({
   onArcClickRef.current = onArcClick
   const { resolvedTheme } = useThemePreference()
   const isDark = resolvedTheme === "dark"
+  const [textureResolution, setTextureResolution] = useState<EarthTextureResolution>("4k")
+  const texture = EARTH_TEXTURES[textureResolution]
+  const logRange = Math.log(MAX_ALT / texture.minAltitude)
+  const zoomFactor = Math.exp(logRange / 10)
+
+  useEffect(() => {
+    setTextureResolution(detectEarthTextureResolution())
+  }, [])
 
   // Tracks current altitude for dynamic arc stroke + zoom % display
   const [currentAlt, setCurrentAlt] = useState(2.5)
@@ -107,7 +113,22 @@ export function ItineraryGlobe({
     ...arcs,
     ...arcs.map((a) => ({ ...a, _hitArea: true as const })),
   ]
-  const zoomPct = Math.round(Math.max(0, Math.min(100, 100 * Math.log(MAX_ALT / currentAlt) / LOG_RANGE)))
+  const zoomPct = Math.round(Math.max(0, Math.min(100, 100 * Math.log(MAX_ALT / currentAlt) / logRange)))
+
+  const configureZoomLimits = useCallback(() => {
+    if (!globeRef.current) return
+    const controls = globeRef.current.controls()
+    if (!controls) return
+
+    const globeRadius = globeRef.current.getGlobeRadius()
+    controls.minDistance = globeRadius * (1 + texture.minAltitude)
+    controls.maxDistance = globeRadius * (1 + MAX_ALT)
+    controls.update()
+  }, [texture.minAltitude])
+
+  useEffect(() => {
+    configureZoomLimits()
+  }, [configureZoomLimits])
 
   const buildHtmlElement = useCallback(
     (item: object): HTMLElement => {
@@ -170,6 +191,7 @@ export function ItineraryGlobe({
     const controls = globeRef.current.controls()
     if (controls) {
       controls.autoRotate = false
+      configureZoomLimits()
       controls.addEventListener("change", () => {
         const pov = globeRef.current?.pointOfView()
         if (pov?.altitude !== undefined) setCurrentAlt(pov.altitude)
@@ -180,16 +202,16 @@ export function ItineraryGlobe({
       globeRef.current.pointOfView({ lat, lng, altitude }, 0)
     }
     onReadyRef.current?.()
-  }, [locations])
+  }, [configureZoomLimits, locations])
 
   const handleZoom = useCallback((direction: "in" | "out") => {
     if (!globeRef.current) return
     const current = globeRef.current.pointOfView()
     const next = direction === "in"
-      ? Math.max(current.altitude / ZOOM_FACTOR, MIN_ALT)
-      : Math.min(current.altitude * ZOOM_FACTOR, MAX_ALT)
+      ? Math.max(current.altitude / zoomFactor, texture.minAltitude)
+      : Math.min(current.altitude * zoomFactor, MAX_ALT)
     globeRef.current.pointOfView({ altitude: next }, 300)
-  }, [])
+  }, [texture.minAltitude, zoomFactor])
 
   return (
     <div className="relative overflow-hidden rounded-lg bg-transparent select-none" style={{ width, height }}>
@@ -198,7 +220,7 @@ export function ItineraryGlobe({
         width={width}
         height={height}
         backgroundColor="rgba(0,0,0,0)"
-        globeImageUrl={isDark ? EARTH_DARK_URL : EARTH_LIGHT_URL}
+        globeImageUrl={isDark ? texture.dark : texture.light}
         showAtmosphere={false}
         // Arcs — each real arc duplicated with an invisible wide hit-area twin for easier clicking
         arcsData={layeredArcs}

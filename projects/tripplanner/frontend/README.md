@@ -60,3 +60,22 @@ API requests to `/api/*` are proxied to the backend URL configured above.
 | `npm run build` | Create production build |
 | `npm start` | Serve production build |
 | `npm run lint` | Run ESLint |
+
+## Globe imagery
+
+The itinerary globe uses locally bundled, 2:1 equirectangular NASA imagery, so it
+does not require a map provider, API key, attribution overlay, or runtime image
+request. Browsers reporting a WebGL `MAX_TEXTURE_SIZE` of at least 8192 use the
+8K files; other browsers automatically retain the original 4096×2048 textures.
+
+| Theme | 8K source | Processing |
+|---|---|---|
+| Light | [NASA Visible Earth: The Blue Marble—Land Surface, Ocean Color and Sea Ice](https://visibleearth.nasa.gov/images/57730/the-blue-marble-land-surface-ocean-color-and-sea-ice) | NASA's 8192×4096 PNG was encoded as a progressive JPEG at quality 82. |
+| Dark | [NASA Earth Observatory: Earth at Night/Black Marble flat maps](https://science.nasa.gov/earth/earth-observatory/earth-at-night/maps/) | NASA's 13500×6750 2016 color JPEG was resized with Lanczos resampling to 8192×4096 and encoded as a progressive JPEG at quality 82. |
+
+The source images were processed with Sharp/mozjpeg. The 8K outputs are
+`public/earth-blue-marble-8k.jpg` and `public/earth-night-8k.jpg`; the existing
+`public/earth-blue-marble.jpg` and `public/earth-night.jpg` remain the 4K
+compatibility fallbacks. Texture selection changes only the image and closest
+useful zoom limit; geographic coordinates, pins, arcs, clicks, and camera fitting
+continue to use the existing globe implementation.
