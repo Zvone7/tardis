@@ -98,6 +98,7 @@ public class GoogleFlightsLinkParserTest
             int limit,
             string? countrycodes,
             string? lang,
+            string? viewbox = null,
             CancellationToken ct = default)
         {
             LastQuery = query;

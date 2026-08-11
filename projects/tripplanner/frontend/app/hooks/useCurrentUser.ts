@@ -35,9 +35,8 @@ export function useCurrentUser() {
         setUser(data)
         setError(null)
       })
-      .catch((err) => {
+      .catch(() => {
         if (!isActive) return
-        console.error("Failed to load current user:", err)
         setError("Failed to load current user")
       })
       .finally(() => {

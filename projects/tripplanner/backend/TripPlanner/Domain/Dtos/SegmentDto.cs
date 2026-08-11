@@ -11,7 +11,7 @@ public class SegmentDto
     public string Name { get; set; }
     public decimal Cost { get; set; }
     public int CurrencyId { get; set; } = 1;
-    public int SegmentTypeId { get; set; }
+    public int? SegmentTypeId { get; set; }
     public string Comment { get; set; }
     public int? StartLocationId { get; set; }
     public int? EndLocationId { get; set; }

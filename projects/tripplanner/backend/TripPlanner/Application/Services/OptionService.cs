@@ -5,6 +5,16 @@ using Domain.Dtos;
 
 namespace Application.Services;
 
+public enum CombineActionType { Create, Unhide }
+
+public class CombineAction
+{
+    public CombineActionType Type { get; set; }
+    public List<int> SegmentIds { get; set; } = [];
+    public int? ExistingOptionId { get; set; } // set when Type == Unhide
+    public string Name { get; set; } = "";
+}
+
 public class OptionService
 {
     private readonly OptionRepository _optionRepository_;
@@ -102,22 +112,35 @@ public class OptionService
         }, cancellationToken);
     }
 
-    public async Task UpdateAsync(UpdateOptionAm option, CancellationToken cancellationToken)
+    public async Task UpdateAsync(UpdateOptionAm option, int tripId, CancellationToken cancellationToken)
     {
         await _optionRepository_.UpdateLightAsync(new TripOptionDbm
         {
             id = option.Id,
             name = option.Name,
             is_ui_visible = option.IsUiVisible,
+            trip_id = tripId,
         }, cancellationToken);
     }
 
-    public async Task DeleteAsync(int optionId, CancellationToken cancellationToken)
+    public async Task DeleteAsync(int optionId, int tripId, CancellationToken cancellationToken)
     {
         var option = await _optionRepository_.GetAsync(optionId, cancellationToken);
         if (option == null)
             throw new InvalidDataException($"Option with id {optionId} not found.");
-        await _optionRepository_.DeleteAsync(optionId, cancellationToken);
+        await _optionRepository_.DeleteAsync(optionId, tripId, cancellationToken);
+    }
+
+    public async Task<int> BatchDeleteAsync(int tripId, List<int> ids, CancellationToken ct)
+    {
+        await _optionRepository_.BatchDeleteAsync(ids, tripId, ct);
+        return ids.Count;
+    }
+
+    public async Task<int> BatchSetVisibilityAsync(int tripId, List<int> ids, bool isVisible, CancellationToken ct)
+    {
+        await _optionRepository_.BatchSetVisibilityAsync(ids, isVisible, tripId, ct);
+        return ids.Count;
     }
 
     public async Task<OptionDto> RecalculateOptionStateAsync(int optionId, CancellationToken cancellationToken)
@@ -194,12 +217,9 @@ public class OptionService
         return result;
     }
 
-    public async Task ConnectOptionWithSegmentsAsync(UpdateConnectedSegmentsAm am, CancellationToken cancellationToken)
+    public async Task ConnectOptionWithSegmentsAsync(int tripId, UpdateConnectedSegmentsAm am, CancellationToken cancellationToken)
     {
-        var option = await _optionRepository_.GetAsync(am.OptionId, cancellationToken);
-        if (option == null)
-            throw new InvalidDataException($"Option with id {am.OptionId} not found.");
-        await _optionRepository_.ConnectOptionWithSegmentsAsync(am.OptionId, am.SegmentIds, cancellationToken);
+        await _optionRepository_.ConnectOptionWithSegmentsAsync(am.OptionId, am.SegmentIds, tripId, cancellationToken);
         var optionFinal = await RecalculateOptionStateAsync(am.OptionId, cancellationToken);
         await UpdateAsync(optionFinal, cancellationToken);
     }
@@ -219,6 +239,152 @@ public class OptionService
             IsUiVisible = s.is_ui_visible,
             CurrencyId = s.currency_id,
         }).ToList();
+        return result;
+    }
+
+    public async Task<int> BatchConnectSegmentAsync(int tripId, BatchConnectSegmentAm am, CancellationToken ct)
+    {
+        if (am.Connect)
+        {
+            await _optionRepository_.AddSegmentToOptionsAsync(am.SegmentId, am.OptionIds, tripId, ct);
+        }
+        else
+        {
+            await _optionRepository_.RemoveSegmentFromOptionsAsync(am.SegmentId, am.OptionIds, tripId, ct);
+        }
+
+        foreach (var optionId in am.OptionIds)
+        {
+            var recalculated = await RecalculateOptionStateAsync(optionId, ct);
+            await UpdateAsync(recalculated, ct);
+        }
+
+        return am.OptionIds.Count;
+    }
+
+    public async Task<int> CombineAllAsync(CombineAllAm am, CancellationToken ct)
+    {
+        var segments = await _segmentRepository_.GetByIdsAndTripAsync(am.SegmentIds, am.TripId, ct);
+        var existingOptions = await _optionRepository_.GetOptionsByTripIdAsync(am.TripId, ct);
+
+        var existingWithSegments = new List<(int optionId, HashSet<int> segmentIds, bool isVisible)>();
+        foreach (var opt in existingOptions)
+        {
+            var segs = await _segmentRepository_.GetAllByOptionIdAsync(opt.id, ct);
+            existingWithSegments.Add((opt.id, segs.Select(s => s.id).ToHashSet(), opt.is_ui_visible));
+        }
+
+        var actions = BuildCombinations(segments, am.StartLocationId, am.EndLocationId, existingWithSegments);
+        var count = 0;
+        var letterIndex = 0;
+
+        foreach (var action in actions)
+        {
+            if (action.Type == CombineActionType.Unhide)
+            {
+                var opt = await _optionRepository_.GetAsync(action.ExistingOptionId!.Value, ct);
+                if (opt != null)
+                {
+                    opt.is_ui_visible = true;
+                    await _optionRepository_.UpdateLightAsync(opt, ct);
+                    count++;
+                }
+            }
+            else
+            {
+                var optionName = letterIndex < 26
+                    ? ((char)('A' + letterIndex)).ToString()
+                    : $"A{letterIndex - 25}";
+                letterIndex++;
+
+                var newId = await _optionRepository_.CreateAndReturnIdAsync(new TripOptionDbm
+                {
+                    trip_id = am.TripId,
+                    name = optionName,
+                    start_datetime_utc = null,
+                    end_datetime_utc = null,
+                    total_cost = 0
+                }, ct);
+
+                await _optionRepository_.ConnectOptionWithSegmentsAsync(newId, action.SegmentIds, am.TripId, ct);
+                var recalculated = await RecalculateOptionStateAsync(newId, ct);
+                await UpdateAsync(recalculated, ct);
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    public static List<CombineAction> BuildCombinations(
+        List<SegmentDbm> segments,
+        int startLocationId,
+        int endLocationId,
+        List<(int optionId, HashSet<int> segmentIds, bool isVisible)> existingOptions)
+    {
+        // Group into legs by (start_location_id, end_location_id)
+        // The frontend already filters to only relevant segments, so we just null-check here
+        var legs = segments
+            .Where(s => s.start_location_id.HasValue && s.end_location_id.HasValue)
+            .GroupBy(s => (s.start_location_id!.Value, s.end_location_id!.Value))
+            .OrderBy(g => g.Min(s => s.start_datetime_utc))
+            .Select(g => g.OrderBy(s => s.start_datetime_utc).ToList())
+            .ToList();
+
+        if (legs.Count == 0) return [];
+
+        // Cartesian product across legs
+        var combinations = CartesianProduct(legs);
+
+        // Deduplicate against existing options
+        var actions = new List<CombineAction>();
+        foreach (var combo in combinations)
+        {
+            var comboIds = combo.Select(s => s.id).ToHashSet();
+            var existing = existingOptions.FirstOrDefault(e => e.segmentIds.SetEquals(comboIds));
+
+            if (existing != default)
+            {
+                if (!existing.isVisible)
+                {
+                    actions.Add(new CombineAction
+                    {
+                        Type = CombineActionType.Unhide,
+                        SegmentIds = comboIds.ToList(),
+                        ExistingOptionId = existing.optionId
+                    });
+                }
+                // visible duplicate → skip
+            }
+            else
+            {
+                actions.Add(new CombineAction
+                {
+                    Type = CombineActionType.Create,
+                    SegmentIds = comboIds.ToList(),
+                });
+            }
+        }
+
+        return actions;
+    }
+
+    public static List<List<SegmentDbm>> CartesianProduct(List<List<SegmentDbm>> legs)
+    {
+        var result = new List<List<SegmentDbm>> { new() };
+        foreach (var leg in legs)
+        {
+            var newResult = new List<List<SegmentDbm>>();
+            foreach (var existing in result)
+            {
+                foreach (var segment in leg)
+                {
+                    var combo = new List<SegmentDbm>(existing) { segment };
+                    newResult.Add(combo);
+                }
+            }
+            result = newResult;
+        }
         return result;
     }
 
@@ -281,4 +447,5 @@ public class OptionService
 
         return null;
     }
+
 }

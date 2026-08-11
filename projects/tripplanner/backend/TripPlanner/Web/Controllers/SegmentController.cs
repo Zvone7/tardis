@@ -39,7 +39,7 @@ public class SegmentController : ControllerBase
     [HttpPost]
     [ServiceFilter(typeof(TripAccessFilterAttribute))]
     [Route(nameof(CreateSegment))]
-    public async Task<ActionResult> CreateSegment([FromQuery]int tripId, SegmentDto segment, CancellationToken cancellationToken)
+    public async Task<ActionResult> CreateSegment([FromQuery]int tripId, [FromBody] SegmentDto segment, CancellationToken cancellationToken)
     {
         await _segmentService_.CreateAsync(segment, cancellationToken);
         return Ok();
@@ -48,7 +48,7 @@ public class SegmentController : ControllerBase
     [HttpPut]
     [ServiceFilter(typeof(TripAccessFilterAttribute))]
     [Route(nameof(UpdateSegment))]
-    public async Task<ActionResult> UpdateSegment([FromQuery]int tripId, SegmentDto segment, CancellationToken cancellationToken)
+    public async Task<ActionResult> UpdateSegment([FromQuery]int tripId, [FromBody] SegmentDto segment, CancellationToken cancellationToken)
     {
         await _segmentService_.UpdateAsync(segment, cancellationToken);
         return Ok();
@@ -59,7 +59,7 @@ public class SegmentController : ControllerBase
     [Route(nameof(DeleteSegment))]
     public async Task<ActionResult> DeleteSegment(int tripId, int segmentId, CancellationToken cancellationToken)
     {
-        await _segmentService_.DeleteAsync(segmentId, cancellationToken);
+        await _segmentService_.DeleteAsync(segmentId, tripId, cancellationToken);
         return Ok();
     }
 
@@ -76,6 +76,7 @@ public class SegmentController : ControllerBase
     [Route(nameof(UpdateConnectedOptions))]
     public async Task<ActionResult> UpdateConnectedOptions([FromQuery]int tripId, UpdateConnectedOptionsAm am, CancellationToken cancellationToken)
     {
+        am.TripId = tripId;
         await _segmentService_.ConnectSegmentWithOptionsAsync(am, cancellationToken);
         return Ok();
     }
@@ -85,6 +86,33 @@ public class SegmentController : ControllerBase
     public async Task<ActionResult<List<SegmentTypeDto>>> GetSegmentTypes(CancellationToken cancellationToken)
     {
         return await _segmentService_.GetAllSegmentTypesAsync(cancellationToken);
+    }
+
+    [HttpPut]
+    [ServiceFilter(typeof(TripAccessFilterAttribute))]
+    [Route(nameof(BatchUpdateLocations))]
+    public async Task<ActionResult<int>> BatchUpdateLocations([FromQuery] int tripId, BatchUpdateLocationsAm am, CancellationToken cancellationToken)
+    {
+        var count = await _segmentService_.BatchUpdateLocationsAsync(am, cancellationToken);
+        return Ok(count);
+    }
+
+    [HttpPost]
+    [ServiceFilter(typeof(TripAccessFilterAttribute))]
+    [Route(nameof(BatchDelete))]
+    public async Task<ActionResult<int>> BatchDelete([FromQuery] int tripId, BatchDeleteAm am, CancellationToken cancellationToken)
+    {
+        var count = await _segmentService_.BatchDeleteAsync(tripId, am.Ids, cancellationToken);
+        return Ok(count);
+    }
+
+    [HttpPut]
+    [ServiceFilter(typeof(TripAccessFilterAttribute))]
+    [Route(nameof(BatchSetVisibility))]
+    public async Task<ActionResult<int>> BatchSetVisibility([FromQuery] int tripId, BatchSetVisibilityAm am, CancellationToken cancellationToken)
+    {
+        var count = await _segmentService_.BatchSetVisibilityAsync(tripId, am.Ids, am.IsVisible, cancellationToken);
+        return Ok(count);
     }
 
     [HttpGet("ParseBookingLink")]

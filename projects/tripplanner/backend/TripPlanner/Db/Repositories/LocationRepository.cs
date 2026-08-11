@@ -33,6 +33,17 @@ public class LocationRepository
     }
 
 
+    public async Task<LocationDbm?> FindByProximityAsync(double lat, double lng, CancellationToken cancellationToken)
+    {
+        using IDbConnection db = new SqlConnection(_connectionString_);
+        const double tolerance = 0.0005; // half a rounding step at 3 decimal places (~55m)
+        return await db.QueryFirstOrDefaultAsync<LocationDbm>(
+            @"SELECT TOP 1 * FROM Location
+              WHERE ABS(lat - @lat) < @tol AND ABS(lng - @lng) < @tol
+              ORDER BY ABS(lat - @lat) + ABS(lng - @lng)",
+            new { lat, lng, tol = tolerance });
+    }
+
     public async Task UpdateAsync(LocationDbm location, CancellationToken cancellationToken)
     {
         using IDbConnection db = new SqlConnection(_connectionString_);

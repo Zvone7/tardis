@@ -4,6 +4,7 @@
 
 body {
   font-family: Arial, Helvetica, sans-serif;
+  @apply bg-background text-foreground;
 }
 
 @layer base {
@@ -71,27 +72,33 @@ body {
   }
 }
 
-@keyframes shake-bounce {
+@keyframes border-pulse {
   0% {
-    transform: translateX(0);
+    border-color: hsl(var(--border));
   }
-  20% {
-    transform: translateX(-4px);
-  }
-  40% {
-    transform: translateX(4px);
-  }
-  60% {
-    transform: translateX(-3px);
-  }
-  80% {
-    transform: translateX(3px);
+  50% {
+    border-color: hsl(var(--foreground) / 0.4);
   }
   100% {
-    transform: translateX(0);
+    border-color: hsl(var(--border));
   }
 }
 
 .shake-once {
-  animation: shake-bounce 0.4s ease;
+  animation: border-pulse 0.6s ease;
+}
+
+@keyframes sort-flash {
+  0% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0); }
+  30% { box-shadow: 0 0 0 2px hsl(var(--primary) / 0.4); }
+  100% { box-shadow: 0 0 0 1px hsl(var(--primary) / 0.15); }
+}
+
+.sort-highlight {
+  animation: sort-flash 1s ease-out forwards;
+  border-radius: 0.25rem;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+  margin-left: -0.25rem;
+  margin-right: -0.25rem;
 }

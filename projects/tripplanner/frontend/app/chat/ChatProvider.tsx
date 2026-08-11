@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from "react"
 import { useChatAssistant } from "./useChatAssistant"
 import type { ChatMessage } from "./types"
+import type { ChatSession } from "./chatSessions"
 
 interface ChatContextValue {
   tripId: number | null
@@ -13,10 +14,18 @@ interface ChatContextValue {
   error: string | null
   sendMessage: (text: string, imageDataUrls?: string[]) => Promise<void>
   stopStreaming: () => void
-  clearMessages: () => void
+  newConversation: () => void
+  switchToSession: (sessionId: string) => void
+  deleteConversation: (sessionId: string) => void
+  sessions: ChatSession[]
+  activeSessionId: string
   isOpen: boolean
   setIsOpen: (open: boolean) => void
+  isMinimized: boolean
+  setIsMinimized: (minimized: boolean) => void
   registerRefreshCallback: (cb: () => void) => () => void
+  setPreferredUtcOffset: (offset: number) => void
+  setPreferredCurrencyId: (id: number | null) => void
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null)
@@ -31,7 +40,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [tripId, setTripId] = useState<number | null>(null)
   const [tripName, setTripName] = useState<string | null>(null)
   const [isOpen, setIsOpen] = useState(false)
+  const [isMinimized, setIsMinimized] = useState(false)
   const [preferredUtcOffset, setPreferredUtcOffset] = useState(0)
+  const [preferredCurrencyId, setPreferredCurrencyId] = useState<number | null>(null)
   const refreshCallbacks = useRef<Set<() => void>>(new Set())
 
   const onDataChanged = useCallback(() => {
@@ -42,6 +53,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     tripId,
     tripName,
     preferredUtcOffset,
+    preferredCurrencyId,
     onDataChanged,
   })
 
@@ -66,7 +78,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         ...chat,
         isOpen,
         setIsOpen,
+        isMinimized,
+        setIsMinimized,
         registerRefreshCallback,
+        setPreferredUtcOffset,
+        setPreferredCurrencyId,
       }}
     >
       {children}

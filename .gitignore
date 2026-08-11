@@ -34,7 +34,6 @@ coverage/
 
 # Editor directories and files
 .idea/
-.vscode/
 
 # C# (ASP.NET)
 # Visual Studio
@@ -61,8 +60,7 @@ packages/
 *.nuspec
 
 # Local development settings
-appsettings.Development.json
-appsettings.*.json
+appsettings.local.json
 
 # Azure Functions
 local.settings.json
@@ -72,6 +70,7 @@ secrets.json
 
 # Dev certificates
 *.pem
+*.key
 
 # Temporary files
 *.tmp
@@ -79,3 +78,4 @@ secrets.json
 .ignored/
 
 .claude/settings.local.json
+projects/tripplanner/.claude/settings.json

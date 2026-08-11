@@ -104,7 +104,7 @@ export default function TripModal({ isOpen, onClose, onSave, trip, defaultCurren
                   <SelectContent>
                     {currencies.map((currency) => (
                       <SelectItem key={currency.id} value={currency.id.toString()}>
-                        {currency.symbol} {currency.shortName}
+                        {currency.shortName}
                       </SelectItem>
                     ))}
                   </SelectContent>

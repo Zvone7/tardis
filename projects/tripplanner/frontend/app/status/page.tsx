@@ -22,21 +22,20 @@ export default function Authenticated() {
       .then((data) => {
         setAuthStatus(`Authenticated as: ${data.email || "Unknown"}`);
       })
-      .catch((err) => {
-        console.error("Authentication failed", err);
+      .catch(() => {
         setAuthStatus("Not authenticated");
       });
   }, [router]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-8">
-      <Link href="/" className="text-blue-500 hover:underline mb-8">
+      <Link href="/" className="text-primary hover:underline mb-8">
         Back to TripPlanner
       </Link>
-      
+
       <TestApiButton />
-      
-      <div className="mt-8 text-sm text-gray-500">
+
+      <div className="mt-8 text-sm text-muted-foreground">
         <p>{authStatus || "Checking..."}</p>
         <p>Server start time: {serverStartTime} (utc)</p>
         <p>Environment: {envCode}, Build: {buildNumber}</p>

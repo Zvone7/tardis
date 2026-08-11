@@ -3,12 +3,12 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { UserInfo } from "./components/UserInfo";
 import { DarkModeToggle } from "./components/DarkModeToggle";
+import { DevMenu } from "./components/DevMenu";
 import Link from "next/link";
 import { Home } from "lucide-react";
 import { ThemeProvider } from "./providers/ThemeProvider";
 import { ChatProvider } from "./chat/ChatProvider";
-import { ChatButton } from "./chat/ChatButton";
-import { ChatPanel } from "./chat/ChatPanel";
+import { ConditionalChatOverlay } from "./chat/ConditionalChatOverlay";
 
 const envCode = process.env.NEXT_PUBLIC_ENV_CODE?.toLowerCase()
 const isLocalEnv = !envCode ? process.env.NODE_ENV !== "production" : envCode === "local"
@@ -52,14 +52,14 @@ export default function RootLayout({
                 <Home className="w-5 h-5" />
                 <span className="ml-2 text-sm font-medium">Trips</span>
               </Link>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center">
+                <DevMenu />
                 <DarkModeToggle />
                 <UserInfo />
               </div>
             </header>
             {children}
-            <ChatButton />
-            <ChatPanel />
+            <ConditionalChatOverlay />
           </ChatProvider>
         </ThemeProvider>
       </body>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import type { ChatMessage, ToolCall, ContentPart } from "./types"
 import type { SegmentType, Currency, SegmentApi, OptionApi } from "../types/models"
 import { streamChatCompletion } from "./chatApiClient"
@@ -8,6 +8,15 @@ import { chatTools } from "./toolDefinitions"
 import { executeToolCall, type ToolContext } from "./toolExecutor"
 import { segmentsApi, optionsApi, currencyApi } from "../utils/apiClient"
 import { normalizeLocation } from "../lib/mapping"
+import {
+  getActiveSession,
+  saveMessages,
+  createNewSession,
+  switchSession,
+  deleteSession,
+  listSessions,
+  type ChatSession,
+} from "./chatSessions"
 
 const MAX_TOOL_ROUNDS = 5
 
@@ -15,14 +24,42 @@ interface UseChatAssistantOptions {
   tripId: number | null
   tripName: string | null
   preferredUtcOffset: number
+  preferredCurrencyId: number | null
   onDataChanged?: () => void
 }
 
-export function useChatAssistant({ tripId, tripName, preferredUtcOffset, onDataChanged }: UseChatAssistantOptions) {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+export function useChatAssistant({ tripId, tripName, preferredUtcOffset, preferredCurrencyId, onDataChanged }: UseChatAssistantOptions) {
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    if (typeof window === "undefined" || !tripId) return []
+    return getActiveSession(tripId).session.messages
+  })
+  const [activeSessionId, setActiveSessionId] = useState<string>(() => {
+    if (typeof window === "undefined" || !tripId) return ""
+    return getActiveSession(tripId).session.id
+  })
+  const [sessions, setSessions] = useState<ChatSession[]>(() => {
+    if (typeof window === "undefined" || !tripId) return []
+    return listSessions(tripId)
+  })
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  // Restore session when tripId changes
+  useEffect(() => {
+    if (!tripId) return
+    const { session } = getActiveSession(tripId)
+    setMessages(session.messages)
+    setActiveSessionId(session.id)
+    setSessions(listSessions(tripId))
+  }, [tripId])
+
+  // Persist messages on change
+  useEffect(() => {
+    if (!tripId || !activeSessionId) return
+    saveMessages(tripId, activeSessionId, messages)
+    setSessions(listSessions(tripId))
+  }, [tripId, activeSessionId, messages])
 
   // Cache for reference data
   const cacheRef = useRef<{
@@ -46,13 +83,18 @@ export function useChatAssistant({ tripId, tripName, preferredUtcOffset, onDataC
 
   const buildSystemPrompt = useCallback(
     (segments: SegmentApi[], options: OptionApi[], segmentTypes: SegmentType[], currencies: Currency[]) => {
+      const preferredCurrencyShortName = preferredCurrencyId
+        ? (currencies.find((c) => c.id === preferredCurrencyId)?.shortName ?? null)
+        : null
+
       const segmentSummary = segments
         .map((s) => {
           const typeName = segmentTypes.find((t) => t.id === s.segmentTypeId)?.name ?? "Unknown"
           const curr = currencies.find((c) => c.id === s.currencyId)?.shortName ?? "?"
           const startLoc = s.startLocation ? normalizeLocation(s.startLocation)?.name : ""
           const endLoc = s.endLocation ? normalizeLocation(s.endLocation)?.name : ""
-          return `  - ID:${s.id} "${s.name}" (${typeName}) ${startLoc}→${endLoc} | ${s.startDateTimeUtc} to ${s.endDateTimeUtc} | ${s.cost} ${curr}`
+          const nicknameStr = s.name && !/^new\s*segment$/i.test(s.name.trim()) ? ` [nickname: "${s.name}"]` : ""
+          return `  - ID:${s.id}${nicknameStr} (${typeName}) ${startLoc}→${endLoc} | ${s.startDateTimeUtc} to ${s.endDateTimeUtc} | ${s.cost} ${curr}`
         })
         .join("\n")
 
@@ -63,9 +105,12 @@ export function useChatAssistant({ tripId, tripName, preferredUtcOffset, onDataC
       const typeList = segmentTypes.map((t) => `${t.name} (ID:${t.id})`).join(", ")
       const currList = currencies.map((c) => `${c.shortName} (ID:${c.id})`).join(", ")
 
+      const utcOffsetLabel = preferredUtcOffset >= 0 ? `UTC+${preferredUtcOffset}` : `UTC${preferredUtcOffset}`
+
       return `You are a travel planning assistant for the TripPlanner app.
 Current trip: "${tripName}" (ID: ${tripId})
-User's preferred UTC offset: ${preferredUtcOffset}
+User's preferred UTC offset: ${preferredUtcOffset} (${utcOffsetLabel})
+User's preferred currency: ${preferredCurrencyShortName ?? "not set"}
 
 Available segment types: ${typeList}
 Available currencies: ${currList}
@@ -84,13 +129,27 @@ When creating/updating segments:
 - If the user doesn't specify a UTC offset, use their preferred offset (${preferredUtcOffset})
 - When updating, only provide fields that need to change (plus the segmentId)
 
+Timezone awareness (critical for flights):
+- Departure times shown in booking screenshots are in the LOCAL timezone of the departure city.
+- Arrival times shown in booking screenshots are in the LOCAL timezone of the arrival city.
+- These are often DIFFERENT — always set startUtcOffset and endUtcOffset independently based on each city's timezone.
+- Use your knowledge of city timezones to determine the correct integer UTC offsets (e.g. Oslo = +1 in winter/+2 in summer, Tokyo = +9).
+- If you are unsure of a city's timezone from the screenshot context, ASK the user before creating or updating the segment.
+- The user's home timezone is ${utcOffsetLabel} — use this as a fallback only when no city timezone can be determined.
+
+Currency awareness:
+- When extracting prices from screenshots, use the ACTUAL currency shown (e.g. if Skyscanner shows "€123", use EUR with cost 123).
+- If the screenshot currency differs from the user's preferred currency (${preferredCurrencyShortName ?? "not set"}), briefly mention the approximate equivalent in ${preferredCurrencyShortName ?? "their preferred currency"} in your summary.
+- If no currency is visible in a screenshot, default to ${preferredCurrencyShortName ?? "EUR"}.
+- Currency symbols can be ambiguous (e.g. "$" could be USD, CAD, AUD) — if unclear from context, note the ambiguity and ask.
+
 IMPORTANT workflow rules:
-- When extracting segments from images or complex input, ALWAYS present a summary of what you plan to create FIRST and ask for confirmation before calling any create tools. List each segment with: type, name, locations, dates/times, cost, and currency.
+- When extracting segments from images or complex input, ALWAYS present a summary of what you plan to create FIRST and ask for confirmation before calling any create tools. List each segment with: type, name, locations, dates/times (with timezone), cost, and currency.
 - Only proceed to create after the user confirms (e.g. "yes", "go ahead", "looks good").
 - For simple direct requests (e.g. "add a flight from Oslo to Budapest"), you can create immediately without asking.
 - Be concise in your responses. Confirm what you did after tool calls complete.`
     },
-    [tripId, tripName, preferredUtcOffset]
+    [tripId, tripName, preferredUtcOffset, preferredCurrencyId]
   )
 
   const sendMessage = useCallback(
@@ -213,6 +272,7 @@ IMPORTANT workflow rules:
             segments: freshSegments,
             options: freshOptions,
             preferredUtcOffset,
+            preferredCurrencyId,
           }
 
           // Execute all tool calls
@@ -262,10 +322,31 @@ IMPORTANT workflow rules:
     abortRef.current?.abort()
   }, [])
 
-  const clearMessages = useCallback(() => {
+  const newConversation = useCallback(() => {
+    if (!tripId) return
+    const { session } = createNewSession(tripId)
     setMessages([])
+    setActiveSessionId(session.id)
+    setSessions(listSessions(tripId))
     setError(null)
-  }, [])
+  }, [tripId])
+
+  const switchToSession = useCallback((sessionId: string) => {
+    if (!tripId) return
+    const { session } = switchSession(tripId, sessionId)
+    setMessages(session.messages)
+    setActiveSessionId(session.id)
+    setError(null)
+  }, [tripId])
+
+  const deleteConversation = useCallback((sessionId: string) => {
+    if (!tripId) return
+    const { session } = deleteSession(tripId, sessionId)
+    setMessages(session.messages)
+    setActiveSessionId(session.id)
+    setSessions(listSessions(tripId))
+    setError(null)
+  }, [tripId])
 
   return {
     messages,
@@ -273,6 +354,10 @@ IMPORTANT workflow rules:
     error,
     sendMessage,
     stopStreaming,
-    clearMessages,
+    newConversation,
+    switchToSession,
+    deleteConversation,
+    sessions,
+    activeSessionId,
   }
 }

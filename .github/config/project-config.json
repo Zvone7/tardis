@@ -42,5 +42,35 @@
             "devTargets": [],
             "productionTargets": []
         }
+    ],
+    "services": [
+        {
+            "name": "tripplanner/be",
+            "paths": [
+                "^projects/tripplanner/backend/.*",
+                "^projects/tripplanner/Dockerfile\\.be$"
+            ]
+        },
+        {
+            "name": "tripplanner/fe",
+            "paths": [
+                "^projects/tripplanner/frontend/.*",
+                "^projects/tripplanner/Dockerfile\\.fe$"
+            ]
+        },
+        {
+            "name": "apartmentpicker/be",
+            "paths": [
+                "^projects/apartmentpicker/backend/.*",
+                "^projects/apartmentpicker/Dockerfile\\.be$"
+            ]
+        },
+        {
+            "name": "apartmentpicker/fe",
+            "paths": [
+                "^projects/apartmentpicker/frontend/.*",
+                "^projects/apartmentpicker/Dockerfile\\.fe$"
+            ]
+        }
     ]
 }

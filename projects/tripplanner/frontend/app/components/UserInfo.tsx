@@ -30,8 +30,8 @@ export function UserInfo() {
       try {
         const userData = await userApi.getAccountInfo()
         setUser(userData)
-      } catch (error) {
-        console.error("Failed to fetch user info:", error)
+      } catch {
+        // Silently ignore on public pages (home, status) — user is simply not logged in
         if (
           window.location.pathname !== "/" &&
           window.location.pathname !== "/status"
@@ -58,7 +58,7 @@ export function UserInfo() {
   }
 
   return (
-    <div className="flex items-center gap-1 group">
+    <div className="flex items-center gap-1">
       {user && (
         <TooltipProvider>
           <Tooltip>
@@ -77,33 +77,35 @@ export function UserInfo() {
         </TooltipProvider>
       )}
 
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={isLoggingOut}
-            className="flex items-center gap-1 text-xs"
-          >
-            <span className="hidden sm:inline opacity-0 group-hover:opacity-100 transition-opacity">Logout</span>
-            <LogOut className="w-3 h-3" />
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Log out?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to log out of TripPlanner?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleLogout} disabled={isLoggingOut}>
-              Log out
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {user && (
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={isLoggingOut}
+              className="group/logout flex items-center gap-1 text-xs"
+            >
+              <LogOut className="w-3 h-3" />
+              <span className="hidden sm:inline overflow-hidden max-w-0 group-hover/logout:max-w-[4rem] transition-all duration-300 whitespace-nowrap">Logout</span>
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Log out?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to log out of TripPlanner?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleLogout} disabled={isLoggingOut}>
+                Log out
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   )
 }
