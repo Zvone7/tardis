@@ -7,7 +7,17 @@ import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
 import { toast } from "../components/ui/use-toast"
-import { Loader2, ChevronLeftIcon, ChevronRightIcon, SaveIcon } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../components/ui/alert-dialog"
+import { Loader2, ChevronLeftIcon, ChevronRightIcon, SaveIcon, XIcon } from "lucide-react"
 import type { SegmentModalProps, SegmentSave, SegmentType, LocationOption } from "../types/models"
 import type { RangeDateTimePickerValue } from "../components/RangeDateTimePicker"
 import type { RangeLocationPickerValue } from "../components/RangeLocationPicker"
@@ -66,6 +76,7 @@ export function SegmentCreationWizard({
   const [step, setStep] = useState(0)
   const [isSaving, setIsSaving] = useState(false)
   const [stepError, setStepError] = useState<string | null>(null)
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false)
 
   // --- Step 1: Type ---
   const [segmentTypeId, setSegmentTypeId] = useState<number | null>(null)
@@ -232,11 +243,29 @@ export function SegmentCreationWizard({
 
   const isLastStep = step === 3 || (step === 2 && !isTransport && !isAccommodation)
   const totalSteps = isTransport || isAccommodation ? 4 : 3
+  const hasInput = segmentTypeId !== null || cost.trim() !== "" || range.startLocal !== "" || locRange.start !== null || locRange.end !== null
+
+  const requestClose = () => {
+    if (hasInput) {
+      setShowDiscardConfirm(true)
+    } else {
+      onCancel()
+    }
+  }
 
   return (
+    <>
     <div className="flex flex-col h-full">
       {/* Step progress */}
-      <div className="px-4 pt-3 pb-2">
+      <div className="relative bg-background px-4 pt-3 pb-2 pr-10">
+        <button
+          type="button"
+          onClick={requestClose}
+          className="absolute right-3 top-3 rounded-sm text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          aria-label="Close"
+        >
+          <XIcon className="h-4 w-4" />
+        </button>
         <div className="flex items-center gap-1.5">
           {STEP_LABELS.slice(0, totalSteps).map((label, i) => (
             <React.Fragment key={label}>
@@ -378,7 +407,7 @@ export function SegmentCreationWizard({
           type="button"
           variant="ghost"
           size="sm"
-          onClick={step === 0 ? onCancel : handleBack}
+          onClick={step === 0 ? requestClose : handleBack}
         >
           {step === 0 ? "Cancel" : <><ChevronLeftIcon className="h-4 w-4 mr-1" />Back</>}
         </Button>
@@ -399,5 +428,20 @@ export function SegmentCreationWizard({
         </Button>
       </div>
     </div>
+    <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Discard segment?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Closing now will discard the information entered for this segment.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Continue editing</AlertDialogCancel>
+          <AlertDialogAction onClick={onCancel}>Discard</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }

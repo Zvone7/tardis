@@ -25,7 +25,7 @@ export function DetailPanel({ isOpen, sheetTitle, children }: DetailPanelProps) 
   if (panelMode === "mobile") {
     return (
       <Sheet open={isOpen} onOpenChange={(open) => { if (!open) handleClose() }}>
-        <SheetContent side="right" hideOverlay className="flex flex-col p-0 w-[90vw] sm:max-w-lg">
+        <SheetContent side="right" hideOverlay hideClose className="flex flex-col p-0 w-[90vw] sm:max-w-lg">
           <SheetTitle className="sr-only">{sheetTitle}</SheetTitle>
           {children(contentRef)}
         </SheetContent>

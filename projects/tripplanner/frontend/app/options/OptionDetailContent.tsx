@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
-import { SaveIcon, Trash2Icon, EyeOffIcon, EyeIcon, LayersIcon, Loader2, LayoutListIcon, CalendarRangeIcon, MapPinIcon } from "lucide-react";
+import { SaveIcon, Trash2Icon, EyeOffIcon, EyeIcon, LayersIcon, Loader2, LayoutListIcon, CalendarRangeIcon, MapPinIcon, XIcon } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { SegmentSelectCard } from "../components/SegmentSelectCard";
 import type { SegmentType, SegmentApi, OptionApi, OptionSave, Currency, CurrencyConversion, Segment } from "../types/models";
@@ -540,7 +540,15 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
   return (
     <>
       <form onSubmit={handleSubmit} className="flex flex-col h-full">
-        <div className="border-b bg-background px-4 py-3 pr-10">
+        <div className="relative border-b bg-background px-4 py-3 pr-10">
+          <button
+            type="button"
+            onClick={requestClose}
+            className="absolute right-3 top-3 rounded-sm text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            aria-label="Close"
+          >
+            <XIcon className="h-4 w-4" />
+          </button>
           <div className="mb-3 space-y-1">
             <div className="flex items-center gap-2 text-lg font-semibold leading-snug">
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-secondary/50 text-secondary-foreground shadow-sm">
@@ -851,4 +859,3 @@ export const OptionDetailContent = forwardRef<OptionDetailContentHandle, OptionD
     </>
   );
 })
-
