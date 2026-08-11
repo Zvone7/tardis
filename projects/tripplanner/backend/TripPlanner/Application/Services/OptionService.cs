@@ -112,22 +112,23 @@ public class OptionService
         }, cancellationToken);
     }
 
-    public async Task UpdateAsync(UpdateOptionAm option, CancellationToken cancellationToken)
+    public async Task UpdateAsync(UpdateOptionAm option, int tripId, CancellationToken cancellationToken)
     {
         await _optionRepository_.UpdateLightAsync(new TripOptionDbm
         {
             id = option.Id,
             name = option.Name,
             is_ui_visible = option.IsUiVisible,
+            trip_id = tripId,
         }, cancellationToken);
     }
 
-    public async Task DeleteAsync(int optionId, CancellationToken cancellationToken)
+    public async Task DeleteAsync(int optionId, int tripId, CancellationToken cancellationToken)
     {
         var option = await _optionRepository_.GetAsync(optionId, cancellationToken);
         if (option == null)
             throw new InvalidDataException($"Option with id {optionId} not found.");
-        await _optionRepository_.DeleteAsync(optionId, cancellationToken);
+        await _optionRepository_.DeleteAsync(optionId, tripId, cancellationToken);
     }
 
     public async Task<int> BatchDeleteAsync(int tripId, List<int> ids, CancellationToken ct)

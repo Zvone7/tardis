@@ -43,11 +43,12 @@ public class Program
 #if RELEASE
         LoadKeyVaultViaDefaultCredential(builder, keyVaultName);
 #else
-        builder.Configuration.AddJsonFile("appsettings.Development.json", optional: true);
+        builder.Configuration.AddJsonFile("appsettings.dev.json", optional: true);
         Console.WriteLine($"{DateTime.UtcNow}|appsettings.dev loaded");
         LoadKeyVaultViaAppRegCredential(builder, keyVaultName);
-        builder.Configuration.AddJsonFile("appsettings.Development.json", optional: true);
-        Console.WriteLine($"{DateTime.UtcNow}|appsettings.dev re-loaded to overwrite keyvault configs");
+        builder.Configuration.AddJsonFile("appsettings.dev.json", optional: true);
+        builder.Configuration.AddJsonFile("appsettings.local.json", optional: true);
+        Console.WriteLine($"{DateTime.UtcNow}|appsettings.local loaded to overwrite keyvault configs");
 #endif
         var appSettings = InitializeAppSettings(builder);
 
@@ -73,6 +74,10 @@ public class Program
         Console.WriteLine($"{DateTime.UtcNow}|Using backendRootUrl: {appSettings.BackendRootUrl}");
         builder.Services.AddSingleton(appSettings);
         Console.WriteLine($"{DateTime.UtcNow}|AppSettings singleton created");
+        var gId = appSettings.GoogleAuthSettings?.ClientId;
+        var gSecret = appSettings.GoogleAuthSettings?.ClientSecret;
+        Console.WriteLine($"{DateTime.UtcNow}|Google ClientId ends with: {(gId?.Length > 4 ? "****" + gId[^4..] : "(not set)")}");
+        Console.WriteLine($"{DateTime.UtcNow}|Google ClientSecret ends with: {(gSecret?.Length > 4 ? "****" + gSecret[^4..] : "(not set)")}");
         return appSettings;
     }
 
@@ -99,6 +104,8 @@ public class Program
         var clientSecret = builder.Configuration.GetValue<string>("AzureAd:ClientSecret");
         if (string.IsNullOrWhiteSpace(clientSecret))
             clientSecret = builder.Configuration["CLIENT_SECRET"];
+        Console.WriteLine($"{DateTime.UtcNow}|Azure ClientId ends with: {(clientId?.Length > 4 ? "****" + clientId[^4..] : "(not set)")}");
+        Console.WriteLine($"{DateTime.UtcNow}|Azure ClientSecret ends with: {(clientSecret?.Length > 4 ? "****" + clientSecret[^4..] : "(not set)")}");
         var clientSecretCredential = new ClientSecretCredential(tenantId, clientId, clientSecret);
 
         builder.Configuration.AddAzureKeyVault(keyvaultUri, clientSecretCredential);

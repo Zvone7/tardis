@@ -37,6 +37,7 @@ public sealed class LocationIqClient : ILocationIqClient
         int limit,
         string? countrycodes,
         string? lang,
+        string? viewbox = null,
         CancellationToken ct = default)
     {
         try
@@ -55,6 +56,7 @@ public sealed class LocationIqClient : ILocationIqClient
             qp["tag"] = "place:country,place:city,place:town,place:village";
             if (!string.IsNullOrWhiteSpace(countrycodes)) qp["countrycodes"] = countrycodes;
             if (!string.IsNullOrWhiteSpace(lang)) qp["accept-language"] = lang;
+            if (!string.IsNullOrWhiteSpace(viewbox)) qp["viewbox"] = viewbox;
             url.Query = qp.ToString();
 
             using var req = new HttpRequestMessage(HttpMethod.Get, url.Uri);
@@ -71,6 +73,10 @@ public sealed class LocationIqClient : ILocationIqClient
             var data = JsonSerializer.Deserialize<List<LocationIqItem>>(resp, JsonOpts)
                        ?? new List<LocationIqItem>();
             return NormalizeResults(data);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception e)
         {
@@ -116,6 +122,10 @@ public sealed class LocationIqClient : ILocationIqClient
 
             return NormalizeResults(new[] { item }).FirstOrDefault();
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception e)
         {
             _logger.LogError(e, "LocationIQ ReverseGeocodeAsync failed");
@@ -158,6 +168,10 @@ public sealed class LocationIqClient : ILocationIqClient
             name = name.Trim();
             country = country.Trim();
             if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(country)) continue;
+
+            // Strip trailing ", {country}" if name already contains it (e.g. "Oslo, Norway" -> "Oslo")
+            if (name.EndsWith($", {country}", StringComparison.OrdinalIgnoreCase))
+                name = name[..^($", {country}".Length)].Trim();
 
             var key = $"{name}|{country}";
             if (!seen.Add(key)) continue;

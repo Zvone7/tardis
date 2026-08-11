@@ -36,11 +36,19 @@ const buildDateRangeLabel = (
   return startLabel || endLabel
 }
 
-const buildCostLabel = (raw?: number | string | null) => {
+const buildCostLabel = (raw?: number | string | null, currencyLabel?: string | null) => {
   if (raw === null || raw === undefined) return ""
+  // If already a non-numeric string (pre-formatted), use as-is
+  if (typeof raw === "string" && Number.isNaN(Number.parseFloat(raw))) return raw
+  // If a string that looks like a pre-formatted label (contains letters), use as-is
+  if (typeof raw === "string" && /[a-zA-Z]/.test(raw)) return raw
   const parsed = typeof raw === "string" ? Number.parseFloat(raw) : Number(raw)
   if (Number.isNaN(parsed)) return ""
-  return `${parsed.toFixed(2)} $`
+  const formatted = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: parsed >= 1000 ? 0 : 2,
+    maximumFractionDigits: parsed >= 1000 ? 0 : 2,
+  }).format(parsed)
+  return currencyLabel ? `${formatted} ${currencyLabel}` : formatted
 }
 
 export interface SegmentTitleConfig {
@@ -59,8 +67,6 @@ export interface SegmentTitleConfig {
 export const buildSegmentTitleTokens = (config: SegmentTitleConfig): TitleToken[] => {
   const tokens: TitleToken[] = []
   const {
-    name,
-    fallbackName = "Segment",
     segmentType,
     startLocationLabel,
     endLocationLabel,
@@ -70,9 +76,6 @@ export const buildSegmentTitleTokens = (config: SegmentTitleConfig): TitleToken[
     endOffset,
     cost,
   } = config
-
-  const displayName = normalizeText(name, fallbackName || "Segment")
-  if (displayName) tokens.push({ key: "name", text: displayName, emphasize: true })
 
   if (segmentType?.name) {
     tokens.push({ key: "type", text: "", iconSvg: segmentType.iconSvg })
@@ -102,6 +105,7 @@ export interface OptionTitleConfig {
   startOffset?: number | null
   endOffset?: number | null
   totalCost?: number | string | null
+  currencyLabel?: string | null
 }
 
 export const buildOptionTitleTokens = (config: OptionTitleConfig): TitleToken[] => {
@@ -118,6 +122,7 @@ export const buildOptionTitleTokens = (config: OptionTitleConfig): TitleToken[] 
     startOffset,
     endOffset,
     totalCost,
+    currencyLabel,
   } = config
 
   const displayName = normalizeText(name, fallbackName || "Option")
@@ -136,7 +141,7 @@ export const buildOptionTitleTokens = (config: OptionTitleConfig): TitleToken[] 
   const dateLabel = buildDateRangeLabel(startDateIso, endDateIso, startOffset, endOffset)
   if (dateLabel) tokens.push({ key: "dates", text: dateLabel })
 
-  const costLabel = buildCostLabel(totalCost)
+  const costLabel = buildCostLabel(totalCost, currencyLabel)
   if (costLabel) tokens.push({ key: "cost", text: costLabel })
 
   return tokens
@@ -194,12 +199,18 @@ export const summarizeSegmentsForOption = (
   }
 }
 
+const isPlaceholderName = (name?: string | null) =>
+  !name?.trim() || /^new\s*segment$/i.test(name.trim())
+
+export const getSegmentNickname = (name?: string | null): string | null =>
+  isPlaceholderName(name) ? null : (name as string).trim()
+
 export const buildSegmentConfigFromApi = (
   segment: SegmentApi,
   segmentType?: SegmentType,
 ): SegmentTitleConfig => ({
-  name: segment.name,
-  fallbackName: segmentType?.name ?? segment.name,
+  name: isPlaceholderName(segment.name) ? null : segment.name,
+  fallbackName: segmentType?.name ?? (isPlaceholderName(segment.name) ? undefined : segment.name),
   segmentType: segmentType ?? null,
   startLocationLabel: getStartLocation(segment as any)?.name ?? "",
   endLocationLabel: getEndLocation(segment as any)?.name ?? "",

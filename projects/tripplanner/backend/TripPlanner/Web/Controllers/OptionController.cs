@@ -51,7 +51,7 @@ public class OptionController : ControllerBase
     [Route(nameof(UpdateOption))]
     public async Task<ActionResult> UpdateOption([FromQuery] int tripId, UpdateOptionAm option, CancellationToken cancellationToken)
     {
-        await _optionService_.UpdateAsync(option, cancellationToken);
+        await _optionService_.UpdateAsync(option, tripId, cancellationToken);
         return Ok();
     }
 
@@ -60,7 +60,7 @@ public class OptionController : ControllerBase
     [Route(nameof(DeleteOption))]
     public async Task<ActionResult> DeleteOption(int tripId, int optionId, CancellationToken cancellationToken)
     {
-        await _optionService_.DeleteAsync(optionId, cancellationToken);
+        await _optionService_.DeleteAsync(optionId, tripId, cancellationToken);
         return Ok();
     }
 

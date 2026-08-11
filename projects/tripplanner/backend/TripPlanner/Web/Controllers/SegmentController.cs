@@ -39,7 +39,7 @@ public class SegmentController : ControllerBase
     [HttpPost]
     [ServiceFilter(typeof(TripAccessFilterAttribute))]
     [Route(nameof(CreateSegment))]
-    public async Task<ActionResult> CreateSegment([FromQuery]int tripId, SegmentDto segment, CancellationToken cancellationToken)
+    public async Task<ActionResult> CreateSegment([FromQuery]int tripId, [FromBody] SegmentDto segment, CancellationToken cancellationToken)
     {
         await _segmentService_.CreateAsync(segment, cancellationToken);
         return Ok();
@@ -48,7 +48,7 @@ public class SegmentController : ControllerBase
     [HttpPut]
     [ServiceFilter(typeof(TripAccessFilterAttribute))]
     [Route(nameof(UpdateSegment))]
-    public async Task<ActionResult> UpdateSegment([FromQuery]int tripId, SegmentDto segment, CancellationToken cancellationToken)
+    public async Task<ActionResult> UpdateSegment([FromQuery]int tripId, [FromBody] SegmentDto segment, CancellationToken cancellationToken)
     {
         await _segmentService_.UpdateAsync(segment, cancellationToken);
         return Ok();
@@ -59,7 +59,7 @@ public class SegmentController : ControllerBase
     [Route(nameof(DeleteSegment))]
     public async Task<ActionResult> DeleteSegment(int tripId, int segmentId, CancellationToken cancellationToken)
     {
-        await _segmentService_.DeleteAsync(segmentId, cancellationToken);
+        await _segmentService_.DeleteAsync(segmentId, tripId, cancellationToken);
         return Ok();
     }
 
@@ -76,6 +76,7 @@ public class SegmentController : ControllerBase
     [Route(nameof(UpdateConnectedOptions))]
     public async Task<ActionResult> UpdateConnectedOptions([FromQuery]int tripId, UpdateConnectedOptionsAm am, CancellationToken cancellationToken)
     {
+        am.TripId = tripId;
         await _segmentService_.ConnectSegmentWithOptionsAsync(am, cancellationToken);
         return Ok();
     }

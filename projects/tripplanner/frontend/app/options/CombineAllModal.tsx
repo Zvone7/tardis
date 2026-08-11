@@ -20,6 +20,8 @@ import { formatDateStr } from "../utils/dateformatters";
 import { formatCurrencyAmount } from "../utils/currency";
 import { RangeLocationPicker, type RangeLocationPickerValue } from "../components/RangeLocationPicker";
 import type { SegmentApi, SegmentType, Currency, LocationOption } from "../types/models";
+import { locationKeyOf } from "../lib/tripLocations";
+import { buildSegmentTitleTokens, buildSegmentConfigFromApi, getSegmentNickname, tokensToLabel } from "../utils/formatters";
 
 interface LocationEntry {
   id: number;
@@ -60,14 +62,17 @@ export default function CombineAllModal({
   const [excludedTypeIds, setExcludedTypeIds] = useState<Set<number>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Extract unique locations from all segments, deduplicated by lat/lng
+  // Extract unique locations from all segments, deduplicated by proximity key (~111m)
   const locations = useMemo(() => {
     const map = new Map<string, LocationEntry>();
     const addLoc = (loc: any) => {
-      if (!loc?.id || loc.latitude == null || loc.longitude == null) return;
-      const key = `${loc.latitude},${loc.longitude}`;
+      if (!loc?.id) return;
+      const key = locationKeyOf(loc);
+      if (!key) return;
       if (!map.has(key)) {
-        map.set(key, { id: loc.id, label: formatLocationLabel(loc), lat: loc.latitude, lng: loc.longitude, key });
+        const lat = loc.lat ?? loc.latitude ?? 0;
+        const lng = loc.lng ?? loc.longitude ?? 0;
+        map.set(key, { id: loc.id, label: formatLocationLabel(loc), lat, lng, key });
       }
     };
     for (const seg of segments) {
@@ -86,11 +91,12 @@ export default function CombineAllModal({
     lng: entry.lng,
   }), []);
 
-  // Find LocationEntry by LocationOption's lat/lng
+  // Find LocationEntry by LocationOption's proximity key
   const entryFromOption = useCallback(
     (opt: LocationOption | null): LocationEntry | null => {
       if (!opt) return null;
-      const key = `${opt.lat},${opt.lng}`;
+      const key = locationKeyOf(opt);
+      if (!key) return null;
       return locations.find((l) => l.key === key) ?? null;
     },
     [locations],
@@ -98,11 +104,6 @@ export default function CombineAllModal({
 
   const startEntry = useMemo(() => entryFromOption(locRange.start), [locRange.start, entryFromOption]);
   const endEntry = useMemo(() => entryFromOption(locRange.end), [locRange.end, entryFromOption]);
-
-  const locKeyOf = (loc: any): string | null => {
-    if (!loc || loc.latitude == null || loc.longitude == null) return null;
-    return `${loc.latitude},${loc.longitude}`;
-  };
 
   const hasBothLocations = !!startEntry && !!endEntry;
 
@@ -112,8 +113,8 @@ export default function CombineAllModal({
     const keySet = new Set([startEntry.key, endEntry.key]);
 
     return segments.filter((s) => {
-      const sStartKey = locKeyOf((s as any).startLocation);
-      const sEndKey = locKeyOf((s as any).endLocation);
+      const sStartKey = locationKeyOf((s as any).startLocation);
+      const sEndKey = locationKeyOf((s as any).endLocation);
       return sStartKey && sEndKey && keySet.has(sStartKey) && keySet.has(sEndKey);
     });
   }, [segments, startEntry, endEntry]);
@@ -124,8 +125,8 @@ export default function CombineAllModal({
     for (const seg of matchingSegments) {
       const sStart = (seg as any).startLocation;
       const sEnd = (seg as any).endLocation;
-      const sStartKey = locKeyOf(sStart);
-      const sEndKey = locKeyOf(sEnd);
+      const sStartKey = locationKeyOf(sStart);
+      const sEndKey = locationKeyOf(sEnd);
       if (!sStartKey || !sEndKey) continue;
       const key = `${sStartKey}->${sEndKey}`;
       if (!map.has(key)) {
@@ -310,7 +311,15 @@ export default function CombineAllModal({
                                 onCheckedChange={() => toggleSegment(seg.id)}
                               />
                               <span className="flex-1 min-w-0">
-                                {seg.name ? <span className="block truncate">{seg.name}</span> : null}
+                                <span
+                                  className="block truncate text-sm"
+                                  title={getSegmentNickname(seg.name) ?? undefined}
+                                >
+                                  {tokensToLabel(buildSegmentTitleTokens(buildSegmentConfigFromApi(seg, segmentTypes.find((t) => t.id === seg.segmentTypeId)))) || getSegmentTypeName(seg.segmentTypeId)}
+                                </span>
+                                {getSegmentNickname(seg.name) && (
+                                  <span className="block text-xs text-muted-foreground italic truncate">"{getSegmentNickname(seg.name)}"</span>
+                                )}
                                 <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                   <span>{getSegmentTypeName(seg.segmentTypeId)}</span>
                                   <span>·</span>

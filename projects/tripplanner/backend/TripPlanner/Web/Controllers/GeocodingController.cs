@@ -23,6 +23,7 @@ public class GeocodingController : ControllerBase
         [FromQuery] int limit = 8,
         [FromQuery] string? countrycodes = null,
         [FromQuery] string? lang = null,
+        [FromQuery] string? viewbox = null,
         CancellationToken ct = default)
     {
         var query = (q ?? string.Empty).Trim();
@@ -34,10 +35,14 @@ public class GeocodingController : ControllerBase
         try
         {
             var results = await _client.ForwardGeocodeAsync(
-                query, limit, countrycodes, lang, ct);
+                query, limit, countrycodes, lang, viewbox, ct);
 
             var normalized = results.Select(LocationSearchResult.FromLocationIq).ToList();
             return Ok(normalized);
+        }
+        catch (OperationCanceledException)
+        {
+            return Ok(Array.Empty<LocationSearchResult>());
         }
         catch (LocationIqException ex)
         {

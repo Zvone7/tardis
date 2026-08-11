@@ -192,7 +192,7 @@ public sealed class GoogleFlightsLinkParser : IGoogleFlightsLinkParser
 
     private async Task<LocationDto?> TryGeocodeAsync(string query, CancellationToken cancellationToken)
     {
-        var results = await _locationIqClient.ForwardGeocodeAsync(query, 1, null, null, cancellationToken);
+        var results = await _locationIqClient.ForwardGeocodeAsync(query, 1, null, null, null, cancellationToken);
         var best = results.FirstOrDefault();
         if (best == null) return null;
 

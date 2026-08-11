@@ -122,30 +122,12 @@ public class SegmentService
         LocationDbm endLocation = null;
         if (segment.StartLocation != null)
         {
-            startLocation = await _locationRepository.CreateAsync(new LocationDbm
-            {
-                name = segment.StartLocation.Name,
-                provider = segment.StartLocation.Provider,
-                provider_place_id = segment.StartLocation.ProviderPlaceId,
-                country_code = segment.StartLocation.CountryCode,
-                country = segment.StartLocation.Country,
-                lat = segment.StartLocation.Latitude,
-                lng = segment.StartLocation.Longitude,
-            }, cancellationToken);
+            startLocation = await GetOrCreateLocationAsync(segment.StartLocation, cancellationToken);
         }
 
         if (segment.EndLocation != null)
         {
-            endLocation = await _locationRepository.CreateAsync(new LocationDbm
-            {
-                name = segment.EndLocation.Name,
-                provider = segment.EndLocation.Provider,
-                provider_place_id = segment.EndLocation.ProviderPlaceId,
-                country_code = segment.EndLocation.CountryCode,
-                country = segment.EndLocation.Country,
-                lat = segment.EndLocation.Latitude,
-                lng = segment.EndLocation.Longitude,
-            }, cancellationToken);
+            endLocation = await GetOrCreateLocationAsync(segment.EndLocation, cancellationToken);
         }
 
         await _segmentRepository_.CreateAsync(new SegmentDbm
@@ -157,7 +139,7 @@ public class SegmentService
             end_datetime_utc_offset = segment.EndDateTimeUtcOffset,
             name = segment.Name,
             cost = segment.Cost,
-            segment_type_id = segment.SegmentTypeId,
+            segment_type_id = segment.SegmentTypeId ?? 0,
             comment = segment.Comment,
             start_location_id = startLocation?.id,
             end_location_id = endLocation?.id,
@@ -177,16 +159,7 @@ public class SegmentService
             {
                 if (segment.StartLocation.Id == 0)
                 {
-                    var startLocation = await _locationRepository.CreateAsync(new LocationDbm
-                    {
-                        name = segment.StartLocation.Name,
-                        provider = segment.StartLocation.Provider,
-                        provider_place_id = segment.StartLocation.ProviderPlaceId,
-                        country_code = segment.StartLocation.CountryCode,
-                        country = segment.StartLocation.Country,
-                        lat = segment.StartLocation.Latitude,
-                        lng = segment.StartLocation.Longitude,
-                    }, cancellationToken);
+                    var startLocation = await GetOrCreateLocationAsync(segment.StartLocation, cancellationToken);
                     segment.StartLocation.Id = startLocation.id;
                 }
                 else
@@ -209,16 +182,7 @@ public class SegmentService
             {
                 if (segment.EndLocation.Id == 0)
                 {
-                    var endLocation = await _locationRepository.CreateAsync(new LocationDbm
-                    {
-                        name = segment.EndLocation.Name,
-                        provider = segment.EndLocation.Provider,
-                        provider_place_id = segment.EndLocation.ProviderPlaceId,
-                        country_code = segment.EndLocation.CountryCode,
-                        country = segment.EndLocation.Country,
-                        lat = segment.EndLocation.Latitude,
-                        lng = segment.EndLocation.Longitude,
-                    }, cancellationToken);
+                    var endLocation = await GetOrCreateLocationAsync(segment.EndLocation, cancellationToken);
                     segment.EndLocation.Id = endLocation.id;
                 }
                 else
@@ -241,6 +205,8 @@ public class SegmentService
                 ? persistedSegment?.currency_id ?? 1
                 : segment.CurrencyId;
 
+            var segmentTypeId = segment.SegmentTypeId ?? persistedSegment?.segment_type_id ?? 0;
+
             await _segmentRepository_.UpdateAsync(new SegmentDbm
             {
                 id = segment.Id,
@@ -251,7 +217,7 @@ public class SegmentService
                 end_datetime_utc_offset = segment.EndDateTimeUtcOffset,
                 name = segment.Name,
                 cost = segment.Cost,
-                segment_type_id = segment.SegmentTypeId,
+                segment_type_id = segmentTypeId,
                 comment = segment.Comment,
                 start_location_id = segment.StartLocation?.Id,
                 end_location_id = segment.EndLocation?.Id,
@@ -268,9 +234,9 @@ public class SegmentService
         }
     }
 
-    public async Task DeleteAsync(int segmentId, CancellationToken cancellationToken)
+    public async Task DeleteAsync(int segmentId, int tripId, CancellationToken cancellationToken)
     {
-        await _segmentRepository_.DeleteAsync(segmentId, cancellationToken);
+        await _segmentRepository_.DeleteAsync(segmentId, tripId, cancellationToken);
         await UpdateOptionsRelatedBySegmentIdAsync(segmentId, cancellationToken);
     }
 
@@ -431,16 +397,7 @@ public class SegmentService
         {
             if (am.StartLocation.Id == 0)
             {
-                var created = await _locationRepository.CreateAsync(new LocationDbm
-                {
-                    name = am.StartLocation.Name,
-                    provider = am.StartLocation.Provider,
-                    provider_place_id = am.StartLocation.ProviderPlaceId,
-                    country_code = am.StartLocation.CountryCode,
-                    country = am.StartLocation.Country,
-                    lat = am.StartLocation.Latitude,
-                    lng = am.StartLocation.Longitude,
-                }, cancellationToken);
+                var created = await GetOrCreateLocationAsync(am.StartLocation, cancellationToken);
                 startLocationId = created.id;
             }
             else
@@ -464,16 +421,7 @@ public class SegmentService
         {
             if (am.EndLocation.Id == 0)
             {
-                var created = await _locationRepository.CreateAsync(new LocationDbm
-                {
-                    name = am.EndLocation.Name,
-                    provider = am.EndLocation.Provider,
-                    provider_place_id = am.EndLocation.ProviderPlaceId,
-                    country_code = am.EndLocation.CountryCode,
-                    country = am.EndLocation.Country,
-                    lat = am.EndLocation.Latitude,
-                    lng = am.EndLocation.Longitude,
-                }, cancellationToken);
+                var created = await GetOrCreateLocationAsync(am.EndLocation, cancellationToken);
                 endLocationId = created.id;
             }
             else
@@ -501,5 +449,26 @@ public class SegmentService
         }
 
         return am.SegmentIds.Count;
+    }
+
+    private async Task<LocationDbm> GetOrCreateLocationAsync(LocationDto dto, CancellationToken ct)
+    {
+        if (dto.Id > 0)
+        {
+            var existing = await _locationRepository.GetAsync(dto.Id, ct);
+            if (existing != null) return existing;
+        }
+        var nearby = await _locationRepository.FindByProximityAsync(dto.Latitude, dto.Longitude, ct);
+        if (nearby != null) return nearby;
+        return await _locationRepository.CreateAsync(new LocationDbm
+        {
+            name = dto.Name,
+            provider = dto.Provider,
+            provider_place_id = dto.ProviderPlaceId,
+            country_code = dto.CountryCode,
+            country = dto.Country,
+            lat = dto.Latitude,
+            lng = dto.Longitude,
+        }, ct);
     }
 }

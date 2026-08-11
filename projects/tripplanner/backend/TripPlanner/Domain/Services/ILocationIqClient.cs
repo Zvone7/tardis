@@ -8,6 +8,7 @@ public interface ILocationIqClient
         int limit,
         string? countrycodes,
         string? lang,
+        string? viewbox = null,
         CancellationToken ct = default);
 
     Task<LocationIqItem?> ReverseGeocodeAsync(

@@ -49,9 +49,11 @@ export default function BatchConnectSegmentModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterState, setFilterState] = useState<SegmentFilterValue>({
-    locations: [],
-    types: [],
+    locations: null,
+    types: null,
     dateRange: { start: "", end: "" },
+    costMin: null,
+    costMax: null,
     showHidden: false,
   });
   const [sortState, setSortState] = useState<SegmentSortValue | null>(null);
@@ -137,7 +139,7 @@ export default function BatchConnectSegmentModal({
 
   const handleClose = () => {
     setSelectedSegmentIds([]);
-    setFilterState({ locations: [], types: [], dateRange: { start: "", end: "" }, showHidden: false });
+    setFilterState({ locations: null, types: null, dateRange: { start: "", end: "" }, costMin: null, costMax: null, showHidden: false });
     setSortState(null);
     setFilterOpen(false);
     setConnect(true);
@@ -223,8 +225,6 @@ export default function BatchConnectSegmentModal({
             availableTypes={filterMetadata.types}
             minDate={filterMetadata.dateBounds.min}
             maxDate={filterMetadata.dateBounds.max}
-            open={filterOpen}
-            onOpenChange={setFilterOpen}
           />
           <ScrollArea className="h-[calc(100%-80px)] border rounded-md p-3">
             {filteredSegments.length === 0 ? (
@@ -238,7 +238,7 @@ export default function BatchConnectSegmentModal({
                   ...segmentConfig,
                   cost: segmentCostLabel ?? segmentConfig.cost,
                 });
-                const summaryLabel = tokensToLabel(tokens) || segment.name;
+                const summaryLabel = tokensToLabel(tokens) || "Segment";
                 const isHiddenSegment = segment.isUiVisible === false;
                 const dimmed = !filterState.showHidden && isHiddenSegment;
                 const dateRangeLabel = `${formatSegmentDateLabel(segment.startDateTimeUtc)} → ${formatSegmentDateLabel(segment.endDateTimeUtc)}`;

@@ -3,12 +3,6 @@
 import React from "react";
 import { EyeIcon, EyeOffIcon, Trash2Icon, XIcon, CheckSquareIcon } from "lucide-react";
 import { Button } from "./ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "./ui/tooltip";
 
 export interface SelectPopupMenuAction {
   icon: React.ReactNode;
@@ -30,24 +24,16 @@ interface SelectPopupMenuProps {
   extraActions?: SelectPopupMenuAction[];
 }
 
-function IconButton({
-  icon,
-  label,
-  onClick,
-  variant = "outline",
-  disabled,
-}: SelectPopupMenuAction) {
+function ActionButton({ icon, label, onClick, variant = "outline", disabled }: SelectPopupMenuAction) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button size="sm" variant={variant} onClick={onClick} disabled={disabled}>
-          {icon}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="top">{label}</TooltipContent>
-    </Tooltip>
+    <Button size="sm" variant={variant} onClick={onClick} disabled={disabled}>
+      {icon}
+      <span className="ml-1.5">{label}</span>
+    </Button>
   );
 }
+
+const Divider = () => <div className="h-5 w-px bg-border" />;
 
 export default function SelectPopupMenu({
   selectedCount,
@@ -63,49 +49,51 @@ export default function SelectPopupMenu({
   if (selectedCount === 0) return null;
 
   return (
-    <TooltipProvider delayDuration={300}>
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-lg border bg-background px-3 py-2 shadow-lg">
-        <span className="text-sm font-medium whitespace-nowrap">
-          {selectedCount} selected
-        </span>
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-lg border bg-background px-3 py-2 shadow-lg">
+      {/* Selection group */}
+      <span className="text-sm font-medium whitespace-nowrap">
+        {selectedCount} selected
+      </span>
+      <ActionButton
+        icon={<CheckSquareIcon className="h-4 w-4" />}
+        label={`All (${totalCount})`}
+        onClick={onSelectAll}
+      />
 
-        <IconButton
-          icon={<CheckSquareIcon className="h-4 w-4" />}
-          label={`Select all (${totalCount})`}
-          onClick={onSelectAll}
-          variant="outline"
-        />
+      {extraActions && extraActions.length > 0 && (
+        <>
+          <Divider />
+          {extraActions.map((action, i) => (
+            <ActionButton key={i} {...action} />
+          ))}
+        </>
+      )}
 
-        {extraActions?.map((action, i) => (
-          <IconButton key={i} {...action} />
-        ))}
+      <Divider />
 
-        <IconButton
-          icon={<EyeOffIcon className="h-4 w-4" />}
-          label="Hide"
-          onClick={onHide}
-          variant="outline"
-        />
-        <IconButton
-          icon={<EyeIcon className="h-4 w-4" />}
-          label="Show"
-          onClick={onShow}
-          variant="outline"
-        />
-        <IconButton
-          icon={<Trash2Icon className="h-4 w-4" />}
-          label="Delete"
-          onClick={onDelete}
-          variant="destructive"
-          disabled={isDeleting}
-        />
-        <IconButton
-          icon={<XIcon className="h-4 w-4" />}
-          label="Clear selection"
-          onClick={onClear}
-          variant="ghost"
-        />
-      </div>
-    </TooltipProvider>
+      {/* State group */}
+      <ActionButton
+        icon={<EyeOffIcon className="h-4 w-4" />}
+        label="Hide"
+        onClick={onHide}
+      />
+      <ActionButton
+        icon={<EyeIcon className="h-4 w-4" />}
+        label="Show"
+        onClick={onShow}
+      />
+      <ActionButton
+        icon={<Trash2Icon className="h-4 w-4" />}
+        label="Delete"
+        onClick={onDelete}
+        variant="destructive"
+        disabled={isDeleting}
+      />
+
+      {/* Clear — icon-only, ghost */}
+      <Button size="sm" variant="ghost" onClick={onClear} aria-label="Clear selection">
+        <XIcon className="h-4 w-4" />
+      </Button>
+    </div>
   );
 }

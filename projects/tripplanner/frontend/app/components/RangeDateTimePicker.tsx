@@ -1,11 +1,11 @@
 // components/RangeDateTimePicker.tsx
 "use client"
 
-import React, { useMemo } from "react"
+import React, { useMemo, useEffect, useRef } from "react"
 import { Label } from "./ui/label"
 import { Input } from "./ui/input"
 import { Button } from "./ui/button"
-import { TimezoneSelector } from "../components/TimeZoneSelector" // your existing one
+import { TimezoneSelector } from "../components/TimeZoneSelector"
 import { ArrowLeftRight } from "lucide-react"
 
 export interface RangeDateTimePickerValue {
@@ -28,6 +28,10 @@ interface RangeDateTimePickerProps {
   allowDifferentOffsets?: boolean
   /** default: false. If true, compact spacing */
   compact?: boolean
+  /** default: false. If true, end time is always shown and cannot be removed */
+  requireEnd?: boolean
+  /** default: false. If true, show "X nights" count when both start and end are set */
+  showNights?: boolean
 }
 
 /** Helpers (no timezone libs; pure offset math) */
@@ -37,12 +41,10 @@ function pad(n: number) {
 
 /** Build UTC ms from a local wall time and hour offset */
 function localToUtcMs(local: string, offsetH: number): number {
-  // local is "YYYY-MM-DDTHH:mm"
   if (!local) return Number.NaN
   const [datePart, timePart] = local.split("T")
   const [y, m, d] = datePart.split("-").map((s) => Number.parseInt(s, 10))
   const [hh, mm] = (timePart || "00:00").split(":").map((s) => Number.parseInt(s, 10))
-  // Treat local wall-time as if it were UTC components, then subtract offset to get real UTC
   const asUtc = Date.UTC(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0, 0, 0)
   return asUtc - offsetH * 60 * 60 * 1000
 }
@@ -57,19 +59,95 @@ function utcMsToLocal(utcMs: number, offsetH: number): string {
   )}:${pad(d.getUTCMinutes())}`
 }
 
+/** Round a "YYYY-MM-DDTHH:mm" string to the nearest 5-minute mark */
+function roundToFiveMinutes(val: string): string {
+  if (!val) return val
+  const [date, time] = val.split("T")
+  if (!time) return val
+  const [hhStr, mmStr] = time.split(":")
+  const hh = Number.parseInt(hhStr ?? "0", 10)
+  const mm = Number.parseInt(mmStr ?? "0", 10)
+  const rounded = Math.round(mm / 5) * 5
+  const overflow = rounded >= 60
+  const finalH = overflow ? (hh + 1) % 24 : hh
+  const finalM = overflow ? 0 : rounded
+  return `${date}T${pad(finalH)}:${pad(finalM)}`
+}
+
+/** Format a duration in ms to a human-readable string (Xh Ym or +X days) */
+function formatDuration(durationMs: number): string {
+  if (durationMs <= 0) return ""
+  const totalMinutes = Math.round(durationMs / 60_000)
+  const days = Math.floor(totalMinutes / (60 * 24))
+  if (days >= 1) {
+    return `+${days} ${days === 1 ? "day" : "days"}`
+  }
+  const hours = Math.floor(totalMinutes / 60)
+  const mins = totalMinutes % 60
+  if (hours === 0) return `${mins}m`
+  if (mins === 0) return `${hours}h`
+  return `${hours}h ${mins}m`
+}
+
+const MIN_GAP_MS = 5 * 60 * 1000 // 5 minutes
+
 export const RangeDateTimePicker: React.FC<RangeDateTimePickerProps> = React.memo(
-  ({ id, label = "When", value, onChange, allowDifferentOffsets = false, compact = false }) => {
+  ({ id, label = "When", value, onChange, allowDifferentOffsets = false, compact = false, requireEnd = false, showNights = false }) => {
     const { startLocal, endLocal, startOffsetH, endOffsetH } = value
 
-    // Effective end offset (falls back to startOffsetH)
     const effEndOffset = endOffsetH ?? startOffsetH
 
-    // Compute a min for the end field: start instant seen in end offset
+    // Track previous start to detect when it moves later (to auto-advance end)
+    const prevStartUtcMsRef = useRef<number>(Number.NaN)
+
+    // Auto-advance end time if start moves later and end would be < 5 min after start
+    useEffect(() => {
+      if (!startLocal || endLocal === null) return
+      const startUtcMs = localToUtcMs(startLocal, startOffsetH)
+      if (!Number.isFinite(startUtcMs)) return
+
+      const endUtcMs = localToUtcMs(endLocal, effEndOffset)
+      const minEndUtcMs = startUtcMs + MIN_GAP_MS
+
+      if (!Number.isFinite(endUtcMs) || endUtcMs < minEndUtcMs) {
+        const newEndLocal = utcMsToLocal(minEndUtcMs, effEndOffset)
+        onChange({ ...value, endLocal: newEndLocal })
+      }
+
+      prevStartUtcMsRef.current = startUtcMs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [startLocal, startOffsetH, endLocal, effEndOffset])
+
+    // Compute nights count from calendar date diff (ignoring time)
+    const nightsCount = useMemo(() => {
+      if (!showNights || !startLocal || !endLocal) return null
+      const startDate = startLocal.split("T")[0]
+      const endDate = endLocal.split("T")[0]
+      if (!startDate || !endDate) return null
+      const startMs = new Date(startDate).getTime()
+      const endMs = new Date(endDate).getTime()
+      const nights = Math.round((endMs - startMs) / (1000 * 60 * 60 * 24))
+      return nights > 0 ? nights : null
+    }, [showNights, startLocal, endLocal])
+
+    // Duration label for non-accommodation (shows hours/minutes or days)
+    const durationLabel = useMemo(() => {
+      if (showNights) return null // accommodation uses nights count instead
+      if (!startLocal || !endLocal) return null
+      const startUtcMs = localToUtcMs(startLocal, startOffsetH)
+      const endUtcMs = localToUtcMs(endLocal, effEndOffset)
+      if (!Number.isFinite(startUtcMs) || !Number.isFinite(endUtcMs)) return null
+      const durationMs = endUtcMs - startUtcMs
+      if (durationMs <= 0) return null
+      return formatDuration(durationMs)
+    }, [showNights, startLocal, endLocal, startOffsetH, effEndOffset])
+
+    // Compute a min for the end field: start instant + 5 min seen in end offset
     const endMinLocal = useMemo(() => {
       if (!startLocal) return undefined
       const startUtcMs = localToUtcMs(startLocal, startOffsetH)
       if (!Number.isFinite(startUtcMs)) return undefined
-      return utcMsToLocal(startUtcMs, effEndOffset)
+      return utcMsToLocal(startUtcMs + MIN_GAP_MS, effEndOffset)
     }, [startLocal, startOffsetH, effEndOffset])
 
     const handleSwap = () => {
@@ -84,11 +162,18 @@ export const RangeDateTimePicker: React.FC<RangeDateTimePickerProps> = React.mem
       }
     }
 
+    const handleStartChange = (raw: string) => {
+      onChange({ ...value, startLocal: roundToFiveMinutes(raw) })
+    }
+
+    const handleEndChange = (raw: string) => {
+      onChange({ ...value, endLocal: roundToFiveMinutes(raw) })
+    }
+
     const grid = compact ? "grid grid-cols-4 items-center gap-2" : "grid grid-cols-4 items-center gap-3"
 
     return (
       <div className="space-y-3">
-        {/* Group label */}
         <div className={grid}>
           <Label htmlFor={`${id}-start`} className="text-right text-sm">
             Start
@@ -98,15 +183,14 @@ export const RangeDateTimePicker: React.FC<RangeDateTimePickerProps> = React.mem
               id={`${id}-start`}
               type="datetime-local"
               value={startLocal}
-              onChange={(e) => onChange({ ...value, startLocal: e.target.value })}
+              step={300}
+              onChange={(e) => handleStartChange(e.target.value)}
               className="w-full md:w-56 text-sm"
             />
-
             <TimezoneSelector
               label=""
               value={startOffsetH}
               onChange={(utcOffset) => {
-                // Keep the local wall time as typed; just change the offset
                 onChange({ ...value, startOffsetH: utcOffset })
               }}
               id={`${id}-start-tz`}
@@ -133,9 +217,7 @@ export const RangeDateTimePicker: React.FC<RangeDateTimePickerProps> = React.mem
           </div>
         )}
 
-        {/* End controls */}
-        {endLocal === null ? (
-          // Collapsed state
+        {endLocal === null && !requireEnd ? (
           <div className={grid}>
             <Label className="text-right text-sm" />
             <div className="col-span-3">
@@ -155,7 +237,7 @@ export const RangeDateTimePicker: React.FC<RangeDateTimePickerProps> = React.mem
               </Button>
             </div>
           </div>
-        ) : (
+        ) : endLocal !== null ? (
           <div className="space-y-2">
             <div className={grid}>
               <Label htmlFor={`${id}-end`} className="text-right text-sm">
@@ -167,7 +249,8 @@ export const RangeDateTimePicker: React.FC<RangeDateTimePickerProps> = React.mem
                   type="datetime-local"
                   value={endLocal}
                   min={endMinLocal}
-                  onChange={(e) => onChange({ ...value, endLocal: e.target.value })}
+                  step={300}
+                  onChange={(e) => handleEndChange(e.target.value)}
                   className="w-full md:w-56 text-sm"
                 />
                 {allowDifferentOffsets ? (
@@ -187,29 +270,41 @@ export const RangeDateTimePicker: React.FC<RangeDateTimePickerProps> = React.mem
               </div>
             </div>
 
-            {/* Clear end button placed below end inputs, left-aligned */}
-            <div className={grid}>
-              <Label className="text-right text-sm" />
-              <div className="col-span-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onChange({ ...value, endLocal: null, endOffsetH: null })}
-                >
-                  Remove end time
-                </Button>
+            {/* Duration / nights display */}
+            {nightsCount !== null && (
+              <div className={grid}>
+                <Label className="text-right text-sm" />
+                <div className="col-span-3 text-sm text-muted-foreground">
+                  {nightsCount} {nightsCount === 1 ? "night" : "nights"}
+                </div>
               </div>
-            </div>
+            )}
+            {durationLabel && (
+              <div className={grid}>
+                <Label className="text-right text-sm" />
+                <div className="col-span-3 text-sm text-muted-foreground">
+                  {durationLabel}
+                </div>
+              </div>
+            )}
 
-            <div className={grid}>
-              <Label className="text-right text-xs text-muted-foreground" />
-              <div className="col-span-3 text-xs text-muted-foreground">
-                End must be at the same time or after start.
+            {!requireEnd && (
+              <div className={grid}>
+                <Label className="text-right text-sm" />
+                <div className="col-span-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onChange({ ...value, endLocal: null, endOffsetH: null })}
+                  >
+                    Remove end time
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
-        )}
+        ) : null}
       </div>
     )
   },

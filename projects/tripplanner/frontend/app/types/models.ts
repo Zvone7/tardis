@@ -210,15 +210,20 @@ export interface SegmentModalProps {
   tripId: number;
   tripName?: string;
   segmentTypes: SegmentType[];
+  options?: OptionApi[];
+  tripSegments?: SegmentApi[];
   tripCurrencyId?: number | null;
   displayCurrencyId?: number | null;
   initialOptionFilters?: OptionFilterPreset;
   initialOptionSort?: SimpleOptionSortValue | null;
+  existingLocations?: LocationOption[];
 }
 
 export interface OptionFilterPreset {
   locations: string[];
   dateRange: { start: string; end: string };
+  costMin?: number | null;
+  costMax?: number | null;
   showHidden: boolean;
 }
 

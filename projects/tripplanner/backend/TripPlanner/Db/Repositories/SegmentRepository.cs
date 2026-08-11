@@ -100,18 +100,18 @@ public class SegmentRepository
                        "start_location_id = @start_location_id, " +
                        "end_location_id = @end_location_id, " +
                        "is_ui_visible = @is_ui_visible " +
-                       "WHERE id = @id";
+                       "WHERE id = @id AND trip_id = @trip_id";
         await db.ExecuteAsync(sqlQuery, segment);
     }
 
-    public async Task DeleteAsync(int segmentId, CancellationToken cancellationToken)
+    public async Task DeleteAsync(int segmentId, int tripId, CancellationToken cancellationToken)
     {
         // todo - wrap in transaction
         using IDbConnection db = new SqlConnection(_connectionString_);
-        var sqlQuery2 = "DELETE FROM option_to_segment WHERE segment_id = @id";
-        await db.ExecuteAsync(sqlQuery2, new { id = segmentId });
-        var sqlQuery = "DELETE FROM Segment WHERE id = @id";
-        await db.ExecuteAsync(sqlQuery, new { id = segmentId });
+        var sqlQuery2 = "DELETE FROM option_to_segment WHERE segment_id = @id AND segment_id IN (SELECT id FROM Segment WHERE trip_id = @trip_id)";
+        await db.ExecuteAsync(sqlQuery2, new { id = segmentId, trip_id = tripId });
+        var sqlQuery = "DELETE FROM Segment WHERE id = @id AND trip_id = @trip_id";
+        await db.ExecuteAsync(sqlQuery, new { id = segmentId, trip_id = tripId });
     }
 
     public async Task ConnectSegmentsWithOptionAsync(int segmentId, List<int> optionIds, int tripId, CancellationToken cancellationToken)

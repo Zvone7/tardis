@@ -1,10 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { Check, ChevronsUpDown } from "lucide-react"
 
 import { cn } from "../lib/utils"
 import { Button } from "./ui/button"
+import { useFloatingPosition } from "../hooks/useFloatingPosition"
 
 interface UtcOffsetDropdownProps {
   value: number
@@ -30,22 +32,69 @@ export function UtcOffsetDropdown({
   popupDirection = "down",
 }: UtcOffsetDropdownProps) {
   const [open, setOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const dropdownRef = useRef<HTMLDivElement | null>(null)
+
+  // Force direction via popupDirection prop; useFloatingPosition for auto if needed
+  const pos = useFloatingPosition(triggerRef, open, 270)
 
   useEffect(() => {
     if (!open) return
     const handler = (event: MouseEvent | TouchEvent) => {
-      if (!containerRef.current) return
-      if (containerRef.current.contains(event.target as Node)) return
+      const target = event.target as Node
+      if (triggerRef.current?.contains(target)) return
+      if (dropdownRef.current?.contains(target)) return
       setOpen(false)
     }
     document.addEventListener("pointerdown", handler)
     return () => document.removeEventListener("pointerdown", handler)
   }, [open])
 
+  const dropdown = open && pos ? (
+    <div
+      ref={dropdownRef}
+      className="z-[200] rounded-md border bg-popover p-0 text-popover-foreground shadow-lg"
+      style={{
+        position: "fixed",
+        top: popupDirection === "up" || pos.openUpward ? undefined : pos.top + 4,
+        bottom: popupDirection === "up" || pos.openUpward ? window.innerHeight - pos.top + 4 : undefined,
+        left: pos.left,
+        width: pos.width,
+        minWidth: 120,
+      }}
+      data-dialog-interactive
+    >
+      <div className="max-h-64 overflow-y-auto">
+        <div className="py-1">
+          {UTC_OFFSETS.map((offset) => {
+            const isSelected = offset === value
+            return (
+              <button
+                type="button"
+                key={offset}
+                className={cn(
+                  "flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted",
+                  isSelected ? "bg-muted/60" : "",
+                )}
+                onClick={() => {
+                  onChange(offset)
+                  setOpen(false)
+                }}
+              >
+                <span className="font-medium">{formatOffset(offset)}</span>
+                <Check className={cn("h-4 w-4 text-primary", isSelected ? "opacity-100" : "opacity-0")} />
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  ) : null
+
   return (
-    <div className={cn("relative flex flex-col gap-1", className)} ref={containerRef}>
+    <div className={cn("relative flex flex-col gap-1", className)}>
       <Button
+        ref={triggerRef}
         type="button"
         variant="outline"
         role="combobox"
@@ -56,40 +105,7 @@ export function UtcOffsetDropdown({
         <span className="truncate font-medium">{formatOffset(value)}</span>
         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
       </Button>
-      {open ? (
-        <div
-          className={cn(
-            "absolute z-[120] w-full rounded-md border bg-popover p-0 text-popover-foreground shadow-lg",
-            popupDirection === "up" ? "bottom-full mb-1" : "mt-1",
-          )}
-          data-dialog-interactive
-        >
-          <div className="max-h-64 overflow-y-auto">
-            <div className="py-1">
-              {UTC_OFFSETS.map((offset) => {
-                const isSelected = offset === value
-                return (
-                  <button
-                    type="button"
-                    key={offset}
-                    className={cn(
-                      "flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted",
-                      isSelected ? "bg-muted/60" : "",
-                    )}
-                    onClick={() => {
-                      onChange(offset)
-                      setOpen(false)
-                    }}
-                  >
-                    <span className="font-medium">{formatOffset(offset)}</span>
-                    <Check className={cn("h-4 w-4 text-primary", isSelected ? "opacity-100" : "opacity-0")} />
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {typeof window !== "undefined" && createPortal(dropdown, document.body)}
     </div>
   )
 }

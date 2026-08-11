@@ -87,7 +87,7 @@ public sealed class BookingLinkParser : IBookingLinkParser
             if (string.IsNullOrWhiteSpace(searchQuery))
                 return;
 
-            var results = await _locationIqClient.ForwardGeocodeAsync(searchQuery, 1, null, null, cancellationToken);
+            var results = await _locationIqClient.ForwardGeocodeAsync(searchQuery, 1, null, null, null, cancellationToken);
             var best = results.FirstOrDefault();
             if (best == null) return;
 

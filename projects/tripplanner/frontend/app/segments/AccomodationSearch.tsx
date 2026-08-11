@@ -18,6 +18,7 @@ import { geocodingApi, scrapingApi, segmentsApi } from "../utils/apiClient"
 import { toast } from "../components/ui/use-toast"
 import { formatWeekdayDayMonth } from "../utils/dateformatters"
 import { toLocationDto } from "../lib/mapping"
+import { matchTripLocations, tripViewbox } from "../lib/tripLocations"
 
 interface AccomodationSearchProps {
   isOpen: boolean
@@ -25,6 +26,7 @@ interface AccomodationSearchProps {
   tripId: number
   tripCurrencyId?: number | null
   onSegmentCreated?: () => void
+  existingLocations?: LocationOption[]
 }
 
 function useDebounced<T>(val: T, delay: number) {
@@ -44,6 +46,7 @@ function LocationAutocomplete({
   placeholder,
   minChars = 2,
   debounceMs = 350,
+  existingLocations,
 }: {
   id: string
   label: string
@@ -52,6 +55,7 @@ function LocationAutocomplete({
   placeholder?: string
   minChars?: number
   debounceMs?: number
+  existingLocations?: LocationOption[]
 }) {
   const [query, setQuery] = useState(selected?.formatted || selected?.name || "")
   const [open, setOpen] = useState(false)
@@ -100,11 +104,20 @@ function LocationAutocomplete({
     setLoading(true)
     ;(async () => {
       try {
-        const list = await geocodingApi.search("/api/geocode/search", q, controller.signal)
+        const vb = tripViewbox(existingLocations ?? [])
+        const list = await geocodingApi.search("/api/geocode/search", q, controller.signal, vb)
         if (!controller.signal.aborted) {
-          setItems(list)
+          const existing = matchTripLocations(q, existingLocations ?? [])
+          const existingKeys = new Set(existing.map((l) => `${l.lat},${l.lng}`))
+          const combined = [...existing, ...list.filter((l) => !existingKeys.has(`${l.lat},${l.lng}`))]
+          const seenLabels = new Set<string>()
+          const merged = combined.filter((l) => {
+            const label = (l.formatted || (l.country ? `${l.name}, ${l.country}` : l.name)).toLowerCase()
+            return seenLabels.size !== seenLabels.add(label).size
+          })
+          setItems(merged)
           setOpen(true)
-          setFocusedIdx(list.length ? 0 : -1)
+          setFocusedIdx(merged.length ? 0 : -1)
         }
       } catch {
         if (!controller.signal.aborted) {
@@ -117,7 +130,7 @@ function LocationAutocomplete({
     })()
 
     return () => controller.abort()
-  }, [debounced, minChars])
+  }, [debounced, minChars, existingLocations])
 
   const selectItem = (itm: LocationOption) => {
     onSelected(itm)
@@ -206,7 +219,7 @@ function LocationAutocomplete({
                     const labelText = itm.formatted || (itm.country ? `${itm.name}, ${itm.country}` : itm.name)
                     return (
                       <li
-                        key={`${itm.provider}-${itm.providerPlaceId}`}
+                        key={itm.providerPlaceId ? `${itm.provider}-${itm.providerPlaceId}` : `${itm.lat},${itm.lng}`}
                         role="option"
                         aria-selected={idx === focusedIdx}
                         onMouseDown={(e) => {
@@ -241,7 +254,7 @@ function formatOfferLabel(offer: AmadeusHotelOffer) {
   return place ? `${name} (${place})` : name
 }
 
-export default function AccomodationSearch({ isOpen, onClose, tripId, tripCurrencyId, onSegmentCreated }: AccomodationSearchProps) {
+export default function AccomodationSearch({ isOpen, onClose, tripId, tripCurrencyId, onSegmentCreated, existingLocations }: AccomodationSearchProps) {
   const [location, setLocation] = useState<LocationOption | null>(null)
   const [checkIn, setCheckIn] = useState("")
   const [checkOut, setCheckOut] = useState("")
@@ -387,6 +400,7 @@ export default function AccomodationSearch({ isOpen, onClose, tripId, tripCurren
             selected={location}
             onSelected={setLocation}
             placeholder="Search a city"
+            existingLocations={existingLocations}
           />
           <div className="text-xs text-muted-foreground">
             Stay search locations are limited to cities mapped from our airport dataset. You can always search manually on{" "}
