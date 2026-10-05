@@ -1,39 +1,47 @@
-import {originalEdit} from '@/app/components/review-model';
-import { db, bucket, failure, validOrigin } from '@/lib/storage';
+import {originalEdit,type Edit} from '@/app/components/review-model';
+import {db,failure,validOrigin} from '@/lib/storage';
+import {loadReport} from '@/lib/report';
+import {matchingEntries,validateMerge,mergedIds} from '@/lib/reconciliation';
 export async function GET(){try{return Response.json((await db().prepare('SELECT * FROM decisions ORDER BY updated_at DESC').all()).results,{headers:{'Cache-Control':'private, no-store'}});}catch{return failure();}}
-const bad=(error:string)=>Response.json({error},{status:400});
+const bad=(error:string,status=400)=>Response.json({error},{status});
 export async function POST(request:Request){
  if(!validOrigin(request))return new Response('Forbidden',{status:403});
- let b:any;try{b=await request.json();}catch{return bad('Invalid JSON');}
+ let b:any;try{b=await request.json()}catch{return bad('Invalid JSON')}
  if(!b||typeof b.id!=='string'||!['confirmed','held','unresolved'].includes(b.status)||typeof b.note!=='string'||b.note.length>4000||!(b.targetId===null||typeof b.targetId==='string')||!['create','edit','delete','revert'].includes(b.action))return bad('Invalid review decision');
  try{
-  const reportFile=await bucket().get('reconciliation.json');if(!reportFile)return failure();const report:any=await reportFile.json();const item=report.items.find((i:any)=>i.id===b.id);
-  if(!item)return bad('Transaction not found');
-  const match=item.candidates.find((c:any)=>c.target.id===b.targetId);
-  if(b.targetId&&!match)return bad('Candidate not found');
-  if(b.action==='edit'&&!match)return bad('Select an existing Money Manager entry to edit');
-  if(b.action==='create'&&b.targetId)return bad('New entries cannot overwrite existing entries');
-  let proposed=b.proposedEdit;let action=b.action;let status=b.status;let note=b.note;
-  if(action==='revert'){
-   proposed=originalEdit(item,b.targetId);
-   action=match?'edit':'create';status='unresolved';note='';
-  }else if(action!=='delete'){
-   if(!proposed||typeof proposed.description!=='string'||!proposed.description.trim()||proposed.description.length>500||typeof proposed.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(proposed.date)||Number.isNaN(Date.parse(proposed.date))||new Date(proposed.date).toISOString().slice(0,10)!==proposed.date||typeof proposed.time!=='string'||(proposed.time!==''&&!/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(proposed.time))||!Number.isFinite(proposed.amount)||Math.abs(proposed.amount)>100000000||typeof proposed.category!=='string'||proposed.category.length>200)return bad('Check the title, date, time, amount and category');
-   const account=report.accounts.find((a:any)=>a.id===proposed.accountId);
-   if(status==='confirmed'&&!account)return bad('Choose a Money Manager account before confirming');
-   if(proposed.accountId&&!account)return bad('Unknown Money Manager account');
-   if(account&&account.currency?.split('_').at(-1)!==proposed.currency)return bad('The account currency must match the amount currency');
-   if(proposed.currency!==item.source.currency)return bad('Currency conversion is not supported; use the statement currency');
-   const kind=proposed.kind||(proposed.amount<0?'expense':'income');
+  const report=await loadReport();if(!report)return failure();const item=report.items.find(i=>i.id===b.id);if(!item)return bad('Transaction not found');
+  let proposed:Edit=b.proposedEdit,action=b.action,status=b.status,note=b.note;
+  let pair;try{if(action!=='revert'&&action!=='delete'&&proposed?.merge)pair=validateMerge(item,proposed.merge,report)}catch(e){return bad((e as Error).message)}
+  const matches=[...(pair?[]:item.candidates),...matchingEntries(pair?.purchase||item,report,pair?.total)];
+  const match=matches.find(c=>c.target.id===b.targetId);
+  // Previously saved targets can always be reverted, even if suggestion ranking changed.
+  if(action!=='revert'&&b.targetId&&!match)return bad('Select a suggested Money Manager entry');
+  if(action==='edit'&&!match)return bad('Select an existing Money Manager entry to update');
+  if(action==='create'&&b.targetId)return bad('A new entry cannot overwrite an existing entry');
+  if(action==='revert'){proposed=originalEdit(item,b.targetId);action=match?'edit':'create';status='unresolved';note=''}
+  else if(action!=='delete'){
+   if(!proposed||typeof proposed.description!=='string'||!proposed.description.trim()||proposed.description.length>500||typeof proposed.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(proposed.date)||Number.isNaN(Date.parse(proposed.date))||new Date(proposed.date).toISOString().slice(0,10)!==proposed.date||typeof proposed.time!=='string'||proposed.time!==''&&!/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(proposed.time)||!Number.isFinite(proposed.amount)||Math.abs(proposed.amount)>100000000||typeof proposed.category!=='string'||proposed.category.length>200||proposed.memo!==undefined&&(typeof proposed.memo!=='string'||proposed.memo.length>4000))return bad('Check the note, date, time, amount and description');
+   const account=report.accounts.find(a=>a.id===proposed.accountId),kind=proposed.kind||(proposed.amount<0?'expense':'income');
    if(!['expense','income','transfer'].includes(kind))return bad('Invalid transaction type');
-   const targetAccount=kind==='transfer'?report.accounts.find((a:any)=>a.id===proposed.targetAccountId):null;
-   if(kind==='transfer'&&status==='confirmed'&&(!targetAccount||targetAccount.id===account?.id||targetAccount.currency!==account?.currency))return bad('Choose two different accounts with the same currency');
-   if(kind==='expense'&&proposed.amount>0||kind==='income'&&proposed.amount<0)return bad('The amount sign does not match the transaction type');
-   proposed={kind,targetAccountId:targetAccount?.id||'',targetAccount:targetAccount?.name||'',description:proposed.description.trim(),date:proposed.date,time:proposed.time,amount:proposed.amount,currency:proposed.currency,accountId:account?.id||'',account:account?.name||'',category:proposed.category};
-  }else{proposed=null;status='confirmed';}
-  if(status==='confirmed'&&b.targetId){const conflict=await db().prepare("SELECT id FROM decisions WHERE target_id=? AND status='confirmed' AND id<>?").bind(b.targetId,b.id).first();if(conflict)return Response.json({error:'This Money Manager entry already has a confirmed change for another transaction.'},{status:409});}
-  const now=new Date().toISOString();
-  await db().prepare('INSERT INTO decisions(id,target_id,status,note,updated_at,action,proposed_edit) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET target_id=excluded.target_id,status=excluded.status,note=excluded.note,updated_at=excluded.updated_at,action=excluded.action,proposed_edit=excluded.proposed_edit').bind(b.id,b.targetId,status,note,now,action,JSON.stringify(b.action==='revert'?{}:proposed||{})).run();
-  return Response.json({id:b.id,target_id:b.targetId,status,note,updated_at:now,action,proposed_edit:JSON.stringify(b.action==='revert'?{}:proposed||{})});
- }catch(e){console.error('Decision save failed',e instanceof Error?e.message:'Storage error');return failure();}
+   if(status==='confirmed'&&!account)return bad('Choose an account');
+   if(proposed.accountId&&!account)return bad('Unknown account');
+   if(proposed.currency!==item.source.currency||account&&account.currency.split('_').at(-1)!==proposed.currency)return bad('Choose an account in the statement currency');
+   const target=kind==='transfer'?report.accounts.find(a=>a.id===proposed.targetAccountId):undefined;
+   if(status==='confirmed'&&kind==='transfer'&&(!target||target.id===account?.id||target.currency!==account?.currency))return bad('Choose two different accounts in the same currency');
+   if(status==='confirmed'&&kind!=='transfer'&&!proposed.category.trim())return bad('Choose a category');
+   if(kind==='expense'&&proposed.amount>0||kind==='income'&&proposed.amount<0)return bad('Amount sign does not match the transaction type');
+   if(pair&&(kind!=='expense'||Math.round(proposed.amount*100)!==Math.round(pair.total*100)))return bad('The merged expense must equal the purchase plus the round-up');
+   let memo=proposed.memo||'';if(action==='create'&&kind==='expense'&&!memo.includes('Newly created expense'))memo=[memo,'Newly created expense (BankBuddy)'].filter(Boolean).join('\n');
+   proposed={kind,description:proposed.description.trim(),memo,date:proposed.date,time:proposed.time||'23:59',amount:proposed.amount,currency:proposed.currency,accountId:account?.id||'',account:account?.name||'',targetAccountId:target?.id||'',targetAccount:target?.name||'',category:kind==='transfer'?'':proposed.category,...(pair?{merge:{purchaseId:pair.purchase.id,roundUpId:pair.roundUp.id,...(pair.credit?{creditId:pair.credit.id}:{})}}:{})};
+  }else{proposed={} as Edit;status='confirmed'}
+  const sources=status==='confirmed'?mergedIds(item.id,proposed?.merge):[];
+  if(sources.length){const conflict=await db().prepare(`SELECT id FROM decisions WHERE id IN (${sources.map(()=>'?').join(',')}) AND id<>? AND status='confirmed'`).bind(...sources,item.id).first();if(conflict)return bad('One of these bank transactions is already confirmed. Revert its other decision first.',409)}
+  const now=new Date().toISOString(),payload=JSON.stringify(b.action==='revert'?{}:proposed||{});
+  await db().batch([
+   db().prepare('DELETE FROM decision_sources WHERE decision_id=?').bind(item.id),
+   db().prepare('INSERT INTO decisions(id,target_id,status,note,updated_at,action,proposed_edit) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET target_id=excluded.target_id,status=excluded.status,note=excluded.note,updated_at=excluded.updated_at,action=excluded.action,proposed_edit=excluded.proposed_edit').bind(item.id,b.targetId,status,note,now,action,payload),
+   ...sources.map(sourceId=>db().prepare('INSERT INTO decision_sources(source_id,decision_id) VALUES(?,?)').bind(sourceId,item.id))
+  ]);
+  return Response.json({id:item.id,target_id:b.targetId,status,note,updated_at:now,action,proposed_edit:payload});
+ }catch(e){const message=e instanceof Error?e.message:'';if(/unique|constraint/i.test(message))return bad('An entry or round-up is already used by another confirmed change. Revert that change first.',409);console.error('Decision save failed',message);return failure()}
 }

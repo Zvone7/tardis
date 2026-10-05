@@ -73,3 +73,5 @@ catalogue.json
 !/backend/tests/fixtures/dummy/consolidated_revolut_dummy.csv
 !/backend/tests/fixtures/dummy/nordea_dummy.csv
 !/backend/tests/fixtures/dummy/money-manager-dummy.mmbak
+
+matching-catalogue*.json

@@ -20,7 +20,7 @@ Review one transaction card at a time, scoped to a selected month (default: the 
 
 Confirmed and held draft edits, deletions, notes and keyboard settings persist in D1. Unconfirmed field changes are only kept in memory while browsing and are lost on reload. Confirmed target IDs are unique, enforced in D1, preventing two bank transactions from claiming the same Money Manager entry. Export draft decisions as JSON. Source files can be downloaded byte-for-byte.
 
-No endpoint writes to the original Money Manager backup. Proposed new entries and field edits are stored as review decisions. Confirmed decisions can now be exported to a new Money Manager backup. Automatic round-up splitting and month-end balancing remain future work. Existing legacy decisions are retained inside the original handoff archive; they are not silently remapped onto new transaction IDs.
+No endpoint writes to the original Money Manager backup. Proposed new entries and field edits are stored as review decisions. Confirmed decisions can now be exported to a new Money Manager backup. Round-up pairing is available for review; automatic splitting and month-end balancing remain future work. Existing legacy decisions are retained inside the original handoff archive; they are not silently remapped onto new transaction IDs.
 
 ## Source checkpoints
 
@@ -59,7 +59,7 @@ The project follows the sibling apps' `projects/<name>/frontend` and `backend` l
 
 Verified in source: one review card, previous completed month selection, title/date/time fields, green create and orange edit cards, confirm/delete/revert, swipe navigation, ranked option sheets, progress views and bottom navigation.
 
-Implemented: continuous hold-and-drag option scrolling, separate transfer account fields, and export of confirmed changes to a new backup. Automatic round-up splitting and month-end balancing remain future work. Browser gesture QA remains unverified.
+Implemented: continuous hold-and-drag option scrolling, separate transfer account fields, and export of confirmed changes to a new backup. Round-up pairing is available for review; automatic splitting and month-end balancing remain future work. Browser gesture QA remains unverified.
 
 ## Review and export update
 
@@ -68,3 +68,16 @@ Hold a field for 300 ms, then drag vertically to scroll its ranked choices witho
 Settings → Download reviewed backup applies all confirmed changes across all months to an in-memory copy of the original and downloads a new `.mmbak`. Held/unconfirmed changes are excluded. Checks include the original SHA-256, atomic rollback, duplicate linked-entry protection and SQLite integrity. Transfers use paired type 4/type 3 records with a shared transaction link. Unsupported linked fees, incomplete transfers and ambiguous categories block the entire export. Existing entries preserve their base-currency ratio; new entries use the backup's stored exchange rates. No original file is modified.
 
 Synthetic checks: `node scripts/test-backup-export.mjs` and `node scripts/test-decision-transfers.mjs`. Browser gesture QA is unavailable in this environment; restoring an export in the Money Manager mobile app has not been verified.
+
+## Simplified form and round-up matching
+
+
+The review form follows Money Manager's row layout: Income/Expense/Transfer, Date/Time, Account, Category (or To account), Amount, Note (merchant), and Description. Account and category requirements are shown inline. Missing times default to 23:59. New expenses receive a `Newly created expense (BankBuddy)` description. Description exports into `ZMEMO`; the merchant note exports into `ZCONTENT`.
+
+Revolut outgoing Lommepenger pocket amounts up to 10 NOK are compared with nearby purchases in the same account, statement and currency. Suggestions require an exact next-10 rounding amount and a date gap of at most three days. Date, actual time when supplied, and statement-row proximity rank competing matches. Matching incoming pocket credits are linked by occurrence order only when debit/credit counts agree; otherwise they remain for separate review.
+
+A user-selected pair becomes one proposed expense for the combined debit total. The selected Money Manager expense may be on a different account or have a different amount; merchant/date evidence supports suggestions. The user can correct the account, update an existing expense, or create a new combined expense. Confirmation claims all paired bank rows atomically so none can be added twice; revert releases them. Combining savings with an expense is an explicit review choice, never automatic.
+
+The private `matching-catalogue-v2.json` can be generated using `backend/scripts/build-matching-catalogue.py ORIGINAL_BACKUP PRIVATE_OUTPUT` and imported via the authenticated immutable import endpoint. Never commit that output. It allows suggestions from all active Money Manager accounts. Browser gesture/layout QA remains unverified in this environment.
+
+Skip saves the unfinished entry and advances to the next unreviewed expense. Return through Queue → Status → Skipped; skipped entries are excluded from export until confirmed.

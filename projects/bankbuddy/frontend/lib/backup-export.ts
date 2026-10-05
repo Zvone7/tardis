@@ -19,8 +19,8 @@ export async function readBackup(report:Report){
 }
 export async function enrichReport(report:Report){
  const {db}=await readBackup(report);try{
- const map=new Map(rows(db,'SELECT Z_PK,ZTOASSETUID FROM ZINOUTCOME').map(r=>['mm-'+r.Z_PK,r.ZTOASSETUID||'']));
- return {...report,items:report.items.map(i=>({...i,candidates:i.candidates.map(c=>({...c,target:{...c.target,toAccountId:map.get(c.target.id)}}))}))};
+ const map=new Map(rows(db,'SELECT Z_PK,ZTOASSETUID,ZMEMO FROM ZINOUTCOME').map(r=>['mm-'+r.Z_PK,{toAccountId:r.ZTOASSETUID||'',memo:r.ZMEMO||''}]));
+ return {...report,items:report.items.map(i=>({...i,candidates:i.candidates.map(c=>({...c,target:{...c.target,...map.get(c.target.id)}}))}))};
  }finally{db.close()}
 }
 /** All changes occur in an in-memory copy. A failure rolls back the entire export. */
@@ -28,6 +28,8 @@ export function applyDecisions(db:Database,decisions:Decision[],report:Report){
  const confirmed=decisions.filter(d=>d.status==='confirmed'&&d.action!=='revert');
  if(!confirmed.length)throw Error('There are no confirmed changes to export.');
  const itemIds=new Set(report.items.map(i=>i.id));
+ const usedSources=new Set<string>();
+ for(const d of confirmed){const e:Edit=JSON.parse(d.proposed_edit||'{}');const ids=[...new Set([d.id,...(e.merge?[e.merge.purchaseId,e.merge.roundUpId,...(e.merge.creditId?[e.merge.creditId]:[])]:[])])];for(const id of ids){if(!itemIds.has(id)||usedSources.has(id))throw Error('A purchase or round-up is included in more than one confirmed change. Revert the duplicate first.');usedSources.add(id)}}
  const accounts=rows(db,'SELECT * FROM ZASSET WHERE ZISDEL IN (0,3)');
  const categories=rows(db,'SELECT * FROM ZCATEGORY WHERE ZISDEL=0');
  const currencies=rows(db,'SELECT * FROM ZCURRENCY WHERE ZISDEL=0');
@@ -64,7 +66,7 @@ export function applyDecisions(db:Database,decisions:Decision[],report:Report){
   const kind=e.kind||(isTransfer?'transfer':e.amount<0?'expense':'income');
   if(!['expense','income','transfer'].includes(kind)||!Number.isFinite(e.amount)||!e.description?.trim())throw Error('Invalid confirmed entry.');
   if(!/^\d{4}-\d{2}-\d{2}$/.test(e.date)||e.time&&!/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(e.time))throw Error('Invalid date or time.');
-  const timestamp=Date.parse(e.date+'T'+(e.time||'00:00:00')+'Z')/1000-978307200;
+  const timestamp=Date.parse(e.date+'T'+(e.time||'23:59:00')+'Z')/1000-978307200;
   if(!Number.isFinite(timestamp))throw Error('Invalid entry date.');
   const account=accounts.find(a=>a.ZUID===e.accountId);if(!account||account.ZCURRENCYUID.split('_').at(-1)!==e.currency)throw Error('Account currency does not match.');
   const target=kind==='transfer'?accounts.find(a=>a.ZUID===e.targetAccountId):null;
@@ -80,7 +82,7 @@ export function applyDecisions(db:Database,decisions:Decision[],report:Report){
   const rate=basis&&basis.ZCURRENCYUID===account.ZCURRENCYUID&&Number(basis.ZAMOUNTACCOUNT)!==0?Number(basis.ZAMOUNT)/Number(basis.ZAMOUNTACCOUNT):Number(currencies.find(c=>c.ZUID===account.ZCURRENCYUID)?.ZRATE);
   if(!Number.isFinite(rate)||rate<=0)throw Error('No valid stored exchange rate for this currency.');
   const amount=Math.abs(e.amount),base=Math.round(amount*rate*1000000)/1000000;
-  const patch=(a:Row,type:string,to='',link=''):Row=>({ZDATE:timestamp,ZTXDATESTR:e.date,ZAMOUNT:base,ZAMOUNTACCOUNT:amount,ZAMOUNTSUB:amount,ZCONTENT:e.description.trim(),ZDO_TYPE:type,ZASSETUID:a.ZUID,ZASSET_NIC:a.ZNICNAME,ZASSET_NAME:a.ZNICNAME,ZCURRENCYUID:a.ZCURRENCYUID,ZCATEGORYUID:category?.ZUID||'',ZCATEGORY_NAME:category?.ZNAME||'',ZCATEGORYID:category?.ZAID||0,ZCATEGORY_ID:0,ZTOASSETUID:to,ZTXUIDTRANS:link,ZISSYNCED:0,ZUTIME:now});
+  const patch=(a:Row,type:string,to='',link=''):Row=>({ZDATE:timestamp,ZTXDATESTR:e.date,ZAMOUNT:base,ZAMOUNTACCOUNT:amount,ZAMOUNTSUB:amount,ZCONTENT:e.description.trim(),ZMEMO:e.memo??original?.ZMEMO??'',ZDO_TYPE:type,ZASSETUID:a.ZUID,ZASSET_NIC:a.ZNICNAME,ZASSET_NAME:a.ZNICNAME,ZCURRENCYUID:a.ZCURRENCYUID,ZCATEGORYUID:category?.ZUID||'',ZCATEGORY_NAME:category?.ZNAME||'',ZCATEGORYID:category?.ZAID||0,ZCATEGORY_ID:0,ZTOASSETUID:to,ZTXUIDTRANS:link,ZISSYNCED:0,ZUTIME:now});
   if(kind==='transfer'){
    const link=pair[0]?.ZTXUIDTRANS||crypto.randomUUID().toUpperCase();
    const out=pair.find(r=>r.ZDO_TYPE==='4')||original,into=pair.find(r=>r.ZDO_TYPE==='3');

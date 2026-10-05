@@ -50,22 +50,4 @@ next-env.d.ts
 *.mmbak
 *.sqlite*
 
-# Financial inputs, exported reports, credentials and generated artifacts
-/attachments/
-/imported/
-.openai/hosting.json
-*.tsbuildinfo
-__pycache__/
-*.pyc
-*.csv
-*.tsv
-*.mmbkp
-*.mmbak*
-*.db
-*.db-*
-*.bak
-*.zip
-*.tar.gz
-reconciliation.json
-catalogue.json
-*decisions*.json
+matching-catalogue*.json
