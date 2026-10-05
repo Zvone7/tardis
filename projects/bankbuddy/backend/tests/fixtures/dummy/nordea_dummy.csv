@@ -1,0 +1,4 @@
+Date;Amount;Balance;Reference;Text;Description;Currency;Category
+2026-09-01;3080,21;3080,21;DEMO-001;;DEMO Income;NOK;Income
+2026-09-02;-125,50;2954,71;DEMO-002;;DEMO Groceries;NOK;Food
+2026-09-05;-99,00;2855,71;DEMO-003;;DEMO Unmatched;NOK;Shopping

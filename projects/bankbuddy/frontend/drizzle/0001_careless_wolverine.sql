@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `unique_confirmed_target` ON `decisions` (`target_id`) WHERE "decisions"."status" = 'confirmed';
