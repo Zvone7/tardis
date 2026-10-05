@@ -25,6 +25,14 @@ const sourceItem={...purchase,source:bankSource};
 assert.equal(model.originalEdit(sourceItem,null,demoAccounts).accountId,'personal');
 assert.equal(model.initialEdit(sourceItem,{target_id:null,proposed_edit:JSON.stringify({...editForSaved(),accountId:'monthly'})},demoAccounts).edit.accountId,'monthly');
 function editForSaved(){return {description:'Saved note',amount:-45.5}}
+const pocketSource={...bankSource,description:'To pocket NOK Vacay lommepenger from NOK'};
+assert.equal(model.sourceAccount(pocketSource,demoAccounts).id,'pocket');
+assert.equal(model.choicesFor('accountId',{...sourceItem,source:pocketSource,candidates:[{target:{...bankSource,accountId:'personal'},score:100}]},{...report,accounts:demoAccounts},[])[0].value,'pocket');
+assert.equal(model.sourceAccount(bankSource,demoAccounts,{[model.accountMappingKey(bankSource)]:'monthly'}).id,'monthly');
+assert.equal(model.sourceAccount(bankSource,demoAccounts,{[model.accountMappingKey(bankSource)]:'eur'}).id,'personal');
+const nordea=tx('nordea',-10,'Expense',8);nordea.source.bank='nordea';
+const deferred={...round,source:pocketSource};
+assert.deepEqual([deferred,purchase,nordea].sort(model.reviewOrder).map(i=>i.id),['nordea','purchase','round']);
 const SQL=await initSqlJs({locateFile:()=>require.resolve('sql.js/dist/sql-wasm.wasm')});const sql=new SQL.Database();
 sql.run("CREATE TABLE decisions(id TEXT PRIMARY KEY,target_id TEXT,status TEXT,note TEXT,updated_at TEXT,action TEXT,proposed_edit TEXT);CREATE UNIQUE INDEX unique_confirmed_target ON decisions(target_id) WHERE status='confirmed';CREATE TABLE decision_sources(source_id TEXT PRIMARY KEY,decision_id TEXT NOT NULL)");
 const prepare=query=>({bind:(...params)=>({query,params,first:async()=>{const stmt=sql.prepare(query);stmt.bind(params);const row=stmt.step()?stmt.getAsObject():null;stmt.free();return row}})});
