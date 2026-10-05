@@ -1,0 +1,10 @@
+import fs from 'node:fs';import ts from 'typescript';import assert from 'node:assert/strict';
+const source=fs.readFileSync(new URL('../lib/pending.ts',import.meta.url),'utf8');
+const {saveQueued}=await import('data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext}}).outputText).toString('base64'));
+const pending={confirm:{id:'confirm',status:'confirmed',action:'create',proposed_edit:'{}'},skip:{id:'skip',status:'held',action:'create',proposed_edit:'{}'}};
+const sent=[];let fail=true;globalThis.fetch=async(url,init)=>{const body=JSON.parse(init.body);sent.push(body.id);return fail&&body.id==='confirm'?Response.json({error:'Conflict'},{status:409}):Response.json(pending[body.id]);};
+assert.equal(sent.length,0);
+await assert.rejects(()=>saveQueued(pending,d=>delete pending[d.id]),/Conflict/);
+assert.deepEqual(sent,['skip','confirm']);assert.deepEqual(Object.keys(pending),['confirm']);
+fail=false;await saveQueued(pending,d=>delete pending[d.id]);assert.deepEqual(Object.keys(pending),[]);
+console.log('PASS: explicit batch submission, release-before-confirm ordering, partial failure retains unsaved changes, retry');

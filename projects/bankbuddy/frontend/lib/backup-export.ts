@@ -19,8 +19,9 @@ export async function readBackup(report:Report){
 }
 export async function enrichReport(report:Report){
  const {db}=await readBackup(report);try{
- const map=new Map(rows(db,'SELECT Z_PK,ZTOASSETUID,ZMEMO FROM ZINOUTCOME').map(r=>['mm-'+r.Z_PK,{toAccountId:r.ZTOASSETUID||'',memo:r.ZMEMO||''}]));
- return {...report,items:report.items.map(i=>({...i,candidates:i.candidates.map(c=>({...c,target:{...c.target,...map.get(c.target.id)}}))}))};
+ const map=new Map(rows(db,'SELECT Z_PK,ZTOASSETUID,ZMEMO,ZCATEGORYUID FROM ZINOUTCOME').map(r=>['mm-'+r.Z_PK,{toAccountId:r.ZTOASSETUID||'',memo:r.ZMEMO||'',categoryId:r.ZCATEGORYUID||''}]));
+ const categoryOptions=rows(db,'SELECT * FROM ZCATEGORY WHERE ZISDEL=0').filter(c=>[0,1].includes(Number(c.ZDOTYPE))).map(c=>({id:String(c.ZUID),name:String(c.ZNAME),parentId:c.ZPUID?String(c.ZPUID):undefined,kind:Number(c.ZDOTYPE)===1?'expense':'income'}));
+ return {...report,categoryOptions,items:report.items.map(i=>({...i,candidates:i.candidates.map(c=>({...c,target:{...c.target,...map.get(c.target.id)}}))}))};
  }finally{db.close()}
 }
 /** All changes occur in an in-memory copy. A failure rolls back the entire export. */
@@ -73,7 +74,7 @@ export function applyDecisions(db:Database,decisions:Decision[],report:Report){
   if(kind==='transfer'&&(!target||target.ZUID===account.ZUID||target.ZCURRENCYUID!==account.ZCURRENCYUID))throw Error('Choose two different accounts in the same currency for a transfer.');
   let category:Row|undefined;
   if(kind!=='transfer'){
-   const candidates=categories.filter(c=>c.ZNAME===e.category&&Number(c.ZDOTYPE)===(kind==='expense'?1:0));
+   const candidates=categories.filter(c=>(e.categoryId?c.ZUID===e.categoryId:c.ZNAME===e.category)&&Number(c.ZDOTYPE)===(kind==='expense'?1:0));
    if(candidates.length!==1)throw Error('Choose an existing, unambiguous '+kind+' category before exporting: '+e.category);
    category=candidates[0];
   }
