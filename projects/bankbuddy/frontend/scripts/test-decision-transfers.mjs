@@ -15,6 +15,16 @@ assert.equal(reconcile.pairSuggestions(purchase,{...report,items:[purchase,later
 assert.match(reconcile.pairSuggestions(purchase,{...report,items:[purchase,later]})[0].reason,/3 days apart/);
 assert.equal(reconcile.pairSuggestions(purchase,{...report,items:[purchase,{...later,source:{...later.source,date:'2026-09-06'}}]}).length,0);
 assert.equal(reconcile.pairSuggestions(purchase,{...report,items:[purchase,{...later,source:{...later.source,amount:-4.49}}]}).length,0);
+const demoAccounts=[{id:'personal',name:'®️evolut 🇳🇴',currency:'EUR_NOK'},{id:'pocket',name:'®️evolut 🇳🇴 lommepenger',currency:'EUR_NOK'},{id:'eur',name:'®️evolut 🇪🇺',currency:'EUR_EUR'},{id:'monthly',name:'®️evolut 🇳🇴 (monthly expenses)',currency:'EUR_NOK'}];
+const bankSource={...purchase.source,account:'Revolut · Personal Account (NOK)'};
+assert.equal(model.sourceAccount(bankSource,demoAccounts).id,'personal');
+assert.equal(model.sourceAccount({...bankSource,account:'Revolut · Vacay lommepenger (NOK)'},demoAccounts).id,'pocket');
+assert.equal(model.sourceAccount({...bankSource,currency:'USD'},demoAccounts),undefined);
+assert.equal(model.sourceAccount(bankSource,[...demoAccounts,{id:'ambiguous',name:'Revolut',currency:'EUR_NOK'}]),undefined);
+const sourceItem={...purchase,source:bankSource};
+assert.equal(model.originalEdit(sourceItem,null,demoAccounts).accountId,'personal');
+assert.equal(model.initialEdit(sourceItem,{target_id:null,proposed_edit:JSON.stringify({...editForSaved(),accountId:'monthly'})},demoAccounts).edit.accountId,'monthly');
+function editForSaved(){return {description:'Saved note',amount:-45.5}}
 const SQL=await initSqlJs({locateFile:()=>require.resolve('sql.js/dist/sql-wasm.wasm')});const sql=new SQL.Database();
 sql.run("CREATE TABLE decisions(id TEXT PRIMARY KEY,target_id TEXT,status TEXT,note TEXT,updated_at TEXT,action TEXT,proposed_edit TEXT);CREATE UNIQUE INDEX unique_confirmed_target ON decisions(target_id) WHERE status='confirmed';CREATE TABLE decision_sources(source_id TEXT PRIMARY KEY,decision_id TEXT NOT NULL)");
 const prepare=query=>({bind:(...params)=>({query,params,first:async()=>{const stmt=sql.prepare(query);stmt.bind(params);const row=stmt.step()?stmt.getAsObject():null;stmt.free();return row}})});
