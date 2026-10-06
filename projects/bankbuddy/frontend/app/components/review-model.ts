@@ -42,14 +42,14 @@ export function sourceAccount(source:Tx,accounts:Report['accounts'],mappings:Rec
  else if(bank==='nordea'&&/\bask\b/.test(name))matches=pool.filter(a=>/nordea.*\bask\b/.test(accountWords(a.name)));
  return matches.length===1?matches[0]:undefined;
 }
-export function originalEdit(item:Item,targetId:string|null,accounts:Report['accounts']=[],mappings:Record<string,string>={}):Edit{const inferred=sourceAccount(item.source,accounts,mappings);const t=item.candidates.find(c=>c.target.id===targetId)?.target||item.source;return {description:t.description||'Unlabelled',date:t.date,time:t.time||'23:59',amount:t.amount,currency:t.currency,accountId:t.type==='3'?t.toAccountId||'':t.type==='4'?t.accountId||'':inferred?.id||t.accountId||'',account:t.type==='3'?'':inferred?.name||(t.accountId?t.account:''),category:t.accountId?t.category:'',categoryId:t.categoryId,kind:['3','4'].includes(t.type||'')?'transfer':t.amount<0?'expense':'income',targetAccountId:t.type==='3'?t.accountId||'':t.toAccountId||'',targetAccount:'',memo:t.memo||(!targetId&&t.amount<0?'Newly created expense (BankBuddy)':'')};}
+export function originalEdit(item:Item,targetId:string|null,accounts:Report['accounts']=[],mappings:Record<string,string>={}):Edit{const inferred=sourceAccount(item.source,accounts,mappings);const t=item.candidates.find(c=>c.target.id===targetId)?.target||item.source;return {description:t.description||(targetId?'':item.source.description||'Unlabelled'),date:t.date,time:t.time||'23:59',amount:t.amount,currency:t.currency,accountId:t.type==='3'?t.toAccountId||'':t.type==='4'?t.accountId||'':inferred?.id||t.accountId||'',account:t.type==='3'?'':inferred?.name||(t.accountId?t.account:''),category:t.accountId?t.category:'',categoryId:t.categoryId,kind:['3','4'].includes(t.type||'')?'transfer':t.amount<0?'expense':'income',targetAccountId:t.type==='3'?t.accountId||'':t.toAccountId||'',targetAccount:'',memo:t.memo||(!targetId&&t.amount<0?'Newly created expense (BankBuddy)':'')};}
 export function unchangedEntry(item:Item,targetId:string|null,edit:Edit|null){
  if(!targetId||!edit||edit.merge||!item.candidates.some(c=>c.target.id===targetId))return false;
  const original=originalEdit(item,targetId);
  const time=(t:string)=>t.length===5?t+':00':t;
  return ['description','date','currency','accountId','kind'].every(k=>(original as any)[k]===(edit as any)[k])&&Math.round(original.amount*100)===Math.round(edit.amount*100)&&time(original.time)===time(edit.time)&&(original.memo||'')===(edit.memo||'')&&(original.kind==='transfer'?(original.targetAccountId||'')===(edit.targetAccountId||''):(original.categoryId&&edit.categoryId?original.categoryId===edit.categoryId:original.category===edit.category));
 }
-export function initialEdit(item:Item,decision?:Decision,accounts:Report['accounts']=[],mappings:Record<string,string>={}):{targetId:string|null;edit:Edit;note:string}{const targetId=decision?(decision.target_id||null):(item.candidates[0]?.target.id||null);const original=originalEdit(item,targetId,accounts,mappings);let saved;try{saved=JSON.parse(decision?.proposed_edit||'{}')}catch{saved={}}return {targetId,edit:typeof saved?.description==='string'?{...original,...saved}:original,note:decision?.note||''};}
+export function initialEdit(item:Item,decision?:Decision,accounts:Report['accounts']=[],mappings:Record<string,string>={}):{targetId:string|null;edit:Edit;note:string}{const targetId=decision?(decision.target_id||null):(item.candidates[0]?.target.id||null);const original=originalEdit(item,targetId,accounts,mappings);if(!decision&&!original.description.trim())original.description=item.source.description||'Unlabelled';let saved;try{saved=JSON.parse(decision?.proposed_edit||'{}')}catch{saved={}}return {targetId,edit:typeof saved?.description==='string'?{...original,...saved}:original,note:decision?.note||''};}
 export function choicesFor(field:Field,item:Item,report:Report,categories:string[]):Choice[]{
  const map=new Map<string,Choice>();const add=(value:string,label:string,score:number,detail?:string,disabled=false)=>{const old=map.get(value);if(!old||old.score<score)map.set(value,{value,label,score,detail,disabled});};
  for(const c of item.candidates){const t=c.target;const val=(field==='accountId'||field==='targetAccountId')?(field==='targetAccountId'?(t.type==='3'?t.accountId:t.toAccountId)||'':(t.type==='3'?t.toAccountId:t.accountId)||''):String(t[field as keyof Tx]??'');add(val,(field==='accountId'||field==='targetAccountId')?(report.accounts.find(a=>a.id===val)?.name||val):field==='amount'?money(t):field==='date'?dateLabel(t.date):val||'Time unavailable',(field==='accountId'||field==='targetAccountId')?Math.min(90,c.score):c.score,'Existing Money Manager entry');}
@@ -78,3 +78,18 @@ export function applyPreference(edit:Edit,item:Item,report:Report,preference?:Pr
  return {...edit,...(account&&!report.accountMappings?.[accountMappingKey(item.source)]?{accountId:account.id,account:account.name}:{}),...(category?.length===1?{category:category[0].name,categoryId:category[0].id}:{})};
 }
 export const sortedCategories=(report:Report,kind:string)=>[...(report.categoryOptions||[])].filter(c=>c.kind===kind).sort((a,b)=>a.name.trim().localeCompare(b.name.trim(),'nb',{sensitivity:'base',numeric:true})||a.id.localeCompare(b.id));
+
+export function availableCandidates(candidates:Match[],itemId:string,decisions:Record<string,Decision>){
+ const used=new Set(Object.values(decisions).filter(d=>d.id!==itemId&&d.status==='confirmed'&&d.target_id).map(d=>d.target_id));
+ return candidates.filter(c=>!used.has(c.target.id));
+}
+export function entryChanges(item:Item,targetId:string|null,edit:Edit|null,accounts:Report['accounts']=[]){
+ if(!targetId||!edit)return [];
+ const o=originalEdit(item,targetId),name=(id?:string)=>accounts.find(a=>a.id===id)?.name||id||'—',time=(t:string)=>t.length===5?t+':00':t;
+ const row=(label:string,before:string|undefined,after:string|undefined,changed=before!==after)=>({label,before:before||'—',after:after||'—',changed});
+ return [row('Type',o.kind,edit.kind),row('Date',o.date,edit.date),row('Time (imported UTC)',o.time,edit.time,time(o.time)!==time(edit.time)),row('Account',name(o.accountId),name(edit.accountId),o.accountId!==edit.accountId),
+ ...(o.kind==='transfer'||edit.kind==='transfer'?[row('To account',name(o.targetAccountId),name(edit.targetAccountId),(o.targetAccountId||'')!==(edit.targetAccountId||''))]:[]),
+ ...(edit.kind!=='transfer'?[row('Category',o.category,edit.category,o.categoryId&&edit.categoryId?o.categoryId!==edit.categoryId:o.category!==edit.category)]:[]),
+ row('Amount',money(o),money(edit),Math.round(o.amount*100)!==Math.round(edit.amount*100)||o.currency!==edit.currency),row('Note',o.description,edit.description),row('Description',o.memo||'',edit.memo||''),
+ ...(edit.merge?[row('Pairing','Single bank entry','Purchase + round-up',true)]:[])];
+}

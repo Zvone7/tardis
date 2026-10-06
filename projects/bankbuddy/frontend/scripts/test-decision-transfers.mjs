@@ -5,6 +5,21 @@ const reconcile=await from(fs.readFileSync(new URL('../lib/reconciliation.ts',im
 const tx=(id,amount,description,line,account='Revolut personal')=>({id,source:{id,date:'2026-09-02',amount,currency:'NOK',description,line,fileId:'demo',bank:'revolut',account},candidates:[]});
 const purchase=tx('purchase',-45.5,'DEMO Coffee',1),round=tx('round',-4.5,'To pocket NOK Lommepenger from NOK',2),credit=tx('credit',4.5,round.source.description,20,'Demo pocket');
 const report={accounts:[{id:'a',name:'Demo A',currency:'EUR_NOK'},{id:'b',name:'Demo B',currency:'EUR_NOK'},{id:'c',name:'Demo USD',currency:'EUR_USD'}],items:[purchase,round,credit],moneyManagerOnly:[],moneyManagerEntries:[{id:'mm-1',date:'2026-09-02',amount:-50,currency:'NOK',description:'DEMO Coffee',type:'1',account:'Wrong account',accountId:'b',category:'Food'}]};
+// Blank original notes must remain blank in comparisons, but drafts use the bank label.
+const namedPayment={...purchase,candidates:[{target:{...report.moneyManagerEntries[0],description:'',time:'05:44:44'},score:84,reason:'Amount/date candidate',roundUp:0}]};
+const originalBlank=model.originalEdit(namedPayment,'mm-1');
+assert.equal(originalBlank.description,'');
+const namedDraft=model.initialEdit(namedPayment);
+assert.equal(namedDraft.edit.description,purchase.source.description);
+assert.deepEqual(model.entryChanges(namedPayment,'mm-1',namedDraft.edit).filter(r=>r.changed).map(r=>r.label),['Note']);
+assert.equal(model.unchangedEntry(namedPayment,'mm-1',namedDraft.edit),false);
+assert.equal(model.entryChanges(namedPayment,'mm-1',originalBlank).filter(r=>r.changed).length,0);
+assert.equal(model.entryChanges(namedPayment,'mm-1',{...originalBlank,time:'05:44:44'}).filter(r=>r.changed).length,0);
+const savedChoice={id:purchase.id,target_id:'mm-1',status:'confirmed',action:'edit',proposed_edit:JSON.stringify({...namedDraft.edit,description:'My saved note'})};
+assert.equal(model.initialEdit(namedPayment,savedChoice).edit.description,'My saved note');
+assert.equal(model.availableCandidates(namedPayment.candidates,'other',{[purchase.id]:savedChoice}).length,0);
+assert.equal(model.availableCandidates(namedPayment.candidates,purchase.id,{[purchase.id]:savedChoice}).length,1);
+assert.equal(model.availableCandidates(namedPayment.candidates,'other',{[purchase.id]:{...savedChoice,status:'held'}}).length,1);
 const pairs=reconcile.pairSuggestions(round,report);assert.equal(pairs.length,1);assert.equal(pairs[0].total,-50);assert.equal(pairs[0].credit.id,'credit');
 assert.equal(reconcile.matchingEntries(purchase,report,-50)[0].target.id,'mm-1');
 assert.equal(reconcile.pairSuggestions(tx('bad',-3,round.source.description,2),report).length,0);
