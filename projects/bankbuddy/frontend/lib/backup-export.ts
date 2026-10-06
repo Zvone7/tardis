@@ -21,13 +21,14 @@ export async function enrichReport(report:Report){
  const {db}=await readBackup(report);try{
  const map=new Map(rows(db,'SELECT Z_PK,ZTOASSETUID,ZMEMO,ZCATEGORYUID FROM ZINOUTCOME').map(r=>['mm-'+r.Z_PK,{toAccountId:r.ZTOASSETUID||'',memo:r.ZMEMO||'',categoryId:r.ZCATEGORYUID||''}]));
  const categoryOptions=rows(db,'SELECT * FROM ZCATEGORY WHERE ZISDEL=0').filter(c=>[0,1].includes(Number(c.ZDOTYPE))).map(c=>({id:String(c.ZUID),name:String(c.ZNAME),parentId:c.ZPUID?String(c.ZPUID):undefined,kind:Number(c.ZDOTYPE)===1?'expense':'income'}));
- return {...report,categoryOptions,items:report.items.map(i=>({...i,candidates:i.candidates.map(c=>({...c,target:{...c.target,...map.get(c.target.id)}}))}))};
+ const accountHistory=rows(db,"SELECT a.*, (SELECT COUNT(*) FROM ZINOUTCOME t WHERE t.ZASSETUID=a.ZUID) transactionCount FROM ZASSET a").map(a=>({id:String(a.ZUID),name:String(a.ZNICNAME||'Unnamed'),currency:String(a.ZCURRENCYUID||''),status:Number(a.ZISDEL),transactionCount:Number(a.transactionCount)}));
+ return {...report,accountHistory,categoryOptions,items:report.items.map(i=>({...i,candidates:i.candidates.map(c=>({...c,target:{...c.target,...map.get(c.target.id)}}))}))};
  }finally{db.close()}
 }
 /** All changes occur in an in-memory copy. A failure rolls back the entire export. */
 export function applyDecisions(db:Database,decisions:Decision[],report:Report){
  const confirmed=decisions.filter(d=>d.status==='confirmed'&&d.action!=='revert');
- if(!confirmed.length)throw Error('There are no confirmed changes to export.');
+ if(!confirmed.length&&!report.newAccounts?.length)throw Error('There are no confirmed changes to export.');
  const itemIds=new Set(report.items.map(i=>i.id));
  const usedSources=new Set<string>();
  for(const d of confirmed){const e:Edit=JSON.parse(d.proposed_edit||'{}');const ids=[...new Set([d.id,...(e.merge?[e.merge.purchaseId,e.merge.roundUpId,...(e.merge.creditId?[e.merge.creditId]:[])]:[])])];for(const id of ids){if(!itemIds.has(id)||usedSources.has(id))throw Error('A purchase or round-up is included in more than one confirmed change. Revert the duplicate first.');usedSources.add(id)}}
@@ -45,6 +46,17 @@ export function applyDecisions(db:Database,decisions:Decision[],report:Report){
  const mark=(r:Row)=>{if(touched.has(r.Z_PK))throw Error('Two confirmed changes affect the same entry or transfer. Revert one before exporting.');touched.add(r.Z_PK)};
  db.run('BEGIN');
  try{
+ let accountsAdded=0;
+ for(const draft of report.newAccounts||[]){
+  if(rows(db,'SELECT ZUID FROM ZASSET WHERE ZUID=?',[draft.id]).length)continue;
+  const template=accounts.find(a=>a.ZUID===draft.templateId);if(!template||template.ZCURRENCYUID!==draft.currency||Number(template.ZTYPE||0)!==0)throw Error('Unsupported new-account template');
+  const assetEntity=rows(db,"SELECT Z_ENT FROM Z_PRIMARYKEY WHERE Z_NAME='Asset'")[0]?.Z_ENT;if(!assetEntity)throw Error('Money Manager account entity missing');
+  const columns=rows(db,'PRAGMA table_info(ZASSET)');const value:Row={};for(const c of columns)value[c.name]=/CHAR|TEXT/.test(c.type)?'':0;
+  const pk=Number(rows(db,'SELECT MAX(Z_PK) n FROM ZASSET')[0].n||0)+1;
+  Object.assign(value,{Z_PK:pk,Z_ENT:assetEntity,Z_OPT:1,ZAID:Number(rows(db,'SELECT MAX(ZAID) n FROM ZASSET')[0].n||0)+1,ZUID:draft.id,ZNICNAME:draft.name,ZCURRENCYUID:draft.currency,ZCURRENCYID:template.ZCURRENCYID||0,ZGROUPUID:template.ZGROUPUID||'',ZGROUP_ID:template.ZGROUP_ID||0,ZTYPE:0,ZISDEL:0,ZISREFLECT:1,ZORDER:Number(rows(db,'SELECT MAX(ZORDER) n FROM ZASSET')[0].n||0)+1,ZUTIME:now,ZMEMO:'Created with BankBuddy'});
+  const keys=columns.map(c=>c.name);db.run('INSERT INTO ZASSET ('+keys.join(',')+') VALUES ('+keys.map(()=>'?').join(',')+')',keys.map(k=>value[k]));
+  db.run('UPDATE Z_PRIMARYKEY SET Z_MAX=MAX(Z_MAX,?) WHERE Z_ENT=?',[pk,assetEntity]);accounts.push(value);accountsAdded++;
+ }
  for(const d of confirmed){
   if(!itemIds.has(d.id))throw Error('A confirmed change refers to a missing bank transaction.');
   if(!['create','edit','delete'].includes(d.action||''))throw Error('A legacy confirmation must be reviewed again before export.');
@@ -97,7 +109,7 @@ export function applyDecisions(db:Database,decisions:Decision[],report:Report){
  }
  db.run('UPDATE Z_PRIMARYKEY SET Z_MAX=MAX(Z_MAX,?) WHERE Z_ENT=?',[nextPk-1,entity]);
  const integrity=rows(db,'PRAGMA integrity_check');if(integrity.length!==1||Object.values(integrity[0])[0]!=='ok')throw Error('Export integrity check failed.');
- db.run('COMMIT');return {added,edited,deleted,dismissed};
+ db.run('COMMIT');return {added,edited,deleted,dismissed,accountsAdded};
  }catch(e){db.run('ROLLBACK');throw e}
 }
 export async function exportBackup(report:Report){

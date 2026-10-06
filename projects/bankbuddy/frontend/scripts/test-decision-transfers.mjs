@@ -32,7 +32,12 @@ assert.equal(model.sourceAccount(bankSource,demoAccounts,{[model.accountMappingK
 assert.equal(model.sourceAccount(bankSource,demoAccounts,{[model.accountMappingKey(bankSource)]:'eur'}).id,'personal');
 const nordea=tx('nordea',-10,'Expense',8);nordea.source.bank='nordea';
 const deferred={...round,source:pocketSource};
-assert.deepEqual([deferred,purchase,nordea].sort(model.reviewOrder).map(i=>i.id),['nordea','purchase','round']);
+assert.deepEqual([deferred,purchase,nordea].sort((a,b)=>model.reviewOrder(a,b)).map(i=>i.id),['nordea','purchase','round']);
+const easy={...purchase,id:'easy',candidates:[{score:96,target:{...purchase.source,accountId:'a',category:'Food'}}]};
+const uncertain={...purchase,id:'uncertain',candidates:[]};
+assert.equal(model.reviewDifficulty(easy).tier,0);
+assert.equal(model.reviewDifficulty(uncertain).tier,3);
+assert.deepEqual([uncertain,easy].sort((a,b)=>model.reviewOrder(a,b)).map(i=>i.id),['easy','uncertain']);
 const SQL=await initSqlJs({locateFile:()=>require.resolve('sql.js/dist/sql-wasm.wasm')});const sql=new SQL.Database();
 sql.run("CREATE TABLE decisions(id TEXT PRIMARY KEY,target_id TEXT,status TEXT,note TEXT,updated_at TEXT,action TEXT,proposed_edit TEXT);CREATE UNIQUE INDEX unique_confirmed_target ON decisions(target_id) WHERE status='confirmed';CREATE TABLE decision_sources(source_id TEXT PRIMARY KEY,decision_id TEXT NOT NULL)");
 const prepare=query=>({bind:(...params)=>({query,params,first:async()=>{const stmt=sql.prepare(query);stmt.bind(params);const row=stmt.step()?stmt.getAsObject():null;stmt.free();return row}})});

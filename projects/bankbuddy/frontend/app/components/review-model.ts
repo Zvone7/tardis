@@ -4,7 +4,8 @@ export type Match={target:Tx;score:number;reason:string;roundUp:number};
 export type Item={id:string;source:Tx;candidates:Match[]};
 export type Edit={description:string;date:string;time:string;amount:number;currency:string;accountId:string;account:string;category:string;categoryId?:string;kind?:'expense'|'income'|'transfer';targetAccountId?:string;targetAccount?:string;memo?:string;merge?:Merge};
 export type Decision={id:string;target_id:string|null;status:string;note:string;updated_at:string;action?:string;proposed_edit?:string};
-export type Report={accountMappings?:Record<string,string>;moneyManagerEntries?:Tx[];categoryOptions?:{name:string;kind:string;id:string;parentId?:string}[];items:Item[];moneyManagerOnly:Tx[];accounts:{id:string;name:string;currency:string}[];files:{id:string;name:string;bytes:number;sha256:string}[];summary:{transactions:number;withSuggestions:number;moneyManagerEntries:number;files:number;excluded:Record<string,number>};notes:string[]};
+export type NewAccount={id:string;name:string;currency:string;templateId:string};
+export type Report={newAccounts?:NewAccount[];accountHistory?:{id:string;name:string;currency:string;status:number;transactionCount:number}[];accountMappings?:Record<string,string>;moneyManagerEntries?:Tx[];categoryOptions?:{name:string;kind:string;id:string;parentId?:string}[];items:Item[];moneyManagerOnly:Tx[];accounts:{id:string;name:string;currency:string}[];files:{id:string;name:string;bytes:number;sha256:string}[];summary:{transactions:number;withSuggestions:number;moneyManagerEntries:number;files:number;excluded:Record<string,number>};notes:string[]};
 export type Field='description'|'date'|'time'|'amount'|'accountId'|'targetAccountId'|'category';
 export type Choice={value:string;label:string;score:number;detail?:string;disabled?:boolean};
 export const defaults:Record<string,string>={help:'K',queue:'M',previous:'Ø',next:'Æ',skip:'Å',save:'^',fieldUp:'W',fieldLeft:'A',fieldDown:'S',fieldRight:'D'};
@@ -18,7 +19,15 @@ export const money=(t:{amount:number;currency:string})=>new Intl.NumberFormat('n
 const accountWords=(name:string)=>name.replace(/®[️]?/gu,'r').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 export const pocketEntry=(t:Tx)=>t.bank==='revolut'&&/to pocket.*(?:lomm?e?penger|lomapenger)/i.test(t.description);
 export const accountMappingKey=(t:Tx)=>pocketEntry(t)?`pocket|${t.currency}|lommepenger`:`${t.bank}|${t.currency}|${t.account}`;
-export const reviewOrder=(a:Item,b:Item)=>{const rank=(t:Tx)=>pocketEntry(t)?4:t.amount<0?(t.bank==='nordea'?0:1):(t.bank==='nordea'?2:3);return rank(a.source)-rank(b.source)||a.source.date.localeCompare(b.source.date)||(a.source.line||0)-(b.source.line||0)||a.id.localeCompare(b.id)};
+export function reviewDifficulty(item:Item,report?:Report){
+ const best=[...item.candidates].sort((a,b)=>b.score-a.score)[0];const score=best?.score||0;
+ const account=report?sourceAccount(item.source,report.accounts,report.accountMappings):undefined;
+ const missing=[!(account||best?.target.accountId),!best?.target.category,!item.source.description?.trim()].filter(Boolean).length;
+ const tier=score>=85&&missing===0?0:missing===1?1:score>=50?2:3;
+ return {tier,score,missing,label:tier===0?'Strong match':tier===1?'Missing one field':tier===2?'Needs review':'Uncertain'};
+}
+export const reviewOrder=(a:Item,b:Item,report?:Report)=>{const rank=(t:Tx)=>pocketEntry(t)?4:t.amount<0?(t.bank==='nordea'?0:1):(t.bank==='nordea'?2:3);const x=reviewDifficulty(a,report),y=reviewDifficulty(b,report);return rank(a.source)-rank(b.source)||x.tier-y.tier||y.score-x.score||x.missing-y.missing||a.source.date.localeCompare(b.source.date)||(a.source.line||0)-(b.source.line||0)||a.id.localeCompare(b.id)};
+
 export function sourceAccount(source:Tx,accounts:Report['accounts'],mappings:Record<string,string>={}){
  const pool=accounts.filter(a=>a.currency.split('_').at(-1)===source.currency);
  const configured=pool.find(a=>a.id===mappings[accountMappingKey(source)]);if(configured)return configured;
