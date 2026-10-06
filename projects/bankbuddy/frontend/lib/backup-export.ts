@@ -39,7 +39,7 @@ export function applyDecisions(db:Database,decisions:Decision[],report:Report){
  if(!entity)throw Error('Unsupported Money Manager database: transaction entity missing.');
  let nextPk=Number(rows(db,'SELECT MAX(Z_PK) n FROM ZINOUTCOME')[0].n||0)+1;
  let nextAid=Number(rows(db,'SELECT MAX(ZAID) n FROM ZINOUTCOME')[0].n||0)+1;
- const touched=new Set<number>();let added=0,edited=0,deleted=0,dismissed=0;
+ const touched=new Set<number>();let added=0,edited=0,deleted=0,dismissed=0,unchanged=0;
  const now=Date.now();
  const update=(pk:number,patch:Row)=>{const keys=Object.keys(patch);db.run('UPDATE ZINOUTCOME SET '+keys.map(k=>k+'=?').join(',')+' WHERE Z_PK=?',[...keys.map(k=>patch[k]),pk])};
  const insert=(patch:Row)=>{const value={Z_PK:nextPk++,Z_ENT:entity,Z_OPT:1,ZAID:nextAid++,ZISDEL:0,ZISSYNCED:0,ZSYNCCHECK:0,ZSYNCVERSION:0,ZUTIME:now,ZUID:crypto.randomUUID().toUpperCase(),ZTXUIDFEE:'',ZCARDDIVIDEUID:'',ZCARDDIVIDEMONTH:'0',...patch};const keys=Object.keys(value);db.run('INSERT INTO ZINOUTCOME ('+keys.join(',')+') VALUES ('+keys.map(()=>'?').join(',')+')',keys.map(k=>(value as Row)[k]));return value};
@@ -59,11 +59,12 @@ export function applyDecisions(db:Database,decisions:Decision[],report:Report){
  }
  for(const d of confirmed){
   if(!itemIds.has(d.id))throw Error('A confirmed change refers to a missing bank transaction.');
-  if(!['create','edit','delete'].includes(d.action||''))throw Error('A legacy confirmation must be reviewed again before export.');
+  if(!['create','edit','delete','match'].includes(d.action||''))throw Error('A legacy confirmation must be reviewed again before export.');
   const pk=d.target_id?Number(d.target_id.replace(/^mm-/,'')):null;
   let original=pk?rows(db,'SELECT * FROM ZINOUTCOME WHERE Z_PK=? AND ZISDEL=0',[pk])[0]:undefined;
   if(d.target_id&&!original)throw Error('A selected Money Manager entry is missing or already deleted.');
   if(original&&!['0','1','3','4'].includes(original.ZDO_TYPE))throw Error('This entry type is not supported for export.');
+  if(d.action==='match'){if(!original)throw Error('A confirmed match needs an existing Money Manager entry');mark(original);unchanged++;continue}
   const isTransfer=original&&['3','4'].includes(original.ZDO_TYPE);
   let pair:Row[]=[];
   if(isTransfer){
@@ -109,7 +110,7 @@ export function applyDecisions(db:Database,decisions:Decision[],report:Report){
  }
  db.run('UPDATE Z_PRIMARYKEY SET Z_MAX=MAX(Z_MAX,?) WHERE Z_ENT=?',[nextPk-1,entity]);
  const integrity=rows(db,'PRAGMA integrity_check');if(integrity.length!==1||Object.values(integrity[0])[0]!=='ok')throw Error('Export integrity check failed.');
- db.run('COMMIT');return {added,edited,deleted,dismissed,accountsAdded};
+ db.run('COMMIT');return {added,edited,deleted,dismissed,accountsAdded,unchanged};
  }catch(e){db.run('ROLLBACK');throw e}
 }
 export async function exportBackup(report:Report){

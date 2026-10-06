@@ -7,7 +7,7 @@ const bad=(error:string,status=400)=>Response.json({error},{status});
 export async function POST(request:Request){
  if(!validOrigin(request))return new Response('Forbidden',{status:403});
  let b:any;try{b=await request.json()}catch{return bad('Invalid JSON')}
- if(!b||typeof b.id!=='string'||!['confirmed','held','unresolved'].includes(b.status)||typeof b.note!=='string'||b.note.length>4000||!(b.targetId===null||typeof b.targetId==='string')||!['create','edit','delete','revert'].includes(b.action))return bad('Invalid review decision');
+ if(!b||typeof b.id!=='string'||!['confirmed','held','unresolved'].includes(b.status)||typeof b.note!=='string'||b.note.length>4000||!(b.targetId===null||typeof b.targetId==='string')||!['create','edit','delete','revert','match'].includes(b.action))return bad('Invalid review decision');
  try{
   const report=await loadReport();if(!report)return failure();const item=report.items.find(i=>i.id===b.id);if(!item)return bad('Transaction not found');
   let proposed:Edit=b.proposedEdit,action=b.action,status=b.status,note=b.note;
@@ -16,9 +16,10 @@ export async function POST(request:Request){
   const match=matches.find(c=>c.target.id===b.targetId);
   // Previously saved targets can always be reverted, even if suggestion ranking changed.
   if(action!=='revert'&&b.targetId&&!match)return bad('Select a suggested Money Manager entry');
-  if(action==='edit'&&!match)return bad('Select an existing Money Manager entry to update');
+  if((action==='edit'||action==='match')&&!match)return bad('Select an existing Money Manager entry to update');
   if(action==='create'&&b.targetId)return bad('A new entry cannot overwrite an existing entry');
   if(action==='revert'){proposed=originalEdit(item,b.targetId);action=match?'edit':'create';status='unresolved';note=''}
+  else if(action==='match'){if(proposed?.merge)return bad('A merged expense must be reviewed as a change');proposed={} as Edit;status='confirmed'}
   else if(action!=='delete'){
    if(!proposed||typeof proposed.description!=='string'||!proposed.description.trim()||proposed.description.length>500||typeof proposed.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(proposed.date)||Number.isNaN(Date.parse(proposed.date))||new Date(proposed.date).toISOString().slice(0,10)!==proposed.date||typeof proposed.time!=='string'||proposed.time!==''&&!/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(proposed.time)||!Number.isFinite(proposed.amount)||Math.abs(proposed.amount)>100000000||typeof proposed.category!=='string'||proposed.category.length>200||proposed.memo!==undefined&&(typeof proposed.memo!=='string'||proposed.memo.length>4000))return bad('Check the note, date, time, amount and description');
    const account=report.accounts.find(a=>a.id===proposed.accountId),kind=proposed.kind||(proposed.amount<0?'expense':'income');

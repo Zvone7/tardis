@@ -43,6 +43,12 @@ export function sourceAccount(source:Tx,accounts:Report['accounts'],mappings:Rec
  return matches.length===1?matches[0]:undefined;
 }
 export function originalEdit(item:Item,targetId:string|null,accounts:Report['accounts']=[],mappings:Record<string,string>={}):Edit{const inferred=sourceAccount(item.source,accounts,mappings);const t=item.candidates.find(c=>c.target.id===targetId)?.target||item.source;return {description:t.description||'Unlabelled',date:t.date,time:t.time||'23:59',amount:t.amount,currency:t.currency,accountId:t.type==='3'?t.toAccountId||'':t.type==='4'?t.accountId||'':inferred?.id||t.accountId||'',account:t.type==='3'?'':inferred?.name||(t.accountId?t.account:''),category:t.accountId?t.category:'',categoryId:t.categoryId,kind:['3','4'].includes(t.type||'')?'transfer':t.amount<0?'expense':'income',targetAccountId:t.type==='3'?t.accountId||'':t.toAccountId||'',targetAccount:'',memo:t.memo||(!targetId&&t.amount<0?'Newly created expense (BankBuddy)':'')};}
+export function unchangedEntry(item:Item,targetId:string|null,edit:Edit|null){
+ if(!targetId||!edit||edit.merge||!item.candidates.some(c=>c.target.id===targetId))return false;
+ const original=originalEdit(item,targetId);
+ const time=(t:string)=>t.length===5?t+':00':t;
+ return ['description','date','currency','accountId','kind'].every(k=>(original as any)[k]===(edit as any)[k])&&Math.round(original.amount*100)===Math.round(edit.amount*100)&&time(original.time)===time(edit.time)&&(original.memo||'')===(edit.memo||'')&&(original.kind==='transfer'?(original.targetAccountId||'')===(edit.targetAccountId||''):(original.categoryId&&edit.categoryId?original.categoryId===edit.categoryId:original.category===edit.category));
+}
 export function initialEdit(item:Item,decision?:Decision,accounts:Report['accounts']=[],mappings:Record<string,string>={}):{targetId:string|null;edit:Edit;note:string}{const targetId=decision?(decision.target_id||null):(item.candidates[0]?.target.id||null);const original=originalEdit(item,targetId,accounts,mappings);let saved;try{saved=JSON.parse(decision?.proposed_edit||'{}')}catch{saved={}}return {targetId,edit:typeof saved?.description==='string'?{...original,...saved}:original,note:decision?.note||''};}
 export function choicesFor(field:Field,item:Item,report:Report,categories:string[]):Choice[]{
  const map=new Map<string,Choice>();const add=(value:string,label:string,score:number,detail?:string,disabled=false)=>{const old=map.get(value);if(!old||old.score<score)map.set(value,{value,label,score,detail,disabled});};
