@@ -3,7 +3,7 @@ export type Tx={id:string;date:string;time?:string;amount:number;currency:string
 export type Match={target:Tx;score:number;reason:string;roundUp:number};
 export type Item={id:string;source:Tx;candidates:Match[]};
 export type Edit={description:string;date:string;time:string;amount:number;currency:string;accountId:string;account:string;category:string;categoryId?:string;kind?:'expense'|'income'|'transfer';targetAccountId?:string;targetAccount?:string;memo?:string;merge?:Merge};
-export type Decision={id:string;target_id:string|null;status:string;note:string;updated_at:string;action?:string;proposed_edit?:string};
+export type Decision={id:string;target_id:string|null;status:string;note:string;updated_at:string;action?:string;proposed_edit?:string;review_context?:string};
 export type NewAccount={id:string;name:string;currency:string;templateId:string};
 export type Report={newAccounts?:NewAccount[];accountHistory?:{id:string;name:string;currency:string;status:number;transactionCount:number}[];accountMappings?:Record<string,string>;moneyManagerEntries?:Tx[];categoryOptions?:{name:string;kind:string;id:string;parentId?:string}[];items:Item[];moneyManagerOnly:Tx[];accounts:{id:string;name:string;currency:string}[];files:{id:string;name:string;bytes:number;sha256:string}[];summary:{transactions:number;withSuggestions:number;moneyManagerEntries:number;files:number;excluded:Record<string,number>};notes:string[]};
 export type Field='description'|'date'|'time'|'amount'|'accountId'|'targetAccountId'|'category';
@@ -61,3 +61,20 @@ export function choicesFor(field:Field,item:Item,report:Report,categories:string
  return [...map.values()].sort((a,b)=>b.score-a.score||a.label.localeCompare(b.label));
 }
 export function progressRows(items:Item[],decisions:Record<string,Decision>,key:(i:Item)=>string){const map=new Map<string,{name:string;total:number;done:number;held:number}>();const merged=new Set<string>();for(const d of Object.values(decisions))if(d.status==='confirmed'){try{const m=JSON.parse(d.proposed_edit||'{}').merge;if(m)for(const id of [m.purchaseId,m.roundUpId,m.creditId])if(id)merged.add(id)}catch{}}for(const i of items){const name=key(i);const row=map.get(name)||{name,total:0,done:0,held:0};row.total++;if(decisions[i.id]?.status==='confirmed'||merged.has(i.id))row.done++;else if(decisions[i.id]?.status==='held')row.held++;map.set(name,row)}return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name));}
+
+export const merchantKey=(t:Tx)=>[t.bank,t.account,t.currency,t.amount<0?'out':'in',t.description.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim()].join('|');
+export type Preference={key:string;merchant:string;count:number;consistent:boolean;edit:Partial<Edit>};
+export function learnedPreferences(report:Report,decisions:Record<string,Decision>):Preference[]{
+ const groups=new Map<string,{item:Item;edits:Edit[]}>();const items=new Map(report.items.map(i=>[i.id,i]));
+ for(const d of Object.values(decisions)){if(d.status!=='confirmed'||!['create','edit'].includes(d.action||''))continue;const item=items.get(d.id);if(!item||/^(omkostninger|fee|fees|transfer|payment|unknown|unlabelled)$/i.test(item.source.description.trim()))continue;let e:Edit;try{e=JSON.parse(d.proposed_edit||'{}')}catch{continue}if(!e.accountId||!e.kind||e.kind==='transfer'||e.merge)continue;
+ const key=merchantKey(item.source),group=groups.get(key)||{item,edits:[]};group.edits.push(e);groups.set(key,group);
+ }
+ return [...groups].map(([key,g])=>{const first=g.edits[0];return {key,merchant:g.item.source.description,count:g.edits.length,consistent:g.edits.every(e=>e.kind===first.kind&&e.accountId===first.accountId&&(e.categoryId||e.category)===(first.categoryId||first.category)),edit:{kind:first.kind,accountId:first.accountId,account:first.account,category:first.category,categoryId:first.categoryId}}}).sort((a,b)=>b.count-a.count||a.merchant.localeCompare(b.merchant));
+}
+export function applyPreference(edit:Edit,item:Item,report:Report,preference?:Preference):Edit{
+ if(!preference?.consistent||preference.edit.kind!==edit.kind)return edit;
+ const category=report.categoryOptions?.filter(c=>c.kind===edit.kind&&(preference.edit.categoryId?c.id===preference.edit.categoryId:c.name===preference.edit.category));
+ const account=report.accounts.find(a=>a.id===preference.edit.accountId&&a.currency.split('_').at(-1)===edit.currency);
+ return {...edit,...(account&&!report.accountMappings?.[accountMappingKey(item.source)]?{accountId:account.id,account:account.name}:{}),...(category?.length===1?{category:category[0].name,categoryId:category[0].id}:{})};
+}
+export const sortedCategories=(report:Report,kind:string)=>[...(report.categoryOptions||[])].filter(c=>c.kind===kind).sort((a,b)=>a.name.trim().localeCompare(b.name.trim(),'nb',{sensitivity:'base',numeric:true})||a.id.localeCompare(b.id));

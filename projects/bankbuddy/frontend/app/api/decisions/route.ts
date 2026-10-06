@@ -37,8 +37,11 @@ export async function POST(request:Request){
   }else{proposed={} as Edit;status='confirmed'}
   const sources=status==='confirmed'?mergedIds(item.id,proposed?.merge):[];
   if(sources.length){const conflict=await db().prepare(`SELECT id FROM decisions WHERE id IN (${sources.map(()=>'?').join(',')}) AND id<>? AND status='confirmed'`).bind(...sources,item.id).first();if(conflict)return bad('One of these bank transactions is already confirmed. Revert its other decision first.',409)}
+  const context=b.reviewContext&&typeof b.reviewContext==='object'?JSON.stringify(b.reviewContext):'{}';if(context.length>20000)return bad('Review context is too large');
   const now=new Date().toISOString(),payload=JSON.stringify(b.action==='revert'?{}:proposed||{});
+  const audit=JSON.stringify({id:item.id,at:now,action:b.action,status,source:item.source,original:match?.target||null,after:{targetId:b.targetId,status,note,action,proposedEdit:proposed},context:JSON.parse(context)});
   await db().batch([
+   db().prepare("INSERT INTO settings(key,value) SELECT ?,json_set(?, '$.previous', json(COALESCE((SELECT json_object('targetId',target_id,'status',status,'note',note,'action',action,'proposedEdit',json(proposed_edit)) FROM decisions WHERE id=?),'null')))").bind('review_history_'+crypto.randomUUID(),audit,item.id),
    db().prepare('DELETE FROM decision_sources WHERE decision_id=?').bind(item.id),
    db().prepare('INSERT INTO decisions(id,target_id,status,note,updated_at,action,proposed_edit) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET target_id=excluded.target_id,status=excluded.status,note=excluded.note,updated_at=excluded.updated_at,action=excluded.action,proposed_edit=excluded.proposed_edit').bind(item.id,b.targetId,status,note,now,action,payload),
    ...sources.map(sourceId=>db().prepare('INSERT INTO decision_sources(source_id,decision_id) VALUES(?,?)').bind(sourceId,item.id))
