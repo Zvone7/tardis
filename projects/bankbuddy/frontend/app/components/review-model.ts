@@ -83,6 +83,11 @@ export function availableCandidates(candidates:Match[],itemId:string,decisions:R
  const used=new Set(Object.values(decisions).filter(d=>d.id!==itemId&&d.status==='confirmed'&&d.target_id).map(d=>d.target_id));
  return candidates.filter(c=>!used.has(c.target.id));
 }
+export function strongestCandidates(candidates:Match[]){
+ const best=new Map<string,Match>();
+ for(const candidate of candidates){const current=best.get(candidate.target.id);if(!current||candidate.score>current.score)best.set(candidate.target.id,candidate)}
+ return [...best.values()].sort((a,b)=>b.score-a.score||a.target.id.localeCompare(b.target.id));
+}
 export function entryChanges(item:Item,targetId:string|null,edit:Edit|null,accounts:Report['accounts']=[]){
  if(!targetId||!edit)return [];
  const o=originalEdit(item,targetId),name=(id?:string)=>accounts.find(a=>a.id===id)?.name||id||'—',time=(t:string)=>t.length===5?t+':00':t;

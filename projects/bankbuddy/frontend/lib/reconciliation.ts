@@ -36,8 +36,9 @@ export const mergedIds=(itemId:string,merge?:Merge)=>[...new Set([itemId,...(mer
 export function matchingEntries(item:Item,report:Report,total?:number):Match[]{
  const seen=new Map<string,Tx>();for(const t of report.moneyManagerEntries||[])seen.set(t.id,t);for(const i of report.items)for(const c of i.candidates)seen.set(c.target.id,c.target);for(const t of report.moneyManagerOnly)seen.set(t.id,t);
  const pool=[...seen.values()],source=item.source,sourceWords=words(source.description);
- return pool.filter(t=>t.currency===source.currency&&t.amount<0&&(!t.type||t.type==='1')&&dayGap(t.date,source.date)<=7).map(t=>{
-  const gap=dayGap(t.date,source.date),sameAmount=cents(t.amount)===cents(source.amount),combined=total!==undefined&&cents(t.amount)===cents(total),rounding=Math.abs(cents(t.amount)-cents(source.amount))<=1000;
+ const sourceKind=source.amount<0?'expense':source.amount>0?'income':null;
+ return pool.filter(t=>sourceKind&&t.currency===source.currency&&(sourceKind==='expense'?t.amount<0&&(!t.type||t.type==='1'):t.amount>0&&(!t.type||t.type==='0'))&&dayGap(t.date,source.date)<=7).map(t=>{
+  const gap=dayGap(t.date,source.date),sameAmount=cents(t.amount)===cents(source.amount),combined=sourceKind==='expense'&&total!==undefined&&cents(t.amount)===cents(total),rounding=sourceKind==='expense'&&Math.abs(cents(t.amount)-cents(source.amount))<=1000;
   const overlap=[...words(t.description)].filter(w=>sourceWords.has(w)).length;
   const score=Math.min(98,(sameAmount?42:combined?46:rounding?15:0)+(gap===0?25:gap<=1?18:7)+Math.min(overlap*14,28));
   return {target:t,score,roundUp:0,reason:[combined?'Combined amount matches':sameAmount?'Purchase amount matches':`Different amount: ${t.amount.toFixed(2)}`,`${gap} day gap`,overlap?'Similar merchant':'Check merchant','Account may need correction'].join(' · ')};

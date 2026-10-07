@@ -20,8 +20,14 @@ assert.equal(model.initialEdit(namedPayment,savedChoice).edit.description,'My sa
 assert.equal(model.availableCandidates(namedPayment.candidates,'other',{[purchase.id]:savedChoice}).length,0);
 assert.equal(model.availableCandidates(namedPayment.candidates,purchase.id,{[purchase.id]:savedChoice}).length,1);
 assert.equal(model.availableCandidates(namedPayment.candidates,'other',{[purchase.id]:{...savedChoice,status:'held'}}).length,1);
+assert.equal(model.strongestCandidates([{...namedPayment.candidates[0],score:84},{...namedPayment.candidates[0],score:60}])[0].score,84);
 const pairs=reconcile.pairSuggestions(round,report);assert.equal(pairs.length,1);assert.equal(pairs[0].total,-50);assert.equal(pairs[0].credit.id,'credit');
 assert.equal(reconcile.matchingEntries(purchase,report,-50)[0].target.id,'mm-1');
+const income=tx('income',250,'DEMO refund',12);income.source.amount=250;
+const incomeTarget={id:'mm-income',date:'2026-09-02',amount:250,currency:'NOK',description:'DEMO refund',type:'0',account:'Demo A',accountId:'a',category:'Refund'};
+const incomeReport={...report,moneyManagerEntries:[...report.moneyManagerEntries,incomeTarget]};
+assert.equal(reconcile.matchingEntries(income,incomeReport)[0].target.id,'mm-income');
+assert.ok(reconcile.matchingEntries(income,incomeReport).every(c=>c.target.amount>0));
 assert.equal(reconcile.pairSuggestions(tx('bad',-3,round.source.description,2),report).length,0);
 const unrelated=tx('unrelated',-4.5,'DEMO snack',3);assert.equal(reconcile.isRoundUp(unrelated.source),false);
 const exact=tx('exact',-50,'DEMO Books',8),ten=tx('ten',-10,round.source.description,9);assert.equal(reconcile.pairSuggestions(exact,{...report,items:[exact,ten]}).length,1);
