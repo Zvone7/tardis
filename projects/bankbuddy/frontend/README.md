@@ -16,9 +16,9 @@ The parser handles separate currency/account sections, decimal commas, and stabl
 
 ## Review
 
-Review one transaction card at a time, scoped to a selected month (default: the previous completed month in Europe/Oslo). New entries are green; existing-entry edits are orange. Title, date and time remain visible, with unavailable times explicitly labelled. Swipe left/right to browse; pull or click a field for ranked options. The green check confirms the draft; Hold, Delete and Revert are available on each card. Bottom navigation and the menu provide the queue, progress by month/account, and settings.
+Review one transaction card at a time, scoped to a selected month (default: the previous completed month in Europe/Oslo). New entries are green; existing-entry edits are orange. Title, date and time remain visible, with unavailable times explicitly labelled. Use the top Previous/Next controls to browse and tap fields for ranked options. Save queues the proposal locally; Delete dismisses it without deleting an original Money Manager entry. Bottom navigation and the menu provide the queue, progress by month/account, and settings.
 
-Confirmed and held draft edits, deletions, notes and keyboard settings persist in D1. Unconfirmed field changes are only kept in memory while browsing and are lost on reload. Confirmed target IDs are unique, enforced in D1, preventing two bank transactions from claiming the same Money Manager entry. Export draft decisions as JSON. Source files can be downloaded byte-for-byte.
+Confirmed and held draft edits, dismissals, notes and keyboard settings persist in D1. Unconfirmed field changes are only kept in memory while browsing and are lost on reload. Confirmed target IDs are unique, enforced in D1, preventing two bank transactions from claiming the same Money Manager entry. Export draft decisions as JSON. Source files can be downloaded byte-for-byte.
 
 No endpoint writes to the original Money Manager backup. Proposed new entries and field edits are stored as review decisions. Applying these decisions to a downloadable Money Manager backup, round-up transfers and month-end balancing remain future work. Existing legacy decisions are retained inside the original handoff archive; they are not silently remapped onto new transaction IDs.
 
@@ -34,7 +34,7 @@ The browser WebMCP filter tool changes visible filters only; it never confirms t
 
 ## Review and export update
 
-Hold a field for 300 ms, then drag vertically to scroll its ranked choices without lifting; tapping also opens the list. Choose Expense, Income or Transfer. Transfers expose separate source and target accounts and require matching currencies.
+Tap a field to open its ranked choices. Choose Expense, Income or Transfer. Transfers expose separate source and target accounts and require matching currencies.
 
 Settings → Download reviewed backup applies all confirmed changes across all months to an in-memory copy of the original and downloads a new `.mmbak`. Held/unconfirmed changes are excluded. Checks include the original SHA-256, atomic rollback, duplicate linked-entry protection and SQLite integrity. Transfers use paired type 4/type 3 records with a shared transaction link. Unsupported linked fees, incomplete transfers and ambiguous categories block the entire export. Existing entries preserve their base-currency ratio; new entries use the backup's stored exchange rates. No original file is modified.
 

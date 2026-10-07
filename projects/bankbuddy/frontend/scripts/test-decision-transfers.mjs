@@ -87,6 +87,8 @@ const choice={kind:'expense',accountId:'a',account:'Demo A',category:' apple ',c
 const learned=model.learnedPreferences(learningReport,Object.fromEntries([purchase,repeated].map(i=>[i.id,{id:i.id,status:'confirmed',action:'create',proposed_edit:JSON.stringify(choice)}])));
 assert.equal(learned[0].count,2);assert.equal(learned[0].consistent,true);
 assert.equal(model.applyPreference({...model.originalEdit(purchase,null),kind:'expense'},purchase,learningReport,learned[0]).categoryId,'a');
+assert.equal(model.choicesFor('accountId',purchase,learningReport,[],learned[0]).find(o=>o.value==='a').score,70);
+assert.match(model.choicesFor('accountId',purchase,learningReport,[],learned[0]).find(o=>o.value==='a').detail,/2 saved choices/);
 assert.equal(model.applyPreference({...model.originalEdit(purchase,null),kind:'income'},purchase,learningReport,learned[0]).categoryId,undefined);
 const conflicting=model.learnedPreferences(learningReport,{one:{id:purchase.id,status:'confirmed',action:'create',proposed_edit:JSON.stringify(choice)},two:{id:repeated.id,status:'confirmed',action:'edit',proposed_edit:JSON.stringify({...choice,categoryId:'z'})}});assert.equal(conflicting[0].consistent,false);
 const SQL=await initSqlJs({locateFile:()=>require.resolve('sql.js/dist/sql-wasm.wasm')});const sql=new SQL.Database();
