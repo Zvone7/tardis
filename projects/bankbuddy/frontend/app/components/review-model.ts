@@ -102,6 +102,11 @@ export function categoryScore(id:string,item:Item,report:Report,preference?:Pref
  if(preference?.consistent&&(preference.edit.categoryId?ids.has(preference.edit.categoryId):names.has(preference.edit.category||'')))scores.push(Math.min(90,50+preference.count*10));
  return Math.max(0,...scores);
 }
+export function accountPickerGroups(options:Choice[]){
+ const groups=new Map<string,Choice[]>();
+ for(const o of options){const name=accountWords(o.label);const group=/revolut/.test(name)?'Revolut':/nordea/.test(name)?'Nordea':o.label;groups.set(group,[...(groups.get(group)||[]),o])}
+ return [...groups].map(([name,items])=>({name,options:[...items].sort((a,b)=>b.score-a.score||a.label.localeCompare(b.label,'nb')),score:Math.max(0,...items.filter(o=>!o.disabled).map(o=>o.score))})).sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name,'nb'));
+}
 export function entryChanges(item:Item,targetId:string|null,edit:Edit|null,accounts:Report['accounts']=[]){
  if(!targetId||!edit)return [];
  const o=originalEdit(item,targetId),name=(id?:string)=>accounts.find(a=>a.id===id)?.name||id||'—',time=(t:string)=>t.length===5?t+':00':t;

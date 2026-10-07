@@ -32,6 +32,9 @@ const badgeReport={...report,categoryOptions:[{id:'food',name:'Food',kind:'expen
 const coffeeItem={...namedPayment,candidates:[{...namedPayment.candidates[0],target:{...namedPayment.candidates[0].target,categoryId:'coffee'}}]};
 assert.equal(model.categoryScore('food',coffeeItem,badgeReport),84);
 assert.equal(model.categoryScore('travel',coffeeItem,badgeReport),0);
+const groupedAccounts=model.accountPickerGroups([{value:'r-low',label:'®️evolut holiday',score:10},{value:'n',label:'Nordea',score:80},{value:'r-high',label:'®️evolut personal',score:100}]);
+assert.equal(groupedAccounts[0].name,'Revolut');
+assert.deepEqual(groupedAccounts[0].options.map(o=>o.value),['r-high','r-low']);
 const pairs=reconcile.pairSuggestions(round,report);assert.equal(pairs.length,1);assert.equal(pairs[0].total,-50);assert.equal(pairs[0].credit.id,'credit');
 assert.equal(reconcile.matchingEntries(purchase,report,-50)[0].target.id,'mm-1');
 const income=tx('income',250,'DEMO refund',12);income.source.amount=250;

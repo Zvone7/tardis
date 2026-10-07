@@ -30,8 +30,12 @@ const before=db.exec('SELECT COUNT(*) FROM ZINOUTCOME')[0].values[0][0];
 assert.throws(()=>applyDecisions(db,[d('three','create'),d('two','edit',{...edit,category:'missing'},'mm-1')],report));
 assert.equal(db.exec('SELECT COUNT(*) FROM ZINOUTCOME')[0].values[0][0],before);
 assert.throws(()=>applyDecisions(db,[d('one','edit',edit,'mm-2'),d('two','edit',edit,'mm-3')],report));
-applyDecisions(db,[d('two','delete',edit,'mm-2')],report);
-assert.equal(db.exec('SELECT count(*) FROM ZINOUTCOME WHERE ZISDEL=1')[0].values[0][0],2);
+const beforeDismiss=JSON.stringify(db.exec('SELECT * FROM ZINOUTCOME'));
+for(const target of ['mm-1','mm-2',null,'mm-999']){
+ const summary=applyDecisions(db,[d('two','delete',{},target)],report);
+ assert.equal(summary.dismissed,1);assert.equal(summary.deleted,0);
+ assert.equal(JSON.stringify(db.exec('SELECT * FROM ZINOUTCOME')),beforeDismiss);
+}
 db.run("INSERT INTO ZCATEGORY VALUES('duplicate','Demo expense',1,0,9)");
 assert.throws(()=>applyDecisions(db,[d('three','create',edit)],report),/unambiguous/);
 assert.equal(applyDecisions(db,[d('three','create',{...edit,categoryId:'duplicate'})],report).added,1);
@@ -44,4 +48,4 @@ assert.equal(applyDecisions(db,[d('three','create',{...edit,categoryId:'c',accou
 assert.throws(()=>applyDecisions(db,[],{...report,newAccounts:[{id:'bad',name:'Bad',currency:'EUR_USD',templateId:'a'}]}),/template/);
 assert.equal(db.exec("SELECT COUNT(*) FROM ZASSET WHERE ZUID='bad'")[0].values[0][0],0);
 const reopened=new SQL.Database(db.export());assert.equal(reopened.exec('PRAGMA integrity_check')[0].values[0][0],'ok');
-console.log('PASS: create, edit, transfer pairing, linked delete, rollback, duplicate protection, exported database integrity');
+console.log('PASS: create, edit, transfer pairing, safe dismissal of existing, transfer and new proposals, rollback, duplicate protection, exported database integrity');

@@ -60,6 +60,8 @@ export function applyDecisions(db:Database,decisions:Decision[],report:Report){
  for(const d of confirmed){
   if(!itemIds.has(d.id))throw Error('A confirmed change refers to a missing bank transaction.');
   if(!['create','edit','delete','match'].includes(d.action||''))throw Error('A legacy confirmation must be reviewed again before export.');
+  // Dismissals exclude proposals, never delete records from the exported backup.
+  if(d.action==='delete'){dismissed++;continue}
   const pk=d.target_id?Number(d.target_id.replace(/^mm-/,'')):null;
   let original=pk?rows(db,'SELECT * FROM ZINOUTCOME WHERE Z_PK=? AND ZISDEL=0',[pk])[0]:undefined;
   if(d.target_id&&!original)throw Error('A selected Money Manager entry is missing or already deleted.');
@@ -74,7 +76,6 @@ export function applyDecisions(db:Database,decisions:Decision[],report:Report){
    for(const r of pair)if(r.ZTXUIDFEE)throw Error('Transfers with linked fees require manual review.');
   }
   const affected=pair.length?pair:original?[original]:[];affected.forEach(mark);
-  if(d.action==='delete'){if(!original){dismissed++;continue}for(const r of affected)update(r.Z_PK,{ZISDEL:1,ZISSYNCED:0,Z_OPT:(r.Z_OPT||0)+1,ZUTIME:now});deleted++;continue}
   if(d.action==='edit'&&!original||d.action==='create'&&original)throw Error('The draft action does not match its selected entry.');
   const e:Edit=JSON.parse(d.proposed_edit||'{}');
   const kind=e.kind||(isTransfer?'transfer':e.amount<0?'expense':'income');

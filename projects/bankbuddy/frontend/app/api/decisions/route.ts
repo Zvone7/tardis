@@ -9,6 +9,7 @@ export async function POST(request:Request){
  let b:any;try{b=await request.json()}catch{return bad('Invalid JSON')}
  if(!b||typeof b.id!=='string'||!['confirmed','held','unresolved'].includes(b.status)||typeof b.note!=='string'||b.note.length>4000||!(b.targetId===null||typeof b.targetId==='string')||!['create','edit','delete','revert','match'].includes(b.action))return bad('Invalid review decision');
  try{
+  if(b.action==='delete')b.targetId=null; // Dismiss the proposal without claiming or deleting its original entry.
   const report=await loadReport();if(!report)return failure();const item=report.items.find(i=>i.id===b.id);if(!item)return bad('Transaction not found');
   let proposed:Edit=b.proposedEdit,action=b.action,status=b.status,note=b.note;
   let pair;try{if(action!=='revert'&&action!=='delete'&&proposed?.merge)pair=validateMerge(item,proposed.merge,report)}catch(e){return bad((e as Error).message)}
