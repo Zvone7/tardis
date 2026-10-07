@@ -21,6 +21,17 @@ assert.equal(model.availableCandidates(namedPayment.candidates,'other',{[purchas
 assert.equal(model.availableCandidates(namedPayment.candidates,purchase.id,{[purchase.id]:savedChoice}).length,1);
 assert.equal(model.availableCandidates(namedPayment.candidates,'other',{[purchase.id]:{...savedChoice,status:'held'}}).length,1);
 assert.equal(model.strongestCandidates([{...namedPayment.candidates[0],score:84},{...namedPayment.candidates[0],score:60}])[0].score,84);
+const sharedItem={...namedPayment,id:'shared',candidates:[{...namedPayment.candidates[0],score:95}]};
+const uniqueItem={...namedPayment,id:'unique',candidates:[{...namedPayment.candidates[0],target:{...namedPayment.candidates[0].target,id:'mm-unique'},score:85}]};
+const queueReport={...report,items:[sharedItem,uniqueItem]};
+const queueFilters={month:'2026-09',bank:'all',status:'unresolved',search:''};
+assert.deepEqual(model.reviewQueue(queueReport,{},queueFilters).map(i=>i.id),['shared','unique']);
+assert.deepEqual(model.reviewQueue(queueReport,{[purchase.id]:savedChoice},queueFilters).map(i=>i.id),['unique','shared']);
+assert.deepEqual(model.reviewQueue(queueReport,{[purchase.id]:savedChoice},{...queueFilters,status:'unmatched'}).map(i=>i.id),['shared']);
+const badgeReport={...report,categoryOptions:[{id:'food',name:'Food',kind:'expense'},{id:'coffee',name:'Coffee',kind:'expense',parentId:'food'},{id:'travel',name:'Travel',kind:'expense'}]};
+const coffeeItem={...namedPayment,candidates:[{...namedPayment.candidates[0],target:{...namedPayment.candidates[0].target,categoryId:'coffee'}}]};
+assert.equal(model.categoryScore('food',coffeeItem,badgeReport),84);
+assert.equal(model.categoryScore('travel',coffeeItem,badgeReport),0);
 const pairs=reconcile.pairSuggestions(round,report);assert.equal(pairs.length,1);assert.equal(pairs[0].total,-50);assert.equal(pairs[0].credit.id,'credit');
 assert.equal(reconcile.matchingEntries(purchase,report,-50)[0].target.id,'mm-1');
 const income=tx('income',250,'DEMO refund',12);income.source.amount=250;

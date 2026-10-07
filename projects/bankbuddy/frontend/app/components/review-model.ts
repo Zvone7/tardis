@@ -88,6 +88,20 @@ export function strongestCandidates(candidates:Match[]){
  for(const candidate of candidates){const current=best.get(candidate.target.id);if(!current||candidate.score>current.score)best.set(candidate.target.id,candidate)}
  return [...best.values()].sort((a,b)=>b.score-a.score||a.target.id.localeCompare(b.target.id));
 }
+export function reviewQueue(report:Report,decisions:Record<string,Decision>,filters:{month:string;bank:string;status:string;search:string}){
+ const consumed=new Set<string>();
+ for(const d of Object.values(decisions))if(d.status==='confirmed'){try{const m=JSON.parse(d.proposed_edit||'{}').merge;if(m)for(const id of [m.purchaseId,m.roundUpId,m.creditId])if(id&&id!==d.id)consumed.add(id)}catch{}}
+ const {month,bank,status,search}=filters;
+ return report.items.map(i=>({...i,candidates:availableCandidates(i.candidates,i.id,decisions)})).filter(i=>!consumed.has(i.id)&&i.source.date.startsWith(month)&&(bank==='all'||i.source.bank===bank)&&(status==='all'||(status==='suggested'?i.candidates.length>0:status==='unmatched'?i.candidates.length===0:status==='deleted'?decisions[i.id]?.action==='delete':(decisions[i.id]?.status||'unresolved')===status))&&(!search||[i.source.description,i.source.account,i.source.amount,i.source.currency].join(' ').toLowerCase().includes(search.toLowerCase()))).sort((a,b)=>reviewOrder(a,b,report));
+}
+export function categoryScore(id:string,item:Item,report:Report,preference?:Preference){
+ const ids=new Set([id]);let added=true;
+ while(added){added=false;for(const c of report.categoryOptions||[])if(c.parentId&&ids.has(c.parentId)&&!ids.has(c.id)){ids.add(c.id);added=true}}
+ const names=new Set((report.categoryOptions||[]).filter(c=>ids.has(c.id)).map(c=>c.name));
+ const scores=item.candidates.filter(c=>c.target.categoryId?ids.has(c.target.categoryId):names.has(c.target.category)).map(c=>c.score);
+ if(preference?.consistent&&(preference.edit.categoryId?ids.has(preference.edit.categoryId):names.has(preference.edit.category||'')))scores.push(Math.min(90,50+preference.count*10));
+ return Math.max(0,...scores);
+}
 export function entryChanges(item:Item,targetId:string|null,edit:Edit|null,accounts:Report['accounts']=[]){
  if(!targetId||!edit)return [];
  const o=originalEdit(item,targetId),name=(id?:string)=>accounts.find(a=>a.id===id)?.name||id||'—',time=(t:string)=>t.length===5?t+':00':t;
