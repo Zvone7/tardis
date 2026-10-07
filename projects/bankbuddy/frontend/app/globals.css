@@ -68,3 +68,4 @@
 .compact-dark .app-brand{flex-direction:column;align-items:flex-start;gap:0}
 
 .compact-dark .review-toolbar{grid-template-columns:repeat(5,minmax(0,1fr))}.compact-dark .review-toolbar button{flex-direction:column;gap:2px}.compact-dark .expense-card-top{height:52px;min-height:52px;box-sizing:border-box}.compact-dark .filter-icon{position:relative;width:34px;height:30px;justify-content:center;padding:5px}.filter-icon .changes-count{top:-6px;right:-7px;min-width:17px;width:auto;padding:0 4px}.compact-dark .month-header{justify-content:flex-start}.compact-dark .month-header .filter-select{flex:1}
+.compact-dark .swap-accounts{align-self:flex-end;display:flex;align-items:center;gap:5px;padding:3px 8px;min-height:26px;font-size:11px;margin:0 30px 0 auto;color:#a9d7ca;background:transparent;border:0}

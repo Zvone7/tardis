@@ -53,6 +53,14 @@ assert.equal(reconcile.pairSuggestions(purchase,{...report,items:[purchase,{...l
 const demoAccounts=[{id:'personal',name:'®️evolut 🇳🇴',currency:'EUR_NOK'},{id:'pocket',name:'®️evolut 🇳🇴 lommepenger',currency:'EUR_NOK'},{id:'eur',name:'®️evolut 🇪🇺',currency:'EUR_EUR'},{id:'monthly',name:'®️evolut 🇳🇴 (monthly expenses)',currency:'EUR_NOK'}];
 const bankSource={...purchase.source,account:'Revolut · Personal Account (NOK)'};
 assert.equal(model.sourceAccount(bankSource,demoAccounts).id,'personal');
+const transferAccounts=[...demoAccounts,{id:'nordea',name:'Nordea',currency:'EUR_NOK'}];
+const outbound={...purchase,source:{...purchase.source,bank:'nordea',account:'Nordea · Brukskonto',description:'Revolut top-up'},candidates:[{target:{...purchase.source,id:'mm-transfer',type:'4',accountId:'personal',toAccountId:'nordea'},score:60}]};
+const directed=model.initialEdit(outbound,undefined,transferAccounts).edit;
+assert.equal(directed.accountId,'nordea');assert.equal(directed.targetAccountId,'personal');
+assert.equal(model.originalEdit(outbound,'mm-transfer').accountId,'personal');
+const incoming={...outbound,source:{...bankSource,amount:45.5}};
+assert.equal(model.orientTransfer(directed,incoming,transferAccounts).targetAccountId,'personal');
+assert.equal(model.initialEdit(outbound,{target_id:'mm-transfer',proposed_edit:JSON.stringify({...directed,accountId:'personal',targetAccountId:'nordea'})},transferAccounts).edit.accountId,'personal');
 assert.equal(model.sourceAccount({...bankSource,account:'Revolut · Vacay lommepenger (NOK)'},demoAccounts).id,'pocket');
 assert.equal(model.sourceAccount({...bankSource,currency:'USD'},demoAccounts),undefined);
 assert.equal(model.sourceAccount(bankSource,[...demoAccounts,{id:'ambiguous',name:'Revolut',currency:'EUR_NOK'}]),undefined);

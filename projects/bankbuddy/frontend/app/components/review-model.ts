@@ -49,7 +49,16 @@ export function unchangedEntry(item:Item,targetId:string|null,edit:Edit|null){
  const time=(t:string)=>t.length===5?t+':00':t;
  return ['description','date','currency','accountId','kind'].every(k=>(original as any)[k]===(edit as any)[k])&&Math.round(original.amount*100)===Math.round(edit.amount*100)&&time(original.time)===time(edit.time)&&(original.memo||'')===(edit.memo||'')&&(original.kind==='transfer'?(original.targetAccountId||'')===(edit.targetAccountId||''):(original.categoryId&&edit.categoryId?original.categoryId===edit.categoryId:original.category===edit.category));
 }
-export function initialEdit(item:Item,decision?:Decision,accounts:Report['accounts']=[],mappings:Record<string,string>={}):{targetId:string|null;edit:Edit;note:string}{const targetId=decision?(decision.target_id||null):(item.candidates[0]?.target.id||null);const original=originalEdit(item,targetId,accounts,mappings);if(!decision&&!original.description.trim())original.description=item.source.description||'Unlabelled';let saved;try{saved=JSON.parse(decision?.proposed_edit||'{}')}catch{saved={}}return {targetId,edit:typeof saved?.description==='string'?{...original,...saved}:original,note:decision?.note||''};}
+export function orientTransfer(edit:Edit,item:Item,accounts:Report['accounts'],mappings:Record<string,string>={}):Edit{
+ if(edit.kind!=='transfer')return edit;
+ const statement=sourceAccount(item.source,accounts,mappings);if(!statement)return edit;
+ let from=edit.accountId,to=edit.targetAccountId||'';
+ if(item.source.amount<0){if(to===statement.id){to=from;from=statement.id}else if(from!==statement.id){to=from;from=statement.id}}
+ else if(item.source.amount>0){if(from===statement.id){from=to;to=statement.id}else to=statement.id}
+ if(!from||!to||from===to)return edit;
+ return {...edit,accountId:from,account:accounts.find(a=>a.id===from)?.name||'',targetAccountId:to,targetAccount:accounts.find(a=>a.id===to)?.name||''};
+}
+export function initialEdit(item:Item,decision?:Decision,accounts:Report['accounts']=[],mappings:Record<string,string>={}):{targetId:string|null;edit:Edit;note:string}{const targetId=decision?(decision.target_id||null):(item.candidates[0]?.target.id||null);let original=originalEdit(item,targetId,accounts,mappings);if(!decision){original=orientTransfer(original,item,accounts,mappings);if(!original.description.trim())original.description=item.source.description||'Unlabelled'}let saved;try{saved=JSON.parse(decision?.proposed_edit||'{}')}catch{saved={}}return {targetId,edit:typeof saved?.description==='string'?{...original,...saved}:original,note:decision?.note||''};}
 export function choicesFor(field:Field,item:Item,report:Report,categories:string[],preference?:Preference):Choice[]{
  const map=new Map<string,Choice>();const add=(value:string,label:string,score:number,detail?:string,disabled=false)=>{const old=map.get(value);if(!old||old.score<score)map.set(value,{value,label,score,detail,disabled});};
  for(const c of item.candidates){const t=c.target;const val=(field==='accountId'||field==='targetAccountId')?(field==='targetAccountId'?(t.type==='3'?t.accountId:t.toAccountId)||'':(t.type==='3'?t.toAccountId:t.accountId)||''):String(t[field as keyof Tx]??'');add(val,(field==='accountId'||field==='targetAccountId')?(report.accounts.find(a=>a.id===val)?.name||val):field==='amount'?money(t):field==='date'?dateLabel(t.date):val||'Time unavailable',(field==='accountId'||field==='targetAccountId')?Math.min(90,c.score):c.score,'Existing Money Manager entry');}
