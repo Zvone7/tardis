@@ -8,10 +8,10 @@ export type NewAccount={id:string;name:string;currency:string;templateId:string}
 export type Report={newAccounts?:NewAccount[];accountHistory?:{id:string;name:string;currency:string;status:number;transactionCount:number}[];accountMappings?:Record<string,string>;moneyManagerEntries?:Tx[];categoryOptions?:{name:string;kind:string;id:string;parentId?:string}[];items:Item[];moneyManagerOnly:Tx[];accounts:{id:string;name:string;currency:string}[];files:{id:string;name:string;bytes:number;sha256:string}[];summary:{transactions:number;withSuggestions:number;moneyManagerEntries:number;files:number;excluded:Record<string,number>};notes:string[]};
 export type Field='description'|'date'|'time'|'amount'|'accountId'|'targetAccountId'|'category';
 export type Choice={value:string;label:string;score:number;detail?:string;disabled?:boolean};
-export const defaults:Record<string,string>={help:'K',queue:'M',previous:'Ø',next:'Æ',skip:'Å',save:'^',fieldUp:'W',fieldLeft:'A',fieldDown:'S',fieldRight:'D'};
-export const labels:Record<string,string>={help:'Keyboard overview',queue:'Match queue',previous:'Previous transaction',next:'Next transaction',skip:'Skip for later',save:'Confirm draft change',fieldUp:'Amount options',fieldLeft:'Account options',fieldDown:'Category options',fieldRight:'Entry options'};
+export const defaults:Record<string,string>={help:'K',queue:'M',filters:'F',details:'G',batch:'X',previous:'←',next:'→',skip:'Å',save:'^',revert:'R',swap:'L',fieldUp:'W',fieldLeft:'A',fieldDown:'S',fieldRight:'D',fieldHints:'J'};
+export const labels:Record<string,string>={help:'Keyboard overview',queue:'Match queue',filters:'Open filters',details:'View bank details',batch:'Save batch',skip:'Skip for later',save:'Confirm draft change',revert:'Revert current entry',swap:'Swap transfer accounts',fieldUp:'Amount options',fieldLeft:'Account options',fieldDown:'Category options',fieldRight:'Entry options',fieldHints:'Show field shortcuts'};
 export const fieldLabels:Record<Field,string>={description:'Title',date:'Date',time:'Time',amount:'Amount',accountId:'Source account',targetAccountId:'Target account',category:'Category'};
-export const physical:Record<string,string>={BracketLeft:'Å',BracketRight:'^',Semicolon:'Ø',Quote:'Æ'};
+export const physical:Record<string,string>={ArrowLeft:'←',ArrowRight:'→',BracketLeft:'Å',BracketRight:'^',Semicolon:'Ø',Quote:'Æ'};
 export function previousMonth(now=new Date()){const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Oslo',year:'numeric',month:'2-digit'}).formatToParts(now);const year=Number(p.find(p=>p.type==='year')?.value),month=Number(p.find(p=>p.type==='month')?.value);return new Date(Date.UTC(year,month-2,1)).toISOString().slice(0,7);}
 export const monthLabel=(month:string)=>new Intl.DateTimeFormat('en-GB',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(month+'-01T12:00:00Z'));
 export const dateLabel=(date:string)=>new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(date+'T12:00:00Z'));
@@ -26,7 +26,7 @@ export function reviewDifficulty(item:Item,report?:Report){
  const tier=score>=85&&missing===0?0:missing===1?1:score>=50?2:3;
  return {tier,score,missing,label:tier===0?'Strong match':tier===1?'Missing one field':tier===2?'Needs review':'Uncertain'};
 }
-export const reviewOrder=(a:Item,b:Item,report?:Report)=>{const rank=(t:Tx)=>pocketEntry(t)?4:t.amount<0?(t.bank==='nordea'?0:1):(t.bank==='nordea'?2:3);const x=reviewDifficulty(a,report),y=reviewDifficulty(b,report);return rank(a.source)-rank(b.source)||x.tier-y.tier||y.score-x.score||x.missing-y.missing||a.source.date.localeCompare(b.source.date)||(a.source.line||0)-(b.source.line||0)||a.id.localeCompare(b.id)};
+export const reviewOrder=(a:Item,b:Item,report?:Report)=>{const accountRank=(t:Tx)=>/6011\.17\.06754/.test(t.account)?99:/6206\.30\.78056/.test(t.account)?10:/6580\.49\.36267/.test(t.account)?20:/6001\.16\.69509/.test(t.account)?30:50;const nordeaTransfer=(t:Tx)=>{const text=(t.description+' '+t.category).toLowerCase();return t.bank==='nordea'&&!/lønn|cheffelo/.test(text)&&/kontoregulering|overførsel|overføring|fast oppdrag|revolut/.test(text)};const deferredRevolut=(t:Tx)=>t.bank==='revolut'&&(/to pocket.*(?:lomm?e?penger|lomapenger)/i.test(t.description)||/^exchanged to nok$/i.test(t.description));const group=(t:Tx)=>t.amount>0?(t.bank==='nordea'?0:1):nordeaTransfer(t)?2:3;const bankRank=(t:Tx)=>t.bank==='nordea'?0:t.bank==='revolut'?1:2;const deferredRank=(t:Tx)=>deferredRevolut(t)?1:0;const x=reviewDifficulty(a,report),y=reviewDifficulty(b,report);return deferredRank(a.source)-deferredRank(b.source)||group(a.source)-group(b.source)||(group(a.source)<2&&group(b.source)<2?Math.abs(b.source.amount)-Math.abs(a.source.amount):0)||bankRank(a.source)-bankRank(b.source)||accountRank(a.source)-accountRank(b.source)||a.source.account.localeCompare(b.source.account)||x.tier-y.tier||y.score-x.score||x.missing-y.missing||a.source.date.localeCompare(b.source.date)||(a.source.line||0)-(b.source.line||0)||a.id.localeCompare(b.id)};
 
 export function sourceAccount(source:Tx,accounts:Report['accounts'],mappings:Record<string,string>={}){
  const pool=accounts.filter(a=>a.currency.split('_').at(-1)===source.currency);
@@ -98,9 +98,23 @@ export function strongestCandidates(candidates:Match[]){
  for(const candidate of candidates){const current=best.get(candidate.target.id);if(!current||candidate.score>current.score)best.set(candidate.target.id,candidate)}
  return [...best.values()].sort((a,b)=>b.score-a.score||a.target.id.localeCompare(b.target.id));
 }
+const roundUpCents=(amount:number)=>{const remainder=Math.round(Math.abs(amount)*100)%1000;return (1000-remainder)||1000};
+const roundUpKey=(t:Tx,amountCents:number)=>[t.account,t.fileId||'',t.currency,amountCents].join('|');
+const dateDistance=(a:string,b:string)=>Math.abs(Date.parse(a)-Date.parse(b))/86400000;
+const automaticRoundUpIds=(items:Item[])=>{
+ const purchases=new Map<string,Item[]>(),roundUps:Item[]=[];
+ for(const item of items){const t=item.source;if(t.bank!=='revolut'||!t.fileId)continue;
+  if(t.amount<0&&!pocketEntry(t)&&!/pocket|vault|exchang|transfer/i.test(t.description)){const key=roundUpKey(t,roundUpCents(t.amount));purchases.set(key,[...(purchases.get(key)||[]),item]);}
+  else if(t.amount<0&&pocketEntry(t))roundUps.push(item);
+ }
+ const consumed=new Set<string>(),usedPurchases=new Set<string>();
+ for(const roundUp of roundUps){const t=roundUp.source;const candidates=(purchases.get(roundUpKey(t,Math.round(Math.abs(t.amount)*100)))||[]).filter(p=>!usedPurchases.has(p.id)&&dateDistance(p.source.date,t.date)<=7).sort((a,b)=>dateDistance(a.source.date,t.date)-dateDistance(b.source.date,t.date)||Math.abs((a.source.line||0)-(t.line||0))-Math.abs((b.source.line||0)-(t.line||0))||a.id.localeCompare(b.id));const purchase=candidates[0];if(purchase){usedPurchases.add(purchase.id);consumed.add(roundUp.id);}}
+ return consumed;
+};
 export function reviewQueue(report:Report,decisions:Record<string,Decision>,filters:{month:string;bank:string;status:string;search:string}){
  const consumed=new Set<string>();
  for(const d of Object.values(decisions))if(d.status==='confirmed'){try{const m=JSON.parse(d.proposed_edit||'{}').merge;if(m)for(const id of [m.purchaseId,m.roundUpId,m.creditId])if(id&&id!==d.id)consumed.add(id)}catch{}}
+ for(const id of automaticRoundUpIds(report.items))consumed.add(id);
  const {month,bank,status,search}=filters;
  return report.items.map(i=>({...i,candidates:availableCandidates(i.candidates,i.id,decisions)})).filter(i=>!consumed.has(i.id)&&i.source.date.startsWith(month)&&(bank==='all'||i.source.bank===bank)&&(status==='all'||(status==='suggested'?i.candidates.length>0:status==='unmatched'?i.candidates.length===0:status==='deleted'?decisions[i.id]?.action==='delete':(decisions[i.id]?.status||'unresolved')===status))&&(!search||[i.source.description,i.source.account,i.source.amount,i.source.currency].join(' ').toLowerCase().includes(search.toLowerCase()))).sort((a,b)=>reviewOrder(a,b,report));
 }
